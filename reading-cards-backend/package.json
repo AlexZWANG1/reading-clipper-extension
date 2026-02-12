@@ -1,0 +1,31 @@
+{
+  "name": "reading-cards-backend",
+  "version": "2.0.0",
+  "description": "Reading Clipper 后端服务 - 支持云端存储和多用户",
+  "type": "module",
+  "main": "src/server.mjs",
+  "scripts": {
+    "dev": "node src/server.mjs",
+    "start": "node src/server.mjs",
+    "build": "echo 'No build step required for this backend service'"
+  },
+  "keywords": [
+    "reading",
+    "cards",
+    "knowledge",
+    "clipper"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "multer": "^2.0.2",
+    "openai": "^6.10.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

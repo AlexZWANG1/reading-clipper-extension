@@ -1,0 +1,93 @@
+{
+  "providers": {
+    "openai": {
+      "name": "OpenAI",
+      "description": "OpenAI官方API",
+      "models": [
+        {
+          "id": "gpt-5-mini",
+          "name": "GPT-5 Mini",
+          "description": "成本优化的推理模型，适合大多数任务",
+          "supports_vision": false,
+          "supports_file_search": false
+        },
+        {
+          "id": "gpt-5.1",
+          "name": "GPT-5.1",
+          "description": "最新的旗舰模型，最智能的模型，支持Vision",
+          "supports_vision": true,
+          "supports_file_search": true
+        },
+        {
+          "id": "gpt-5-nano",
+          "name": "GPT-5 Nano",
+          "description": "高吞吐量、简单指令跟随",
+          "supports_vision": false,
+          "supports_file_search": false
+        },
+        {
+          "id": "gpt-4o",
+          "name": "GPT-4o",
+          "description": "GPT-4优化版，支持Vision和文件搜索",
+          "supports_vision": true,
+          "supports_file_search": true
+        }
+      ],
+      "default_model": "gpt-5-mini",
+      "api_endpoint": "https://api.openai.com/v1",
+      "chat_endpoint": "https://api.openai.com/v1/chat/completions",
+      "responses_endpoint": "https://api.openai.com/v1/responses",
+      "files_endpoint": "https://api.openai.com/v1/files"
+    },
+    "anthropic": {
+      "name": "Anthropic",
+      "description": "Anthropic Claude API",
+      "models": [
+        {
+          "id": "claude-3-5-sonnet-20241022",
+          "name": "Claude 3.5 Sonnet",
+          "description": "平衡性能和成本",
+          "supports_vision": true,
+          "supports_file_search": false
+        },
+        {
+          "id": "claude-3-opus-20240229",
+          "name": "Claude 3 Opus",
+          "description": "最强性能",
+          "supports_vision": true,
+          "supports_file_search": false
+        }
+      ],
+      "default_model": "claude-3-5-sonnet-20241022",
+      "api_endpoint": "https://api.anthropic.com/v1",
+      "chat_endpoint": "https://api.anthropic.com/v1/messages",
+      "responses_endpoint": null,
+      "files_endpoint": null
+    },
+    "custom": {
+      "name": "自定义API",
+      "description": "使用自己的API端点（需兼容OpenAI格式）",
+      "models": [
+        {
+          "id": "*",
+          "name": "自定义模型",
+          "description": "使用自定义模型名称",
+          "supports_vision": true,
+          "supports_file_search": false
+        }
+      ],
+      "default_model": "*",
+      "api_endpoint": null,
+      "chat_endpoint": null,
+      "responses_endpoint": null,
+      "files_endpoint": null
+    }
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "last_updated": null,
+    "description": "Reading Clipper AI模型配置"
+  }
+}
+
+

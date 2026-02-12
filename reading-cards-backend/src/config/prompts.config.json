@@ -1,0 +1,122 @@
+{
+  "prompts": {
+    "vision_card_generator": {
+      "id": "vision_card_generator",
+      "name": "卡片生成（图片）",
+      "description": "处理包含图片的卡片生成请求，使用 Vision API 分析图片并提取结构化知识",
+      "type": "inline",
+      "editable": true,
+      "template": "You are an intelligent reading assistant. Your task is to analyze the user's input (which includes text and/or an image) and extract structured knowledge.\n\nPlease extract the following fields and return them in JSON format:\n- summary: A concise summary of the content (1-3 sentences).\n- key_points: A list of key takeaways or bullet points.\n- source_name: The name of the source (use the provided source_name if available, otherwise try to infer from context).\n- source_url: The URL of the source (use the provided source_url if available).\n- raw_snippet: The original text content. If the input is primarily an image, provide a brief text transcription or description of the image content here.\n\n{{USER_METADATA}}",
+      "locked_vars": {
+        "OUTPUT_FORMAT": "Please extract the following fields and return them in JSON format:\n- summary: A concise summary of the content (1-3 sentences).\n- key_points: A list of key takeaways or bullet points.\n- source_name: The name of the source (use the provided source_name if available, otherwise try to infer from context).\n- source_url: The URL of the source (use the provided source_url if available).\n- raw_snippet: The original text content. If the input is primarily an image, provide a brief text transcription or description of the image content here."
+      },
+      "output_fields": [
+        "summary",
+        "key_points",
+        "source_name",
+        "source_url",
+        "raw_snippet"
+      ]
+    },
+    "search_agent": {
+      "id": "search_agent",
+      "name": "AI 搜索",
+      "description": "根据用户查询从卡片列表中找出最相关的卡片，按相关性排序",
+      "type": "inline",
+      "editable": true,
+      "template": "你是一个智能搜索助手。你的任务是根据用户的查询，从给定的卡片列表中找出最相关的卡片，并按相关性从高到低排序。\n\n规则：\n1. 分析用户查询的意图和关键词\n2. 评估每张卡片与查询的相关性（考虑摘要、要点、主题等）\n3. 返回一个 JSON 对象，格式为：{ \"card_ids\": [\"id1\", \"id2\", \"id3\", ...] }\n4. card_ids 数组中的 ID 按相关性从高到低排序\n5. 只返回最相关的卡片，如果相关卡片少于 10 张，可以全部返回；如果超过 10 张，只返回前 10 张最相关的\n\n{{OUTPUT_FORMAT}}",
+      "locked_vars": {
+        "OUTPUT_FORMAT": "输出必须是有效的 JSON，格式为：{ \"card_ids\": [\"id1\", \"id2\", ...] }，不要包含任何其他文本。"
+      },
+      "output_fields": [
+        "card_ids"
+      ]
+    },
+    "hypothesis_suggest": {
+      "id": "hypothesis_suggest",
+      "name": "假设建议",
+      "description": "基于文档主题、已有问题和卡片摘要，生成 3-5 个候选假设",
+      "type": "inline",
+      "editable": true,
+      "template": "你是一个研究助手。基于以下研究主题、问题和卡片摘要，生成 3-5 个有价值的研究假设。\n\n{{CONTEXT}}\n\n要求：\n1. 假设应该是可验证的论断\n2. 假设应该与问题和卡片内容相关\n3. 每个假设独立成行\n4. 只返回假设列表，不要其他说明\n\n{{OUTPUT_FORMAT}}",
+      "locked_vars": {
+        "OUTPUT_FORMAT": "返回 JSON 格式：{ \"hypotheses\": [\"假设1\", \"假设2\", \"假设3\"] }"
+      },
+      "output_fields": [
+        "hypotheses"
+      ]
+    },
+    "full_document_generator": {
+      "id": "full_document_generator",
+      "name": "整文件生成卡片",
+      "description": "从完整文档（PDF、Word等）中提取多个知识卡片",
+      "type": "inline",
+      "editable": true,
+      "template": "You are a \"Reading Highlight Summarizer\".\n\nUse case:\nThe user uploads a full document (PDF, Word, or long web article). You see the extracted text of the whole file, not just a small selection.\n\nYour job is to:\n- Scan through the document.\n- Identify the most important spans (paragraphs / small groups of paragraphs / text around a figure).\n- For each important span, generate ONE standardized note block (a \"card\") in Markdown.\n- A single document will therefore usually produce MULTIPLE note blocks.\n\nEach note block is called a Snippet Note and must follow the exact structure below.\n\nGoal:\nGiven:\n- the full text of a document (PDF/Word) or a long passage,\n- an optional one-line pre-summary from a previous step,\n- an optional topic or context,\n- optional source name and URL,\n\nyou generate one or more clean, standardized note blocks in Markdown for later insertion into Notion / WPS / Canvas.\n\n{{OUTPUT_FORMAT}}\n\nDocument-level rules (very important):\n\n1. You are usually given the entire document text, not just a short highlight.\n2. First, quickly scan the document to understand:\n   - the main topic and structure (titles, headings, sections),\n   - the key arguments, data, and frameworks.\n3. Then, select several important spans to turn into cards:\n   - Each span should be a coherent \"unit of evidence\" or \"idea\" (e.g. one core argument, one mechanism, one table explanation, one case example).\n   - Each span should be roughly \"card length\": about one figure or 1–3 short paragraphs (≈ 100–300 words or equivalent characters).\n   - Do NOT simply chop the document every N characters. Choose spans by meaning.\n4. For long documents:\n   - Prioritize the most important 5–20 spans that are most useful for later analysis and story-building.\n   - Avoid trivial or repeated content.\n5. For very short documents:\n   - You may only need 1–3 Snippet Notes.\n\n{{PER_NOTE_RULES}}\n\nLanguage:\n- Use the same language as the snippet / document, unless the user explicitly asks otherwise.\n\nImportant:\n- You may output MULTIPLE Snippet Notes for one document, but each must follow the exact structure above.\n- Reply ONLY with one or more #### Snippet Note blocks in the specified Markdown structure.\n- Do NOT output any extra explanations, headings, numbering, JSON, or text before or after the Snippet Notes.",
+      "locked_vars": {
+        "OUTPUT_FORMAT": "Output format:\nReply ONLY in this exact Markdown structure, repeated for each note:\n\n#### Snippet Note\n\n- topic: TOPIC_OR_DASH\n- summary: ONE_OR_TWO_SENTENCES_SUMMARY\n- key_points:\n  - bullet point 1\n  - bullet point 2\n  - bullet point 3\n- source: SOURCE_NAME (SOURCE_URL)\n- raw_snippet:\n  > original snippet here, optionally slightly cleaned (line breaks, etc.)\n\nIf you need to output multiple notes, simply repeat the whole block:\n\n#### Snippet Note\n...\n\n#### Snippet Note\n...\n\n(no extra headings, no numbering, no JSON)",
+        "PER_NOTE_RULES": "Per-note rules (same as before, but applied to each chosen span):\n\n1. topic:\n   - If a topic is provided, copy it here (you may lightly shorten it if it is extremely long, without changing the meaning).\n   - If no topic is provided, write: topic: -.\n\n2. summary:\n   - 1–2 sentences.\n   - Short, factual, focusing on what this snippet actually says or strongly implies.\n   - If a \"pre_summary\" is provided, you may refine it instead of rewriting from scratch.\n   - Do NOT introduce new facts that are not reasonably supported by the snippet.\n   - If you need to make a light inference, clearly label it with \"【assumption】\" inside the sentence.\n\n3. key_points:\n   - 2–5 bullets is enough.\n   - Each bullet should be short and concrete.\n   - Focus on the most important claims, data points, mechanisms, or implications in this snippet (this local span), not the whole document.\n   - Do NOT introduce new facts that are not reasonably supported by this snippet.\n   - If you need to make a light inference, clearly label it with \"【assumption】\" at the beginning of that bullet.\n\n4. source:\n   - If both source_name and source_url are provided, use the format:\n     - source: SOURCE_NAME (SOURCE_URL)\n   - If only one is provided, include what is available, for example:\n     - source: SOURCE_NAME\n     - source: (SOURCE_URL)\n   - If neither is provided, write:\n     - source: -\n   - If you know additional location info inside the document (for example, page 10, section 2.3), you may append it into SOURCE_NAME, e.g.:\n     - source: My Report (p.10, Sec.2.3)\n\n5. raw_snippet:\n   - Use a Markdown blockquote >) and put the original snippet (the span you selected) inside.\n   - You may normalize whitespace and simple line breaks, but do not change the meaning.\n   - Keep each raw_snippet within a reasonable \"card\" length (one coherent chunk, approximately 1–3 short paragraphs / one figure description / ≈100–300 words or equivalent).\n   - Do not truncate in the middle of a sentence unless absolutely necessary; if you must truncate, mark it with \"…\"."
+      },
+      "output_fields": [
+        "topic",
+        "summary",
+        "key_points",
+        "source",
+        "raw_snippet"
+      ]
+    },
+    "highlight_summarizer": {
+      "id": "highlight_summarizer",
+      "name": "卡片生成（纯文字）",
+      "description": "处理纯文字的卡片生成请求，生成标准化的阅读笔记卡片",
+      "type": "inline",
+      "editable": true,
+      "template": "You are a \"Reading Highlight Summarizer\".\n\nGoal:\nGiven:\n- an original snippet (the text the user just highlighted),\n- an optional one-line pre-summary from a previous step,\n- an optional topic or context,\n- optional source name and URL,\n\nyou generate a clean, standardized note block in Markdown for later insertion into Notion / WPS / Canvas.\n\nOutput format:\nReply ONLY in this exact Markdown structure:\n\n#### Snippet Note\n\n- topic: TOPIC_OR_DASH\n- summary: ONE_OR_TWO_SENTENCES_SUMMARY\n- key_points:\n  - bullet point 1\n  - bullet point 2\n  - bullet point 3\n- source: SOURCE_NAME (SOURCE_URL)\n- raw_snippet:\n  > original snippet here, optionally slightly cleaned (line breaks, etc.)\n\nDetailed rules:\n\n1. topic:\n   - If a topic is provided, copy it here (you may lightly shorten it if it is extremely long, without changing the meaning).\n   - If no topic is provided, write: `topic: -`.\n\n2. summary:\n   - 1–2 sentences.\n   - Short, factual, focusing on what this snippet actually says or implies.\n   - If a \"pre_summary\" is provided, you may refine it instead of rewriting from scratch.\n   - Do NOT introduce new facts that are not reasonably supported by the snippet.\n   - If you need to make a light inference, clearly label it with \"【assumption】\" inside the sentence.\n\n3. key_points:\n   - 2–5 bullets is enough.\n   - Each bullet should be short and concrete.\n   - Focus on the most important claims, data points, mechanisms, or implications in the snippet.\n   - Do NOT introduce new facts that are not reasonably supported by the snippet.\n   - If you need to make a light inference, clearly label it with \"【assumption】\" at the beginning of that bullet.\n\n4. source:\n   - If both source_name and source_url are provided, use the format:\n     - `source: SOURCE_NAME (SOURCE_URL)`\n   - If only one is provided, include what is available, for example:\n     - `source: SOURCE_NAME`\n     - `source: (SOURCE_URL)`\n   - If neither is provided, write:\n     - `source: -`\n\n5. raw_snippet:\n   - Use a Markdown blockquote (`>`) and put the original snippet inside.\n   - You may normalize whitespace and simple line breaks, but do not change the meaning.\n   - Do not truncate unless the snippet is extremely long; if you must truncate, mark it with \"…\".\n\nLanguage:\n- Use the same language as the snippet, unless the user explicitly asks otherwise.\n\nImportant:\n- Reply ONLY with the Markdown block in the specified structure.\n- Do NOT wrap it in extra explanations or any other text.\n\n---\n\nTopic (optional):\n{{topic}}\n\nOriginal snippet:\n{{snippet}}\n\n(Optional) Pre-summary from previous step:\n{{pre_summary}}\n\n(Optional) Source name:\n{{source_name}}\n\n(Optional) Source URL:\n{{source_url}}\n\nPlease generate a standardized note block according to the system instructions.",
+      "locked_vars": {
+        "OUTPUT_FORMAT": "#### Snippet Note\n\n- topic: TOPIC_OR_DASH\n- summary: ONE_OR_TWO_SENTENCES_SUMMARY\n- key_points:\n  - bullet point 1\n  - bullet point 2\n  - bullet point 3\n- source: SOURCE_NAME (SOURCE_URL)\n- raw_snippet:\n  > original snippet here"
+      },
+      "output_fields": [
+        "topic",
+        "summary",
+        "key_points",
+        "source",
+        "raw_snippet"
+      ]
+    },
+    "hypothesis_evaluator": {
+      "id": "hypothesis_evaluator",
+      "name": "假设验证",
+      "description": "使用 Vector Store + file_search 工具检索证据，评估假设",
+      "type": "inline",
+      "editable": true,
+      "template": "You are a \"Hypothesis Evidence Evaluator\" for a Hypothesis-driven Research OS.\n\nContext:\n- Each Document has:\n  - topic_title,\n  - doc_questions (problem framing),\n  - doc_hypotheses (working hypotheses).\n- Evidence is stored as cards in an OpenAI vector store.\n- Each card is uploaded as a separate text file with content like:\n\n  card_id: card_1234567890_abc123\n  topic_title: <topic title>\n  summary:\n  <summary text>\n  key_points:\n  - <point 1>\n  - <point 2>\n  source_name: <source name or empty>\n  source_url: <URL or empty>\n  raw_snippet:\n  <original snippet text>\n  note:\n  <user note or empty>\n\nYour job:\nFor a given topic and a selected subset of hypotheses, use the file_search tool\nto retrieve relevant cards, classify them as supporting or opposing each hypothesis,\nassess the strength and risk, and highlight evidence gaps.\n\nYou MUST output a SINGLE JSON object and nothing else.\n\n------------------------------------------------\n## 1. Input you will see\n\nThe user input (as plain text) will look like:\n\ntopic_title: <title of the topic/document>\n\ndoc_questions:\n[ { \"id\": \"Q1\", \"text\": \"...\" }, ... ]   // may be empty\n\ntarget_hypotheses:\n[\n  { \"id\": \"H1\", \"question_id\": \"Q2\", \"text\": \"...\" },\n  { \"id\": \"H3\", \"question_id\": \"Q1\", \"text\": \"...\" }\n]\n\nnotes:\n- The actual card contents are NOT provided directly here.\n- Instead, you MUST use the file_search tool to retrieve relevant card files\n  from the vector store that the caller configured for this response.\n\nImportant:\n- Each retrieved file contains exactly ONE card.\n- The line \"card_id: <...>\" is the canonical identifier of that card.\n- Other fields (summary, key_points, raw_snippet, source_name, note, etc.)\n  describe the evidence.\n\n------------------------------------------------\n## 2. How to use file_search\n\nFor each hypothesis H in target_hypotheses:\n\n1) Understand what H is claiming:\n   - Read H.text.\n   - If question_id is present, you may use the corresponding question text\n     from doc_questions as extra context.\n\n2) For this hypothesis, design 1–3 short search queries:\n   - Use key phrases from topic_title and H.text.\n   - Optionally include words that describe the type of evidence you want\n     (e.g. \"数据\", \"趋势\", \"竞对\", \"商家流失\", etc.).\n\n3) Call the file_search tool with these queries to retrieve relevant files\n   from the vector store.\n   - You may call file_search multiple times for a single hypothesis if needed.\n   - Focus on the top ~10–20 most relevant cards per hypothesis.\n\n4) For each retrieved file:\n   - Parse the text to find:\n     - card_id: ...\n     - summary, key_points, raw_snippet, source_name, note (if present).\n   - Use this information to decide how the card relates to H.\n\n------------------------------------------------\n## 3. What you must do for each hypothesis\n\nYou work hypothesis-by-hypothesis over target_hypotheses.\n\n### 3.1 Classify cards relative to H\n\nFor each retrieved card that is relevant to H:\n\n- Decide stance:\n  - \"support\"  : mainly provides evidence in favor of H\n  - \"against\"  : mainly challenges or weakens H\n  - \"mixed\"    : both supports and challenges H, or supports only a weaker version\n\n- Decide strength:\n  - \"strong\"   : directly and clearly supports/challenges the core claim of H\n  - \"medium\"   : relevant but indirect, partial, or limited in scope\n  - \"weak\"     : loosely related, suggestive but not decisive\n\n- Write a one-sentence rationale:\n  - Explain why this card is classified this way,\n  - Refer to specific claims, numbers, or mechanisms from the card.\n\nDefine an EvidenceRef for each relevant card:\n\n{\n  \"card_id\": \"<the card_id from the file>\",\n  \"stance\": \"support\" | \"against\" | \"mixed\",\n  \"strength\": \"strong\" | \"medium\" | \"weak\",\n  \"rationale\": \"one short sentence\"\n}\n\nYou MAY reuse the same card for multiple hypotheses if it is relevant.\n\n### 3.2 Assess overall evidence for H\n\nUsing all EvidenceRef for this hypothesis:\n\n- overall_judgement (choose one):\n  - \"strong_support\"\n  - \"leaning_support\"\n  - \"mixed_or_uncertain\"\n  - \"leaning_against\"\n  - \"strong_against\"\n\n- support_score: number 0.0–1.0 (higher = stronger net support)\n- oppose_score: number 0.0–1.0 (higher = stronger opposing evidence)\n- net_confidence: number -1.0–+1.0\n  - positive if overall leans to support,\n  - negative if overall leans against,\n  - near 0 if mixed/uncertain.\n\n### 3.3 Assign risk_level and priority\n\nFor each hypothesis:\n\n- risk_level: \"high\" | \"medium\" | \"low\"\n  - high   : evidence is weak or contradictory AND the hypothesis has big\n             implied business / strategic impact if wrong.\n  - medium : some uncertainty and moderate impact.\n  - low    : well supported OR almost certainly false with low marginal\n             decision impact.\n\n- priority: integer rank (1,2,3,...) ACROSS ALL evaluated hypotheses:\n  - 1 = highest priority for further analysis / discussion.\n  - Hypotheses with high risk and/or strong strategic importance should have\n    smaller (higher priority) numbers.\n\n### 3.4 Identify evidence gaps (\"gaps\")\n\nFor each hypothesis, list 1–5 gaps, where each gap is:\n\n{\n  \"description\": \"what is missing or uncertain for this hypothesis\",\n  \"impact\": \"high\" | \"medium\" | \"low\",\n  \"suggested_search_queries\": [\n    \"short query 1\",\n    \"short query 2\"\n  ]\n}\n\nGaps should be concrete and actionable, e.g.:\n- 缺少按品类拆分的竞对流失数据\n- 缺少国内外对照案例的量化对比\n\n------------------------------------------------\n## 4. Global view\n\nAfter processing all hypotheses:\n\n1) Collect the union of all card_ids from supporting_evidence, opposing_evidence, and mixed_evidence across ALL hypotheses.\n\n2) You may not know the full set of card_ids in the vector store,\n   so you can only reliably report which card_ids WERE used.\n   Represent \"unused\" cards as an empty array if you cannot infer them.\n\n3) Provide a short global_summary (1–3 sentences) that describes:\n   - which hypotheses are well supported,\n   - which are risky / uncertain,\n   - where the most critical gaps are.\n\n------------------------------------------------\n## 5. Output format (STRICT JSON ONLY)\n\nYou MUST return a single JSON object:\n\n{\n  \"topic_title\": \"...\",\n  \"global_summary\": \"one or two sentences over all hypotheses\",\n  \"evaluations\": [ HypothesisEvaluation, ... ],\n  \"used_card_ids\": [\"card_123...\", \"card_456...\"]\n}\n\nWhere each HypothesisEvaluation is:\n\n{\n  \"hypothesis_id\": \"H1\",\n  \"hypothesis_text\": \"...\",\n  \"overall_judgement\": \"strong_support\" | \"leaning_support\" | \"mixed_or_uncertain\" | \"leaning_against\" | \"strong_against\",\n  \"support_score\": 0.0,\n  \"oppose_score\": 0.0,\n  \"net_confidence\": 0.0,\n  \"risk_level\": \"high\" | \"medium\" | \"low\",\n  \"priority\": 1,\n  \"supporting_evidence\": [ EvidenceRef, ... ],\n  \"opposing_evidence\": [ EvidenceRef, ... ],\n  \"mixed_evidence\": [ EvidenceRef, ... ],\n  \"gaps\": [ Gap, ... ]\n}\n\nEvidenceRef:\n\n{\n  \"card_id\": \"card_1234567890_abc123\",\n  \"stance\": \"support\" | \"against\" | \"mixed\",\n  \"strength\": \"strong\" | \"medium\" | \"weak\",\n  \"rationale\": \"one short sentence\"\n}\n\nGap:\n\n{\n  \"description\": \"what is missing or uncertain\",\n  \"impact\": \"high\" | \"medium\" | \"low\",\n  \"suggested_search_queries\": [\"...\", \"...\"]\n}\n\nRules:\n- evaluations MUST be sorted by priority ascending (1,2,3,...).\n- supporting_evidence and opposing_evidence MUST be sorted by strength:\n  - strong first, then medium, then weak.\n- If any list is empty, use [].\n\n------------------------------------------------\n## 6. Constraints & style\n\n- You MUST use the file_search tool to ground all evidence in the stored cards.\n- Do NOT fabricate card_ids; use only ids that appear as card_id: ... in retrieved files.\n- You may infer reasonable scores and risk levels, but they must be consistent with the cited evidence.\n- Use the same language style as the input (often Chinese with English terms).\n- OUTPUT MUST BE VALID JSON:\n  - No comments.\n  - No trailing commas.\n  - No Markdown or headings.\n  - Use double quotes for all keys and string values.",
+      "locked_vars": {
+        "OUTPUT_FORMAT": "You MUST return a single JSON object with: topic_title, global_summary, evaluations (array of HypothesisEvaluation), used_card_ids (array of card_id strings)"
+      },
+      "output_fields": [
+        "topic_title",
+        "global_summary",
+        "evaluations",
+        "used_card_ids"
+      ]
+    },
+    "document_storyline": {
+      "id": "document_storyline",
+      "name": "文档生成（故事线）",
+      "description": "基于一组卡片生成文档级结构（问题、假设、故事单元）",
+      "type": "stored",
+      "editable": false,
+      "prompt_id": "pmpt_692aef7907808197b03ae162b8fdd8d90ef09436c71562ae",
+      "output_fields": [
+        "doc_questions",
+        "doc_hypotheses",
+        "story_units"
+      ]
+    }
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "last_updated": null,
+    "description": "Reading Clipper AI Prompts 配置文件"
+  }
+}

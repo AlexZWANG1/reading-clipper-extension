@@ -1,0 +1,114 @@
+[
+  {
+    "doc_id": "doc_1765184320529_o1lq6abf0",
+    "topic_title": "人工智能驱动垂直财务",
+    "doc_questions": [
+      {
+        "id": "Q1",
+        "text": "2025 年代表性垂直 SaaS 厂商在收入规模与增速上呈现怎样的分层结构？"
+      },
+      {
+        "id": "Q2",
+        "text": "这些厂商是如何将生成式 AI / Agentic AI 深度嵌入垂直业务工作流，从而形成差异化价值？"
+      },
+      {
+        "id": "Q3",
+        "text": "AI 与 Agent 能力在多大程度上已经通过 ACV、收入增速和盈利结构体现为可量化的财务回报？"
+      },
+      {
+        "id": "Q4",
+        "text": "从这些头部案例中，可以提炼出“人工智能驱动垂直财务”的哪些共性路径与可复用打法？"
+      }
+    ],
+    "doc_hypotheses": [
+      {
+        "id": "H1",
+        "question_id": "Q1",
+        "text": "在垂直 SaaS 领域，2025 年保持 20%–30% 增速的厂商，大多已经完成从单点工具到“AI 驱动工作系统 / 平台”的转型，而增速放缓的厂商更多处于 AI 优化与防守阶段。"
+      },
+      {
+        "id": "H2",
+        "question_id": "Q2",
+        "text": "将生成式 AI 和 Agentic AI 深度嵌入高频、刚需的垂直财务与运营工作流（如记账对账、IT 服务、客服与协作），比单纯在界面层堆叠 AI 功能更能驱动用户采用和业务粘性。"
+      },
+      {
+        "id": "H3",
+        "question_id": "Q3",
+        "text": "能够以独立 ACV 口径或清晰子业务线来衡量 AI 收入贡献的厂商，更容易维持 20% 左右的订阅收入高增，并将 AI 从“成本项”升级为核心增长引擎。"
+      },
+      {
+        "id": "H4",
+        "question_id": "Q4",
+        "text": "成功的“人工智能驱动垂直财务”路径呈现出共性：平台级 AI 能力 + 针对场景的专用 Agents + 明确的财务 KPI（如回款周期缩短、百万级 ACV 合同数提升）。"
+      }
+    ],
+    "story_units": [
+      {
+        "unit_id": "U1",
+        "title": "垂直 SaaS 2025：规模已至数百亿美元，增速显著分层",
+        "core_point": "Workday、ServiceNow、Intuit、Shopify、Atlassian、Zoom 等垂直 SaaS 头部厂商 2025 年合计 SaaS 收入已达约 600 亿美元级别，但在增速上分化明显：ServiceNow、Shopify、Atlassian 维持 20%–30% 高增，Intuit、Workday 处于中高速扩张，Zoom 增速较低但利润率较高，反映出 AI 化程度与成长质量之间的结构性差异。",
+        "card_ids": [
+          "card_1765179055555_kdwppyyy2"
+        ],
+        "question_id": "Q1",
+        "hypothesis_id": "H1"
+      },
+      {
+        "unit_id": "U2",
+        "title": "ServiceNow：用 Now Assist 将 AI 深植企业 IT / 运营工作流并拉动订阅高增",
+        "core_point": "ServiceNow 通过 Now Assist 将“生成式搜索 + 总结 + 推荐 + Agent 工作流”嵌入 IT、客服、HR、合同管理和现场服务等关键流程，并以 Now Assist 超 5 亿美元 ACV 和 20% 左右订阅收入增速证明 AI 已成为其业务转型和增长的核心抓手。",
+        "card_ids": [
+          "card_1765179055516_52293xddu"
+        ],
+        "question_id": "Q2",
+        "hypothesis_id": "H2"
+      },
+      {
+        "unit_id": "U3",
+        "title": "Intuit：QuickBooks Agent 化，直接改善 SMB 现金流与在线生态增速",
+        "core_point": "Intuit 围绕 QuickBooks 推出 Intuit Assist 及 Accounting / Payments / Customer 三类 AI Agents，把 SMB 的记账、对账、催收和简单 CRM 流程自动化，实现逾期发票回款概率和速度提升、平均回款时间缩短约 5 天，并支撑 Global Business Solutions 与 Online Ecosystem 20%+ 的收入高增，体现 AI 对垂直财务场景的直接财务贡献。",
+        "card_ids": [
+          "card_1765179055530_tllrg0p8o"
+        ],
+        "question_id": "Q2",
+        "hypothesis_id": "H2"
+      },
+      {
+        "unit_id": "U4",
+        "title": "Atlassian：Rovo 将协作工具升级为带 AI 队友的 System of Work",
+        "core_point": "Atlassian 通过 Rovo AI Teammate 和 Rovo Studio 把 Jira、Confluence、JSM 等整合为“Apps + Agents”的 System of Work，让团队可以构建特定场景的自定义 AI Agents 并打包为 Collections 解决方案，在此基础上维持约 20% 的全年收入增速和 25% 的云收入增速，印证了平台级 AI + 场景化 Agent 的增长逻辑。",
+        "card_ids": [
+          "card_1765179055535_8bci5zykx"
+        ],
+        "question_id": "Q3",
+        "hypothesis_id": "H3"
+      },
+      {
+        "unit_id": "U5",
+        "title": "Zoom：从视频会议到 AI-first 通信与 CX 平台的防守反击",
+        "core_point": "在整体营收增速较低的背景下，Zoom 借助 AI Companion 3.0 和 Virtual Agent 2.0 将会议、内部沟通和联络中心打通为一个 Agent 系统，在 70 万+ 账户启用、任务节省近 89% 人力时间的基础上稳住企业收入并提升高价值客户数，展现出 AI 在低速赛道中支撑 ARPU 与利润优化的“防守 + 渗透”模式。",
+        "card_ids": [
+          "card_1765179055543_w6uz5ebqz"
+        ],
+        "question_id": "Q3",
+        "hypothesis_id": "H1"
+      },
+      {
+        "unit_id": "U6",
+        "title": "共性打法：AI 平台能力 + 场景化 Agents + 可量化财务指标",
+        "core_point": "综合 ServiceNow、Intuit、Atlassian、Zoom 等案例，可以看到“人工智能驱动垂直财务”的共性路径：首先搭建统一 AI 平台或 AI-first 定位，其次在垂直场景中用 Agentic AI 承接具体工作流，最后通过 Now Assist ACV、Online 生态增速、回款周期缩短、百万级 ACV 合同数等明确指标来对齐产品迭代与财务成效，从而实现 AI 与收入质量的正循环。",
+        "card_ids": [
+          "card_1765179055555_kdwppyyy2",
+          "card_1765179055516_52293xddu",
+          "card_1765179055530_tllrg0p8o",
+          "card_1765179055535_8bci5zykx",
+          "card_1765179055543_w6uz5ebqz"
+        ],
+        "question_id": "Q4",
+        "hypothesis_id": "H4"
+      }
+    ],
+    "created_at": "2025-12-08T08:58:40.528Z",
+    "updated_at": "2025-12-08T08:58:40.528Z"
+  }
+]
