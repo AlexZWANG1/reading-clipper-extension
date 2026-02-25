@@ -1,111 +1,15 @@
 {
   "stores": [
     {
-      "topic_title": "中国传统零食分销分析",
-      "vector_store_id": "vs_69355c601b2c81918bb98b0922fd31be",
-      "file_map": {},
-      "created_at": "2025-12-07T10:52:19.015Z",
-      "updated_at": "2025-12-07T10:52:19.015Z"
-    },
-    {
-      "topic_title": "茅台销售体系分析",
-      "vector_store_id": "vs_69355ecf77488191a575947c2eb609f2",
-      "file_map": {},
-      "created_at": "2025-12-07T11:02:42.303Z",
-      "updated_at": "2025-12-07T11:02:42.303Z"
-    },
-    {
-      "topic_title": "低利润下的扩张策略",
-      "vector_store_id": "vs_693580790d2c8191b60fc69332eb877a",
+      "topic_title": "Enterprise AI研究",
+      "vector_store_id": "vs_698e0f95d0f48191a0b3664a8327103d",
       "file_map": {
-        "card_1765110053184_ax4743me3": "file-2ahu5QzH4i4ZSzWbuBakxo"
+        "card_1770917778792_uec5pofl9": "file-47zy3pDYrzhZwfmt5eUkMv",
+        "card_1770917938963_m121m3tsk": "file-Fx47iNGoMP33sq2p4ui8Bo",
+        "card_1771923026593_4otorfklr": "file-4yPJyAXRBm13YtdsoMwpVX"
       },
-      "created_at": "2025-12-07T13:26:20.065Z",
-      "updated_at": "2025-12-08T06:44:24.958Z"
-    },
-    {
-      "topic_title": "人工智能驱动垂直财务",
-      "vector_store_id": "vs_693693437a5c81919949d0b384b9bfab",
-      "file_map": {
-        "card_1765179055543_w6uz5ebqz": "file-LTxa4h4Vm9Y6ayEg3EZZi2",
-        "card_1765179055535_8bci5zykx": "file-HfZwn9UfwvnAaWZdAAJEmJ",
-        "card_1765179055530_tllrg0p8o": "file-3mr52v7W4JJ4U2bBDgeGiC",
-        "card_1765179055516_52293xddu": "file-REEkRJbeVx9tNYne3jv21M"
-      },
-      "created_at": "2025-12-08T08:58:47.641Z",
-      "updated_at": "2025-12-08T09:00:32.429Z"
-    },
-    {
-      "topic_title": "现场工程师驱动平台",
-      "vector_store_id": "vs_6937895010bc81919c320a5241c2aa3f",
-      "file_map": {
-        "card_1765179339572_sdjeaybhc": "file-HNaBSgG1ZReF82ybaCgi6q",
-        "card_1765179055562_69egd6bdm": "file-M1znoWkuEMMbM4PdYebqhB",
-        "card_1765179055555_kdwppyyy2": "file-TeHcPXqUYsj7kk37LTN9Kc",
-        "card_1765179055549_t48214xk6": "file-9F8juKSGDcaHiTbkQoHqYo",
-        "card_1765179055543_w6uz5ebqz": "file-RskVyLg8gt8heUuw9C3iWa",
-        "card_1765179055535_8bci5zykx": "file-JF2KEKJejd17wCCN3pS24e",
-        "card_1765179055530_tllrg0p8o": "file-GPYvQHVNLDshWMWDt5JDBP",
-        "card_1765179055523_x6afbg5j0": "file-5pW3CP8z4Z5FwEAPdYe51J",
-        "card_1765179055510_8hoxgjh6f": "file-CvPU6rzuCHWEi9RHxkFBYp",
-        "card_1765179055502_yko7t0ynr": "file-8qrNF7NCUriNgWpDW5dHrb",
-        "card_1765179055495_t96cupjay": "file-RQwdzNaMSimc2aTZ9XSwH5",
-        "card_1765179055487_27ss4d8e3": "file-KBXDHopubwCmd2a6hPaF4g",
-        "card_1765179055481_5fy4ksf8w": "file-A4KxTxysLf7ycCtZqqXkAE",
-        "card_1765178811507_a4q3h02pi": "file-6GUJGM1zVYT1UdsR571UCh",
-        "card_1765178501077_npsdj31z1": "file-9dgmM8U79hrBvC9vpJBeCV",
-        "card_1765178496965_c8ukz5qf2": "file-33sJNSX1wC7C19bN93ggXV"
-      },
-      "created_at": "2025-12-09T02:28:23.467Z",
-      "updated_at": "2025-12-09T02:31:43.663Z"
-    },
-    {
-      "topic_title": "未分类",
-      "vector_store_id": "vs_6960dff9e37c81918caebfdd14e2f51d",
-      "file_map": {
-        "card_1767943139462_dvy2tbh7t": "file-2PidpVHcjbYt54Z8ncqohE",
-        "card_1767942753150_xgmdogd44": "file-RG2kKjbL2xN9VdiVA4yduS",
-        "card_1767942577666_o27l2z18x": "file-JoYbwgkRy4oxdC2TTY29fR"
-      },
-      "created_at": "2026-01-09T11:01:19.723Z",
-      "updated_at": "2026-01-09T11:01:51.572Z"
-    },
-    {
-      "topic_title": "测试",
-      "vector_store_id": "vs_6964c51906a08191b27769e54526d616",
-      "file_map": {
-        "card_1768211736244_gm4pl13jf": "file-MPP37esA1QahDUvGNsRVKn",
-        "card_1768898512494_j5ky1c5ja": "file-2WyB3azJuQpEiuGbuRMtkz"
-      },
-      "created_at": "2026-01-12T09:55:37.642Z",
-      "updated_at": "2026-01-20T08:42:17.775Z"
-    },
-    {
-      "topic_title": "ISV课题",
-      "vector_store_id": "vs_696f412dda4c8191afd9ff9ff5feba1a",
-      "file_map": {
-        "card_1768898862501_uc33wufvw": "file-UNYNi5v5f48GRent1fQHGS",
-        "card_1768898865084_czhoisflk": "file-5838ZqrvfgBVQeBHhs7pF8",
-        "card_1768898950458_60ek4awp3": "file-AcNQjojxVzU6zAeZnNJWSs",
-        "card_1768900555425_k98zml1gf": "file-76rhCS4MMkEvreXNYA5HwX",
-        "card_1769137319037_gf3na2d34": "file-82Vwwc5j8n6GahTg5YhC7A",
-        "card_1769139746233_zgwpaw5xy": "file-W1YP8ZEjNPTTEzAdkJcLXd"
-      },
-      "created_at": "2026-01-20T08:47:43.601Z",
-      "updated_at": "2026-01-23T03:42:35.443Z"
-    },
-    {
-      "topic_title": "自由研究",
-      "vector_store_id": "vs_697b160e97ec81918d31fd7656f6d2fd",
-      "file_map": {
-        "card_1769674259552_q6z3bzg75": "file-69XshstYVLB82mLp5f2Z6p",
-        "card_1769674313704_qwt1qp5vt": "file-RgwXY1cZyBXdCo8AKpbYWG",
-        "card_1769674556793_1u0jkmec7": "file-WGK7SpXQWcKPM14YccoYcV",
-        "card_1769758807636_a3nkp6myc": "file-8cCErSQ1uqdjLLjmmu6AVX",
-        "card_1770716975190_iv7q5x6cp": "file-H8eYJErzMuWrYW4qxmHoL6"
-      },
-      "created_at": "2026-01-29T08:11:00.746Z",
-      "updated_at": "2026-02-10T09:49:43.904Z"
+      "created_at": "2026-02-12T17:36:19.821Z",
+      "updated_at": "2026-02-24T08:50:43.319Z"
     }
   ]
 }

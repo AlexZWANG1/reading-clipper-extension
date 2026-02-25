@@ -16,12 +16,12 @@ function TopicCard({ topic, onEdit, onDelete }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const colors = [
-    'bg-primary-100 text-primary-600',
-    'bg-emerald-100 text-emerald-600',
-    'bg-amber-100 text-amber-600',
-    'bg-rose-100 text-rose-600',
-    'bg-cyan-100 text-cyan-600',
-    'bg-violet-100 text-violet-600',
+    { bg: 'rgba(99,102,241,0.15)', color: '#818CF8' },
+    { bg: 'rgba(52,211,153,0.15)', color: '#34D399' },
+    { bg: 'rgba(251,191,36,0.15)', color: '#FBBF24' },
+    { bg: 'rgba(251,113,133,0.15)', color: '#FB7185' },
+    { bg: 'rgba(34,211,238,0.15)', color: '#22D3EE' },
+    { bg: 'rgba(167,139,250,0.15)', color: '#A78BFA' },
   ];
 
   const colorIndex =
@@ -29,41 +29,35 @@ function TopicCard({ topic, onEdit, onDelete }) {
     colors.length;
 
   return (
-    <div className="bg-white rounded-xl border border-surface-100 p-5 card-hover group">
+    <div className="rounded-xl p-5 card-hover group" style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)' }}>
       <div className="flex items-start justify-between mb-4">
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${colors[colorIndex]}`}>
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: colors[colorIndex].bg, color: colors[colorIndex].color }}>
           <Folder className="w-6 h-6" />
         </div>
         <div className="relative">
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="p-1.5 text-surface-400 hover:text-surface-600 hover:bg-surface-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+            className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+            style={{ color: 'var(--text-2)' }}
           >
             <MoreVertical className="w-4 h-4" />
           </button>
           {menuOpen && (
             <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setMenuOpen(false)}
-              />
-              <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-surface-100 py-1 z-20 min-w-[120px]">
+              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+              <div className="absolute right-0 top-full mt-1 rounded-lg shadow-lg py-1 z-20 min-w-[120px] glass-surface">
                 <button
-                  onClick={() => {
-                    onEdit(topic);
-                    setMenuOpen(false);
-                  }}
-                  className="w-full px-3 py-2 text-left text-sm text-surface-700 hover:bg-surface-50 flex items-center gap-2"
+                  onClick={() => { onEdit(topic); setMenuOpen(false); }}
+                  className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors"
+                  style={{ color: 'var(--text-1)' }}
                 >
                   <Edit3 className="w-4 h-4" />
                   编辑
                 </button>
                 <button
-                  onClick={() => {
-                    onDelete(topic.id);
-                    setMenuOpen(false);
-                  }}
-                  className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                  onClick={() => { onDelete(topic.id); setMenuOpen(false); }}
+                  className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors"
+                  style={{ color: '#FB7185' }}
                 >
                   <Trash2 className="w-4 h-4" />
                   删除
@@ -75,15 +69,15 @@ function TopicCard({ topic, onEdit, onDelete }) {
       </div>
 
       <Link to={`/topics/${topic.id}`} className="block">
-        <h3 className="text-lg font-semibold text-surface-900 mb-1 hover:text-primary-600 transition-colors">
+        <h3 className="text-lg font-semibold mb-1 transition-colors" style={{ color: 'var(--text-0)' }}>
           {topic.title}
         </h3>
         {topic.description && (
-          <p className="text-sm text-surface-500 line-clamp-2 mb-3">
+          <p className="text-sm line-clamp-2 mb-3" style={{ color: 'var(--text-2)' }}>
             {topic.description}
           </p>
         )}
-        <div className="flex items-center gap-1.5 text-sm text-surface-500">
+        <div className="flex items-center gap-1.5 text-sm" style={{ color: 'var(--text-2)' }}>
           <CreditCard className="w-4 h-4" />
           <span>{topic.card_count || 0} 张卡片</span>
         </div>
@@ -122,47 +116,46 @@ function CreateTopicModal({ isOpen, onClose, onSubmit, editingTopic }) {
 
   if (!isOpen) return null;
 
+  const inputStyle = { background: 'var(--surface-0)', border: '1px solid var(--stroke-0)', color: 'var(--text-0)' };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-6 animate-slide-up">
+      <div className="fixed inset-0" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose} />
+      <div className="relative rounded-2xl shadow-xl w-full max-w-md p-6 animate-slide-up glass-surface">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-surface-900">
+          <h2 className="text-xl font-semibold" style={{ color: 'var(--text-0)' }}>
             {editingTopic ? '编辑 Topic' : '新建 Topic'}
           </h2>
-          <button
-            onClick={onClose}
-            className="p-2 text-surface-400 hover:text-surface-600 hover:bg-surface-100 rounded-lg"
-          >
+          <button onClick={onClose} className="p-2 rounded-lg transition-colors" style={{ color: 'var(--text-2)' }}>
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-surface-700 mb-1.5">
-              名称
-            </label>
+            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-1)' }}>名称</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="输入 Topic 名称"
-              className="w-full px-4 py-2.5 bg-surface-50 border border-surface-200 rounded-xl text-surface-900 placeholder-surface-400 input-focus"
+              className="w-full px-4 py-2.5 rounded-xl input-focus"
+              style={inputStyle}
               autoFocus
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-surface-700 mb-1.5">
-              描述 <span className="text-surface-400">(可选)</span>
+            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-1)' }}>
+              描述 <span style={{ color: 'var(--text-2)' }}>(可选)</span>
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="简要描述这个 Topic"
               rows={3}
-              className="w-full px-4 py-2.5 bg-surface-50 border border-surface-200 rounded-xl text-surface-900 placeholder-surface-400 input-focus resize-none"
+              className="w-full px-4 py-2.5 rounded-xl input-focus resize-none"
+              style={inputStyle}
             />
           </div>
 
@@ -170,14 +163,16 @@ function CreateTopicModal({ isOpen, onClose, onSubmit, editingTopic }) {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2.5 bg-surface-100 text-surface-700 font-medium rounded-xl hover:bg-surface-200 transition-colors"
+              className="flex-1 px-4 py-2.5 font-medium rounded-xl transition-colors"
+              style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-1)', border: '1px solid var(--stroke-0)' }}
             >
               取消
             </button>
             <button
               type="submit"
               disabled={!title.trim() || loading}
-              className="flex-1 px-4 py-2.5 bg-primary-600 text-white font-medium rounded-xl hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-2.5 font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              style={{ background: 'var(--accent-600)', color: 'white' }}
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               {editingTopic ? '保存' : '创建'}
@@ -234,25 +229,21 @@ function TopicsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* 页面标题 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-surface-900">Topics</h1>
-          <p className="text-surface-500 mt-1">管理你的知识主题</p>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-0)' }}>Topics</h1>
+          <p className="mt-1" style={{ color: 'var(--text-2)' }}>管理你的知识主题</p>
         </div>
         <button
-          onClick={() => {
-            setEditingTopic(null);
-            setModalOpen(true);
-          }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white font-medium rounded-xl hover:bg-primary-700 transition-colors btn-press"
+          onClick={() => { setEditingTopic(null); setModalOpen(true); }}
+          className="flex items-center gap-2 px-4 py-2.5 font-medium rounded-xl transition-colors btn-press"
+          style={{ background: 'var(--accent-600)', color: 'white' }}
         >
           <Plus className="w-5 h-5" />
           新建 Topic
         </button>
       </div>
 
-      {/* Topic 列表 */}
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => (
@@ -262,37 +253,27 @@ function TopicsPage() {
       ) : topics.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {topics.map((topic) => (
-            <TopicCard
-              key={topic.id}
-              topic={topic}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-            />
+            <TopicCard key={topic.id} topic={topic} onEdit={handleEdit} onDelete={handleDelete} />
           ))}
         </div>
       ) : (
-        <div className="text-center py-16 bg-white rounded-xl border border-surface-100">
-          <Folder className="w-12 h-12 mx-auto mb-4 text-surface-300" />
-          <p className="text-surface-600 font-medium">还没有任何 Topic</p>
-          <p className="text-surface-400 text-sm mt-1">
-            创建一个 Topic 来组织你的知识卡片
-          </p>
+        <div className="text-center py-16 rounded-xl" style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)' }}>
+          <Folder className="w-12 h-12 mx-auto mb-4" style={{ color: 'var(--text-2)' }} />
+          <p className="font-medium" style={{ color: 'var(--text-1)' }}>还没有任何 Topic</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>创建一个 Topic 来组织你的知识卡片</p>
           <button
             onClick={() => setModalOpen(true)}
-            className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 transition-colors"
+            className="mt-4 px-4 py-2 rounded-lg font-medium transition-colors"
+            style={{ background: 'var(--accent-600)', color: 'white' }}
           >
             创建第一个 Topic
           </button>
         </div>
       )}
 
-      {/* 创建/编辑模态框 */}
       <CreateTopicModal
         isOpen={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setEditingTopic(null);
-        }}
+        onClose={() => { setModalOpen(false); setEditingTopic(null); }}
         onSubmit={handleCreate}
         editingTopic={editingTopic}
       />

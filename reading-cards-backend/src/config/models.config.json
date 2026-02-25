@@ -7,30 +7,30 @@
         {
           "id": "gpt-5-mini",
           "name": "GPT-5 Mini",
-          "description": "成本优化的推理模型，适合大多数任务",
-          "supports_vision": false,
-          "supports_file_search": false
+          "description": "快速、低成本推理模型，适合大多数任务（400K上下文）",
+          "supports_vision": true,
+          "supports_file_search": true
         },
         {
-          "id": "gpt-5.1",
-          "name": "GPT-5.1",
-          "description": "最新的旗舰模型，最智能的模型，支持Vision",
+          "id": "gpt-5.2",
+          "name": "GPT-5.2",
+          "description": "最新旗舰模型，复杂推理和多步骤任务",
+          "supports_vision": true,
+          "supports_file_search": true
+        },
+        {
+          "id": "gpt-5.2-pro",
+          "name": "GPT-5.2 Pro",
+          "description": "深度推理，更多计算资源，最高质量输出",
           "supports_vision": true,
           "supports_file_search": true
         },
         {
           "id": "gpt-5-nano",
           "name": "GPT-5 Nano",
-          "description": "高吞吐量、简单指令跟随",
+          "description": "高吞吐量、简单指令跟随，最低成本",
           "supports_vision": false,
           "supports_file_search": false
-        },
-        {
-          "id": "gpt-4o",
-          "name": "GPT-4o",
-          "description": "GPT-4优化版，支持Vision和文件搜索",
-          "supports_vision": true,
-          "supports_file_search": true
         }
       ],
       "default_model": "gpt-5-mini",
@@ -44,21 +44,21 @@
       "description": "Anthropic Claude API",
       "models": [
         {
-          "id": "claude-3-5-sonnet-20241022",
-          "name": "Claude 3.5 Sonnet",
+          "id": "claude-sonnet-4-6",
+          "name": "Claude Sonnet 4.6",
           "description": "平衡性能和成本",
           "supports_vision": true,
           "supports_file_search": false
         },
         {
-          "id": "claude-3-opus-20240229",
-          "name": "Claude 3 Opus",
+          "id": "claude-opus-4-6",
+          "name": "Claude Opus 4.6",
           "description": "最强性能",
           "supports_vision": true,
           "supports_file_search": false
         }
       ],
-      "default_model": "claude-3-5-sonnet-20241022",
+      "default_model": "claude-sonnet-4-6",
       "api_endpoint": "https://api.anthropic.com/v1",
       "chat_endpoint": "https://api.anthropic.com/v1/messages",
       "responses_endpoint": null,
@@ -84,8 +84,8 @@
     }
   },
   "metadata": {
-    "version": "1.0.0",
-    "last_updated": null,
+    "version": "2.0.0",
+    "last_updated": "2025-02",
     "description": "Reading Clipper AI模型配置"
   }
 }

@@ -257,29 +257,29 @@ export const sourcesApi = {
     if (params.category) query.set('category', params.category);
     if (params.status) query.set('status', params.status);
     if (params.importance_level) query.set('importance_level', params.importance_level);
-    return request(`/sources?${query}`);
+    return request(`/v2/sources?${query}`);
   },
 
   // 获取单个信息源
-  get: (id) => request(`/sources/${id}`),
+  get: (id) => request(`/v2/sources/${id}`),
 
   // 创建信息源
   create: (data) =>
-    request('/sources', {
+    request('/v2/sources', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
   // 更新信息源
   update: (id, updates) =>
-    request(`/sources/${id}`, {
+    request(`/v2/sources/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(updates),
     }),
 
   // 删除信息源
   delete: (id) =>
-    request(`/sources/${id}`, {
+    request(`/v2/sources/${id}`, {
       method: 'DELETE',
     }),
 };
@@ -553,6 +553,20 @@ export const boardsApi = {
   deleteEdge: (boardId, edgeId) =>
     request(`/v2/boards/${boardId}/edges/${edgeId}`, {
       method: 'DELETE',
+    }),
+};
+
+// ========= Chat API =========
+export const chatApi = {
+  send: (messages) =>
+    request('/v2/chat', {
+      method: 'POST',
+      body: JSON.stringify({ messages }),
+    }),
+  confirm: (messages, pendingToolCalls, confirmedIds) =>
+    request('/v2/chat/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ messages, pendingToolCalls, confirmedIds }),
     }),
 };
 

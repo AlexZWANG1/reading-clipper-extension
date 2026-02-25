@@ -1,0 +1,21 @@
+import { useState, useRef, useCallback } from 'react';
+import {
+  Plus,
+  Upload,
+  Image,
+  FileText,
+  X,
+  Loader2,
+  ChevronDown,
+  Link as LinkIcon,
+  Tag,
+} from 'lucide-react';
+import { cardsApi } from '../lib/api';
+import { useTopicsStore, useUIStore, useCardsStore } from '../lib/store';
+
+const ACCEPTED_FILE_TYPES = '.pdf,.doc,.docx,.txt,.md';
+
+function AddCardSection({ onCardAdded }) {
+  const { topics } = useTopicsStore();
+  const { showToast } = useUIStore();
+  const { fetchCards } = useCardsStore();

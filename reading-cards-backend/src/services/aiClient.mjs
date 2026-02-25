@@ -203,7 +203,7 @@ export async function callChatAPI(config, messages, options = {}) {
   }
 
   const payload = {
-    model: model === "*" ? options.customModelName || "gpt-4o" : model,
+    model: model === "*" ? options.customModelName || "gpt-5-mini" : model,
     messages,
     ...options,
   };
@@ -247,6 +247,7 @@ export async function callChatAPI(config, messages, options = {}) {
   }
 
   // OpenAI格式（包括自定义API）
+  console.log("[callChatAPI] endpoint:", chatEndpoint, "model:", payload.model, "messages:", payload.messages?.length, "hasTools:", !!payload.tools);
   const response = await fetch(chatEndpoint, {
     method: "POST",
     headers: {
@@ -258,10 +259,13 @@ export async function callChatAPI(config, messages, options = {}) {
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
+    console.error("[callChatAPI] ERROR:", response.status, errorText);
     throw new Error(`API 请求失败：${response.status} - ${errorText}`);
   }
 
-  return await response.json();
+  const result = await response.json();
+  console.log("[callChatAPI] OK, choice role:", result.choices?.[0]?.message?.role, "has tool_calls:", !!result.choices?.[0]?.message?.tool_calls);
+  return result;
 }
 
 /**
@@ -289,7 +293,7 @@ export async function callResponsesAPI(config, prompt, input, options = {}) {
   }
 
   const payload = {
-    model: model === "*" ? options.customModelName || "gpt-4o" : model,
+    model: model === "*" ? options.customModelName || "gpt-5-mini" : model,
     prompt,
     input,
     ...options,

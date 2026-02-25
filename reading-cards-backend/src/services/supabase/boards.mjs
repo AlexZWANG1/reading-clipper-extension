@@ -1,4 +1,6 @@
-// ========= 思维画板相关 Supabase 服务 =========
+// ========= 思维画板 Supabase 服务 (V2 — Thinking Engine) =========
+
+// ========= Board CRUD =========
 
 /**
  * 获取用户的所有思维画板
@@ -49,35 +51,38 @@ export async function createBoard(supabase, userId, { title, description, topic_
 
 /**
  * 获取或创建 Topic 关联的画板 (幂等操作)
- * 如果该 Topic 已有画板则返回，否则创建新的
  */
 export async function getOrCreateBoardByTopic(supabase, userId, topicId, topicTitle) {
-    // 先尝试查找已存在的画板
     const { data: existing, error: findError } = await supabase
         .from("thinking_boards")
         .select("*")
         .eq("topic_id", topicId)
         .single();
 
-    // 如果找到了，直接返回
     if (existing && !findError) {
         return existing;
     }
 
-    // 没找到，创建新的
-    // 使用 upsert 确保并发安全 (基于 topic_id 唯一约束)
+    // Use INSERT instead of UPSERT to avoid constraint issues if unique index is missing
     const { data, error } = await supabase
         .from("thinking_boards")
-        .upsert({
+        .insert({
             user_id: userId,
             topic_id: topicId,
             title: topicTitle || "未命名画板",
-        }, {
-            onConflict: 'topic_id',
-            ignoreDuplicates: false,
         })
         .select()
         .single();
+
+    // If constraint exists and duplicate error, return existing
+    if (error && error.code === '23505') {
+        const { data: existingRetry } = await supabase
+            .from("thinking_boards")
+            .select("*")
+            .eq("topic_id", topicId)
+            .single();
+        if (existingRetry) return existingRetry;
+    }
 
     if (error) throw error;
     return data;
@@ -111,17 +116,43 @@ export async function deleteBoard(supabase, boardId) {
     return true;
 }
 
-// ========= 节点 (Nodes) 操作 =========
+// ========= 节点 (Nodes) 操作 — V2 =========
+
+// 允许通过 API 设置的节点字段白名单
+const NODE_FIELDS = [
+    'node_type', 'content', 'card_id',
+    'position_x', 'position_y', 'width', 'height',
+    'parent_id',
+    // Question
+    'priority', 'status', 'decomposition_type',
+    // Hypothesis
+    'claim', 'hypo_state', 'confidence',
+    // Evidence
+    'evidence_type', 'strength',
+];
 
 /**
- * 获取画板的所有节点
+ * 从请求 body 中提取合法的节点字段
+ */
+function pickNodeFields(body) {
+    const result = {};
+    for (const key of NODE_FIELDS) {
+        if (body[key] !== undefined) {
+            result[key] = body[key];
+        }
+    }
+    return result;
+}
+
+/**
+ * 获取画板的所有节点 (含 Card join)
  */
 export async function listNodes(supabase, boardId) {
     const { data, error } = await supabase
         .from("board_nodes")
         .select(`
       *,
-      card:cards(id, summary, key_points, source_name, source_url, raw_snippet)
+      card:cards(id, summary, key_points, source_name, source_url, raw_snippet, image_url)
     `)
         .eq("board_id", boardId)
         .order("created_at", { ascending: true });
@@ -131,29 +162,38 @@ export async function listNodes(supabase, boardId) {
 }
 
 /**
- * 创建节点
+ * 创建节点 — V2
+ * 支持所有新字段: parent_id, priority, status, claim, confidence, evidence_type, strength 等
  */
-export async function createNode(supabase, boardId, {
-    node_type,
-    content,
-    card_id,
-    position_x,
-    position_y,
-    width,
-    height,
-}) {
+export async function createNode(supabase, boardId, body) {
+    const fields = pickNodeFields(body);
+
+    const insertData = {
+        board_id: boardId,
+        node_type: fields.node_type || 'question',
+        content: fields.content || {},
+        card_id: fields.card_id || null,
+        position_x: fields.position_x ?? 0,
+        position_y: fields.position_y ?? 0,
+        width: fields.width ?? 200,
+        height: fields.height ?? 100,
+        parent_id: fields.parent_id || null,
+        // Question
+        priority: fields.priority || 'normal',
+        status: fields.status || 'open',
+        decomposition_type: fields.decomposition_type || null,
+        // Hypothesis
+        claim: fields.claim || null,
+        hypo_state: fields.hypo_state || 'pending',
+        confidence: fields.confidence ?? 0.0,
+        // Evidence
+        evidence_type: fields.evidence_type || null,
+        strength: fields.strength ?? 3,
+    };
+
     const { data, error } = await supabase
         .from("board_nodes")
-        .insert({
-            board_id: boardId,
-            node_type,
-            content: content || {},
-            card_id: card_id || null,
-            position_x: position_x ?? 0,
-            position_y: position_y ?? 0,
-            width: width ?? 200,
-            height: height ?? 100,
-        })
+        .insert(insertData)
         .select()
         .single();
 
@@ -162,9 +202,15 @@ export async function createNode(supabase, boardId, {
 }
 
 /**
- * 更新节点
+ * 更新节点 — V2 (增量 PATCH)
+ * 只更新传入的字段
  */
-export async function updateNode(supabase, nodeId, updates) {
+export async function updateNode(supabase, nodeId, body) {
+    const updates = pickNodeFields(body);
+    if (Object.keys(updates).length === 0) {
+        throw new Error('No valid fields to update');
+    }
+
     const { data, error } = await supabase
         .from("board_nodes")
         .update(updates)
@@ -177,7 +223,7 @@ export async function updateNode(supabase, nodeId, updates) {
 }
 
 /**
- * 删除节点
+ * 删除节点 (DB 级联删除子节点 via parent_id ON DELETE CASCADE)
  */
 export async function deleteNode(supabase, nodeId) {
     const { error } = await supabase
@@ -189,7 +235,23 @@ export async function deleteNode(supabase, nodeId) {
     return true;
 }
 
-// ========= 边 (Edges) 操作 =========
+// ========= 边 (Edges) 操作 — V2 =========
+
+// 允许的 edge 字段
+const EDGE_FIELDS = [
+    'source_node_id', 'target_node_id', 'relation_type',
+    'ai_confidence', 'ai_generated', 'user_confirmed', 'ai_explanation',
+];
+
+function pickEdgeFields(body) {
+    const result = {};
+    for (const key of EDGE_FIELDS) {
+        if (body[key] !== undefined) {
+            result[key] = body[key];
+        }
+    }
+    return result;
+}
 
 /**
  * 获取画板的所有边
@@ -206,25 +268,23 @@ export async function listEdges(supabase, boardId) {
 }
 
 /**
- * 创建边
+ * 创建边 — V2
+ * 支持 ai_explanation, relation_type = supports/refutes/neutral/conflicts/related
  */
-export async function createEdge(supabase, boardId, {
-    source_node_id,
-    target_node_id,
-    relation_type,
-    ai_confidence,
-    ai_generated,
-}) {
+export async function createEdge(supabase, boardId, body) {
+    const fields = pickEdgeFields(body);
+
     const { data, error } = await supabase
         .from("board_edges")
         .insert({
             board_id: boardId,
-            source_node_id,
-            target_node_id,
-            relation_type: relation_type || "related",
-            ai_confidence: ai_confidence ?? null,
-            ai_generated: ai_generated ?? false,
-            user_confirmed: false,
+            source_node_id: fields.source_node_id,
+            target_node_id: fields.target_node_id,
+            relation_type: fields.relation_type || "supports",
+            ai_confidence: fields.ai_confidence ?? null,
+            ai_generated: fields.ai_generated ?? false,
+            user_confirmed: fields.user_confirmed ?? false,
+            ai_explanation: fields.ai_explanation || null,
         })
         .select()
         .single();
@@ -234,9 +294,14 @@ export async function createEdge(supabase, boardId, {
 }
 
 /**
- * 更新边
+ * 更新边 — V2 (增量 PATCH)
  */
-export async function updateEdge(supabase, edgeId, updates) {
+export async function updateEdge(supabase, edgeId, body) {
+    const updates = pickEdgeFields(body);
+    if (Object.keys(updates).length === 0) {
+        throw new Error('No valid fields to update');
+    }
+
     const { data, error } = await supabase
         .from("board_edges")
         .update(updates)

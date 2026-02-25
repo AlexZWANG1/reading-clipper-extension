@@ -262,7 +262,7 @@ export const useSourcesStore = create((set, get) => ({
     const { source } = await sourcesApi.update(id, updates);
     set((state) => ({
       sources: state.sources.map((s) =>
-        s.source_id === id ? source : s
+        s.id === id ? source : s
       ),
     }));
     return source;
@@ -272,7 +272,7 @@ export const useSourcesStore = create((set, get) => ({
   deleteSource: async (id) => {
     await sourcesApi.delete(id);
     set((state) => ({
-      sources: state.sources.filter((s) => s.source_id !== id),
+      sources: state.sources.filter((s) => s.id !== id),
     }));
   },
 

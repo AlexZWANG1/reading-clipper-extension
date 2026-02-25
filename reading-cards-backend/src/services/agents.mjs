@@ -103,11 +103,11 @@ const HYPOTHESIS_EVAL_PROMPT_ID = process.env.HYPOTHESIS_EVAL_PROMPT_ID || "pmpt
 
 // ========= 模型配置（根据 OpenAI 官方文档优化）=========
 // 根据任务复杂度选择合适的模型：
-// - gpt-5.1: 复杂推理、多步骤任务、Vision（图片理解）
-// - gpt-5-mini: 成本优化的推理和聊天（替代 gpt-4.1-mini）
-// - gpt-5-nano: 高吞吐量、简单指令跟随（替代 gpt-4.1-nano）
+// - gpt-5.2: 最新旗舰，复杂推理、多步骤任务、Vision
+// - gpt-5-mini: 快速低成本推理（400K上下文，支持 file_search）
+// - gpt-5-nano: 高吞吐量、简单指令跟随
 const OPENAI_MODEL = "gpt-5-mini"; // 默认用于 Stored Prompt（Agent1 文本、Search Agent）
-const OPENAI_MODEL_COMPLEX = "gpt-5.1"; // 用于复杂推理任务（Agent2、文档 Q/H、Story Unit Refiner）
+const OPENAI_MODEL_COMPLEX = "gpt-5.2"; // 用于复杂推理任务（Agent2、文档 Q/H、Story Unit Refiner）
 const OPENAI_MODEL_SIMPLE = "gpt-5-nano"; // 用于简单任务（标题生成、单元标题）
 const HIGHLIGHT_SUMMARIZER_PROMPT_ID = "pmpt_692adaa16b2081909364455f9306be420aa65b20d7fe063b";
 const AGENT2_PROMPT_ID = "pmpt_692aef7907808197b03ae162b8fdd8d90ef09436c71562ae";
@@ -424,7 +424,7 @@ Please extract the following fields and return them in JSON format:
   }
 
   const payload = {
-    model: "gpt-5.1", // 使用最新的 GPT-5.1 旗舰模型（根据 OpenAI 官方文档：最新的旗舰模型，最智能的模型，支持 Vision）
+    model: OPENAI_MODEL_COMPLEX, // Vision 卡片生成需要旗舰模型（gpt-5.2 支持 Vision）
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userContent }
@@ -1419,11 +1419,9 @@ export async function runHypothesisEvaluatorV2({
   }
 
   // 构建 payload，确保格式正确
-  // 注意：根据 OpenAI 官方文档，Responses API 可能不支持 gpt-5
-  // 如果 gpt-5 不可用，尝试使用 gpt-4o 或 gpt-4o-mini
-  // 先尝试 gpt-4o（支持 file_search），如果失败再降级
+  // gpt-5-mini 支持 file_search，无需降级到旧模型
   const payload = {
-    model: "gpt-4o", // 使用 gpt-4o（支持 file_search 和 Vision）
+    model: OPENAI_MODEL, // gpt-5-mini 支持 file_search
     prompt: { id: HYPOTHESIS_EVAL_PROMPT_ID },
     input: inputLines.join("\n"),
     tools: [
@@ -2032,7 +2030,7 @@ ${sourcesText}
 请返回最匹配的 source_id (JSON格式):`;
 
   const payload = {
-    model: "gpt-4o", // 使用 gpt-4o，确保支持 JSON mode
+    model: OPENAI_MODEL, // gpt-5-mini 支持 JSON mode
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userMessage }

@@ -2,10 +2,91 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════
+   McKinsey Professional Design Tokens
+   ═══════════════════════════════════════ */
+:root {
+  /* LIGHT MODE (Default McKinsey Professional) */
+  --bg-0: #F8FAFC;
+  /* Slate 50 - Very light crisp gray */
+  --bg-1: #F1F5F9;
+  /* Slate 100 - Slightly darker for background separation */
+
+  --surface-0: #FFFFFF;
+  /* Pure white for cards and nodes */
+  --surface-1: #F8FAFC;
+  /* Off-white for sidebars */
+  --surface-top: #FFFFFF;
+
+  --text-0: #0F172A;
+  /* Slate 900 - High contrast text */
+  --text-1: #475569;
+  /* Slate 600 - Secondary text */
+  --text-2: #94A3B8;
+  /* Slate 400 - Muted text */
+
+  --stroke-0: #E2E8F0;
+  /* Slate 200 - Clean, subtle borders */
+  --stroke-1: #CBD5E1;
+  /* Slate 300 - Slightly stronger borders */
+
+  /* Corporate Blue Accent */
+  --accent-600: #1D4ED8;
+  /* Blue 700 */
+  --accent-500: #2563EB;
+  /* Blue 600 */
+  --accent-400: #3B82F6;
+  /* Blue 500 */
+  --accent-300: #60A5FA;
+  /* Blue 400 */
+  --glow: rgba(59, 130, 246, 0.25);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* DARK MODE (Elegant McKinsey Night) */
+    --bg-0: #0B1120;
+    /* Deep Oxford Blue */
+    --bg-1: #0F172A;
+    /* Slate 900 */
+
+    --surface-0: #1E293B;
+    /* Matte Navy for cards/nodes */
+    --surface-1: #0F172A;
+    /* Dark sidebar */
+    --surface-top: rgba(30, 41, 59, 0.95);
+
+    --text-0: #F8FAFC;
+    /* Slate 50 */
+    --text-1: #94A3B8;
+    /* Slate 400 */
+    --text-2: #64748B;
+    /* Slate 500 */
+
+    --stroke-0: #334155;
+    /* Slate 700 */
+    --stroke-1: #475569;
+    /* Slate 600 */
+
+    --accent-600: #2563EB;
+    /* Blue 600 */
+    --accent-500: #3B82F6;
+    /* Blue 500 */
+    --accent-400: #60A5FA;
+    /* Blue 400 */
+    --accent-300: #93C5FD;
+    /* Blue 300 */
+    --glow: rgba(59, 130, 246, 0.35);
+  }
+}
+
+/* ═══════════════════════════════════════
+   Deep Space Scrollbar
+   ═══════════════════════════════════════ */
 /* 自定义滚动条 */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -13,18 +94,18 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d4d4d8;
-  border-radius: 4px;
+  background: var(--stroke-0);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a1a1aa;
+  background: var(--stroke-1);
 }
 
 /* 选中文本颜色 */
 ::selection {
-  background: #c4b5fd;
-  color: #4c1d95;
+  background: var(--accent-300);
+  color: var(--bg-0);
 }
 
 /* 基础样式 */
@@ -32,6 +113,7 @@ body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  line-height: 1.45;
 }
 
 /* 卡片悬停效果 */
@@ -55,6 +137,7 @@ body {
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -70,20 +153,57 @@ body {
   0% {
     background-position: -200% 0;
   }
+
   100% {
     background-position: 200% 0;
   }
 }
 
 .skeleton {
-  background: linear-gradient(90deg, #f4f4f5 25%, #e4e4e7 50%, #f4f4f5 75%);
+  background: linear-gradient(90deg, rgba(30, 41, 59, 0.5) 25%, rgba(51, 65, 85, 0.4) 50%, rgba(30, 41, 59, 0.5) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
 
+/* ═══════════════════════════════════════
+   Deep Space Utility Classes
+   ═══════════════════════════════════════ */
 
+/* Clean surface (removing heavy blur for corporate feel) */
+.glass-surface {
+  background: var(--surface-0);
+  border: 1px solid var(--stroke-0);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
 
+/* Node glow on selection */
+.node-selected-glow {
+  box-shadow: inset 0 0 0 1px var(--glow), 0 0 0 3px var(--glow-soft);
+}
 
+/* Energy packet animation for verified edges */
+@keyframes energyFlow {
+  0% {
+    stroke-dashoffset: 540;
+  }
 
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
 
+.edge-energy-packet {
+  stroke-dasharray: 20 520;
+  animation: energyFlow 3s linear infinite;
+}
 
+/* Cinematic focus: dimmed elements */
+.board-dimmed {
+  opacity: 0.2;
+  transition: opacity 0.3s ease;
+}
+
+.board-focused {
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}

@@ -32,59 +32,63 @@ function LoginPage() {
     }
   };
 
+  const inputStyle = { background: 'var(--surface-0)', border: '1px solid var(--stroke-0)', color: 'var(--text-0)' };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-surface-50 flex flex-col">
-      {/* 装饰背景 */}
+    <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-base)' }}>
+      {/* Decorative background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-primary-100/30 rounded-full blur-3xl" />
-        <div className="absolute -bottom-1/2 -left-1/2 w-full h-full bg-primary-200/20 rounded-full blur-3xl" />
+        <div className="absolute -top-1/2 -right-1/2 w-full h-full rounded-full blur-3xl" style={{ background: 'rgba(99,102,241,0.08)' }} />
+        <div className="absolute -bottom-1/2 -left-1/2 w-full h-full rounded-full blur-3xl" style={{ background: 'rgba(99,102,241,0.05)' }} />
       </div>
 
       <div className="flex-1 flex items-center justify-center p-4 relative z-10">
         <div className="w-full max-w-md">
           {/* Logo */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-600 rounded-2xl shadow-lg shadow-primary-500/30 mb-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl shadow-lg mb-4" style={{ background: 'var(--accent-600)' }}>
               <BookOpen className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-surface-900">Reading Clipper</h1>
-            <p className="text-surface-500 mt-1">知识卡片管理平台</p>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-0)' }}>Reading Clipper</h1>
+            <p className="mt-1" style={{ color: 'var(--text-2)' }}>知识卡片管理平台</p>
           </div>
 
-          {/* 登录表单 */}
-          <div className="bg-white rounded-2xl shadow-xl shadow-surface-900/5 p-8 border border-surface-100">
-            <h2 className="text-xl font-semibold text-surface-900 mb-6">欢迎回来</h2>
+          {/* Login form */}
+          <div className="rounded-2xl shadow-xl p-8" style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)' }}>
+            <h2 className="text-xl font-semibold mb-6" style={{ color: 'var(--text-0)' }}>欢迎回来</h2>
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-surface-700 mb-1.5">
+                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-1)' }}>
                   邮箱地址
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: 'var(--text-2)' }} />
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="your@email.com"
-                    className="w-full pl-11 pr-4 py-3 bg-surface-50 border border-surface-200 rounded-xl text-surface-900 placeholder-surface-400 input-focus"
+                    className="w-full pl-11 pr-4 py-3 rounded-xl input-focus"
+                    style={inputStyle}
                     disabled={loading}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-surface-700 mb-1.5">
+                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-1)' }}>
                   密码
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: 'var(--text-2)' }} />
                   <input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-11 pr-4 py-3 bg-surface-50 border border-surface-200 rounded-xl text-surface-900 placeholder-surface-400 input-focus"
+                    className="w-full pl-11 pr-4 py-3 rounded-xl input-focus"
+                    style={inputStyle}
                     disabled={loading}
                   />
                 </div>
@@ -93,7 +97,8 @@ function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-4 rounded-xl transition-colors btn-press flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full font-medium py-3 px-4 rounded-xl transition-colors btn-press flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ background: 'var(--accent-600)', color: 'white' }}
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -107,18 +112,18 @@ function LoginPage() {
             </form>
 
             <div className="mt-6 text-center">
-              <span className="text-surface-500">还没有账号？</span>
+              <span style={{ color: 'var(--text-2)' }}>还没有账号？</span>
               <Link
                 to="/register"
-                className="text-primary-600 hover:text-primary-700 font-medium ml-1"
+                className="font-medium ml-1"
+                style={{ color: 'var(--accent-400)' }}
               >
                 立即注册
               </Link>
             </div>
           </div>
 
-          {/* 底部提示 */}
-          <p className="text-center text-surface-400 text-sm mt-6">
+          <p className="text-center text-sm mt-6" style={{ color: 'var(--text-2)' }}>
             登录即表示您同意我们的服务条款和隐私政策
           </p>
         </div>

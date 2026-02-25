@@ -141,32 +141,30 @@ function HypothesisSection({ topics = [], selectedCardIds, cards = [], onClearSe
   // 渲染证据项
   const renderEvidenceItem = (evidence, type) => {
     const colors = {
-      support: 'border-green-300 bg-green-50',
-      oppose: 'border-red-300 bg-red-50',
-      mixed: 'border-yellow-300 bg-yellow-50',
+      support: { background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)' },
+      oppose: { background: 'rgba(251,113,133,0.08)', border: '1px solid rgba(251,113,133,0.2)' },
+      mixed: { background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' },
     };
+    const iconColors = { support: '#34D399', oppose: '#FB7185', mixed: '#FBBF24' };
     const icons = {
-      support: <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />,
-      oppose: <XCircle className="w-4 h-4 text-red-600 shrink-0" />,
-      mixed: <HelpCircle className="w-4 h-4 text-yellow-600 shrink-0" />,
+      support: <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: iconColors.support }} />,
+      oppose: <XCircle className="w-4 h-4 shrink-0" style={{ color: iconColors.oppose }} />,
+      mixed: <HelpCircle className="w-4 h-4 shrink-0" style={{ color: iconColors.mixed }} />,
     };
 
     return (
-      <div
-        key={evidence.card_id}
-        className={`p-3 rounded-lg border ${colors[type]} mb-2`}
-      >
+      <div key={evidence.card_id} className="p-3 rounded-lg mb-2" style={colors[type]}>
         <div className="flex items-start gap-2">
           {icons[type]}
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-surface-700 leading-relaxed">
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--text-1)' }}>
               {evidence.rationale}
             </p>
-            <div className="flex items-center gap-2 mt-2 text-xs text-surface-500">
+            <div className="flex items-center gap-2 mt-2 text-xs" style={{ color: 'var(--text-2)' }}>
               <FileText className="w-3 h-3" />
               <span className="truncate">卡片: {evidence.card_id}</span>
               {evidence.strength && (
-                <span className="px-1.5 py-0.5 bg-surface-200 rounded text-[10px]">
+                <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(0,0,0,0.2)', color: 'var(--text-2)' }}>
                   {evidence.strength}
                 </span>
               )}
@@ -179,16 +177,16 @@ function HypothesisSection({ topics = [], selectedCardIds, cards = [], onClearSe
 
   // 渲染评估结果
   const renderEvaluation = (evaluation) => {
-    const verdictColors = {
-      strong_support: 'text-green-700 bg-green-100',
-      leaning_support: 'text-green-600 bg-green-50',
-      supported: 'text-green-600 bg-green-50',
-      rejected: 'text-red-600 bg-red-50',
-      strong_against: 'text-red-700 bg-red-100',
-      leaning_against: 'text-red-600 bg-red-50',
-      mixed_or_uncertain: 'text-yellow-700 bg-yellow-100',
-      inconclusive: 'text-yellow-600 bg-yellow-50',
-      partially_supported: 'text-blue-600 bg-blue-50',
+    const verdictStyles = {
+      strong_support: { color: '#34D399', background: 'rgba(52,211,153,0.1)' },
+      leaning_support: { color: '#34D399', background: 'rgba(52,211,153,0.08)' },
+      supported: { color: '#34D399', background: 'rgba(52,211,153,0.08)' },
+      rejected: { color: '#FB7185', background: 'rgba(251,113,133,0.08)' },
+      strong_against: { color: '#FB7185', background: 'rgba(251,113,133,0.1)' },
+      leaning_against: { color: '#FB7185', background: 'rgba(251,113,133,0.08)' },
+      mixed_or_uncertain: { color: '#FBBF24', background: 'rgba(251,191,36,0.1)' },
+      inconclusive: { color: '#FBBF24', background: 'rgba(251,191,36,0.08)' },
+      partially_supported: { color: 'var(--accent-300)', background: 'rgba(99,102,241,0.08)' },
     };
     const verdictLabels = {
       strong_support: '✅ 强力支持',
@@ -203,39 +201,38 @@ function HypothesisSection({ topics = [], selectedCardIds, cards = [], onClearSe
     };
 
     const verdict = evaluation.overall_judgement || evaluation.verdict;
+    const vStyle = verdictStyles[verdict] || { color: 'var(--text-1)', background: 'rgba(0,0,0,0.1)' };
 
     return (
       <div className="space-y-4">
-        {/* 假设文本 */}
-        <div className="p-3 bg-surface-50 rounded-lg border border-surface-200">
-          <p className="text-surface-800 font-medium">{evaluation.hypothesis_text}</p>
+        <div className="p-3 rounded-lg" style={{ background: 'rgba(0,0,0,0.15)', border: '1px solid var(--stroke-0)' }}>
+          <p className="font-medium" style={{ color: 'var(--text-0)' }}>{evaluation.hypothesis_text}</p>
         </div>
 
-        {/* 结论 */}
         <div className="flex items-center gap-3">
-          <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${verdictColors[verdict] || 'text-surface-600 bg-surface-100'}`}>
+          <span className="px-3 py-1.5 rounded-full text-sm font-medium" style={vStyle}>
             {verdictLabels[verdict] || verdict}
           </span>
           {evaluation.net_confidence !== undefined && (
-            <span className="text-sm text-surface-500">
+            <span className="text-sm" style={{ color: 'var(--text-2)' }}>
               置信度: {(evaluation.net_confidence * 100).toFixed(0)}%
             </span>
           )}
           {evaluation.risk_level && (
-            <span className={`text-xs px-2 py-0.5 rounded ${
-              evaluation.risk_level === 'high' ? 'bg-red-100 text-red-700' :
-              evaluation.risk_level === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-              'bg-green-100 text-green-700'
-            }`}>
+            <span className="text-xs px-2 py-0.5 rounded" style={{
+              background: evaluation.risk_level === 'high' ? 'rgba(251,113,133,0.1)' :
+                evaluation.risk_level === 'medium' ? 'rgba(251,191,36,0.1)' : 'rgba(52,211,153,0.1)',
+              color: evaluation.risk_level === 'high' ? '#FB7185' :
+                evaluation.risk_level === 'medium' ? '#FBBF24' : '#34D399',
+            }}>
               风险: {evaluation.risk_level}
             </span>
           )}
         </div>
 
-        {/* 证据列表 */}
         {evaluation.supporting_evidence?.length > 0 && (
           <div>
-            <h5 className="text-xs font-semibold text-green-700 mb-2 flex items-center gap-1">
+            <h5 className="text-xs font-semibold mb-2 flex items-center gap-1" style={{ color: '#34D399' }}>
               <CheckCircle2 className="w-3.5 h-3.5" />
               支持证据 ({evaluation.supporting_evidence.length})
             </h5>
@@ -244,7 +241,7 @@ function HypothesisSection({ topics = [], selectedCardIds, cards = [], onClearSe
         )}
         {evaluation.opposing_evidence?.length > 0 && (
           <div>
-            <h5 className="text-xs font-semibold text-red-700 mb-2 flex items-center gap-1">
+            <h5 className="text-xs font-semibold mb-2 flex items-center gap-1" style={{ color: '#FB7185' }}>
               <XCircle className="w-3.5 h-3.5" />
               反对证据 ({evaluation.opposing_evidence.length})
             </h5>
@@ -253,7 +250,7 @@ function HypothesisSection({ topics = [], selectedCardIds, cards = [], onClearSe
         )}
         {evaluation.mixed_evidence?.length > 0 && (
           <div>
-            <h5 className="text-xs font-semibold text-yellow-700 mb-2 flex items-center gap-1">
+            <h5 className="text-xs font-semibold mb-2 flex items-center gap-1" style={{ color: '#FBBF24' }}>
               <HelpCircle className="w-3.5 h-3.5" />
               混合证据 ({evaluation.mixed_evidence.length})
             </h5>
@@ -261,14 +258,13 @@ function HypothesisSection({ topics = [], selectedCardIds, cards = [], onClearSe
           </div>
         )}
 
-        {/* 证据缺口 */}
         {evaluation.gaps?.length > 0 && (
-          <div className="mt-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
-            <h5 className="text-xs font-semibold text-amber-800 mb-2">📋 证据缺口</h5>
+          <div className="mt-4 p-3 rounded-lg" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.15)' }}>
+            <h5 className="text-xs font-semibold mb-2" style={{ color: '#FBBF24' }}>📋 证据缺口</h5>
             <ul className="space-y-1">
               {evaluation.gaps.map((gap, i) => (
-                <li key={i} className="text-sm text-amber-700 flex items-start gap-2">
-                  <span className="text-amber-500 mt-1">•</span>
+                <li key={i} className="text-sm flex items-start gap-2" style={{ color: 'var(--text-1)' }}>
+                  <span className="mt-1" style={{ color: '#FBBF24' }}>•</span>
                   <span>{gap.description}</span>
                 </li>
               ))}
@@ -280,43 +276,40 @@ function HypothesisSection({ topics = [], selectedCardIds, cards = [], onClearSe
   };
 
   return (
-    <div className="bg-white rounded-xl border border-surface-100 overflow-hidden mb-6">
-      {/* 标题栏 - 可折叠 */}
+    <div className="rounded-xl overflow-hidden mb-6" style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)' }}>
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-5 py-4 flex items-center justify-between hover:bg-surface-50 transition-colors"
+        className="w-full px-5 py-4 flex items-center justify-between transition-colors"
       >
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-purple-50 rounded-lg">
-            <FlaskConical className="w-5 h-5 text-purple-600" />
+          <div className="p-2 rounded-lg" style={{ background: 'rgba(168,85,247,0.1)' }}>
+            <FlaskConical className="w-5 h-5" style={{ color: '#A855F7' }} />
           </div>
           <div className="text-left">
-            <h3 className="font-semibold text-surface-900">假设验证</h3>
-            <p className="text-xs text-surface-500">
+            <h3 className="font-semibold" style={{ color: 'var(--text-0)' }}>假设验证</h3>
+            <p className="text-xs" style={{ color: 'var(--text-2)' }}>
               输入假设，用卡片证据验证真伪
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {selectedCount > 0 && (
-            <span className="text-xs px-2 py-1 bg-primary-100 text-primary-700 rounded-full">
+            <span className="text-xs px-2 py-1 rounded-full" style={{ background: 'rgba(99,102,241,0.1)', color: 'var(--accent-300)' }}>
               已选 {selectedCount} 张卡片
             </span>
           )}
           {isExpanded ? (
-            <ChevronUp className="w-5 h-5 text-surface-400" />
+            <ChevronUp className="w-5 h-5" style={{ color: 'var(--text-2)' }} />
           ) : (
-            <ChevronDown className="w-5 h-5 text-surface-400" />
+            <ChevronDown className="w-5 h-5" style={{ color: 'var(--text-2)' }} />
           )}
         </div>
       </button>
 
-      {/* 展开内容 */}
       {isExpanded && (
-        <div className="px-5 pb-5 border-t border-surface-100">
-          {/* 假设输入区 */}
+        <div className="px-5 pb-5" style={{ borderTop: '1px solid var(--stroke-0)' }}>
           <div className="mt-4">
-            <label className="block text-sm font-medium text-surface-700 mb-2">
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-1)' }}>
               输入你的假设
             </label>
             <input
@@ -325,103 +318,76 @@ function HypothesisSection({ topics = [], selectedCardIds, cards = [], onClearSe
               onChange={(e) => setHypothesis(e.target.value)}
               placeholder="例如：AI 技术将在 2025 年前显著改变办公效率"
               disabled={loading}
-              className="w-full px-4 py-3 bg-surface-50 border border-surface-200 rounded-xl text-surface-900 placeholder-surface-400 input-focus disabled:opacity-50"
+              className="w-full px-4 py-3 rounded-xl input-focus disabled:opacity-50"
+              style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)', color: 'var(--text-0)' }}
             />
           </div>
 
-          {/* 证据来源选择 */}
           <div className="mt-4">
-            <label className="block text-sm font-medium text-surface-700 mb-3">
+            <label className="block text-sm font-medium mb-3" style={{ color: 'var(--text-1)' }}>
               选择证据来源
             </label>
             <div className="flex gap-4 mb-4">
-              {/* 按 Topic */}
-              <label className={`flex-1 flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                sourceMode === 'topic' 
-                  ? 'border-primary-400 bg-primary-50' 
-                  : 'border-surface-200 hover:border-surface-300'
-              }`}>
-                <input
-                  type="radio"
-                  name="sourceMode"
-                  value="topic"
-                  checked={sourceMode === 'topic'}
-                  onChange={(e) => setSourceMode(e.target.value)}
-                  className="sr-only"
-                />
-                <Layers className={`w-5 h-5 ${sourceMode === 'topic' ? 'text-primary-600' : 'text-surface-400'}`} />
+              <label className="flex-1 flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all" style={{
+                border: sourceMode === 'topic' ? '2px solid var(--accent-400)' : '2px solid var(--stroke-0)',
+                background: sourceMode === 'topic' ? 'rgba(99,102,241,0.08)' : 'transparent',
+              }}>
+                <input type="radio" name="sourceMode" value="topic" checked={sourceMode === 'topic'} onChange={(e) => setSourceMode(e.target.value)} className="sr-only" />
+                <Layers className="w-5 h-5" style={{ color: sourceMode === 'topic' ? 'var(--accent-400)' : 'var(--text-2)' }} />
                 <div>
-                  <div className={`font-medium ${sourceMode === 'topic' ? 'text-primary-900' : 'text-surface-700'}`}>
-                    按 Topic
-                  </div>
-                  <div className="text-xs text-surface-500">使用整个 Topic 的卡片</div>
+                  <div className="font-medium" style={{ color: sourceMode === 'topic' ? 'var(--accent-300)' : 'var(--text-1)' }}>按 Topic</div>
+                  <div className="text-xs" style={{ color: 'var(--text-2)' }}>使用整个 Topic 的卡片</div>
                 </div>
               </label>
 
-              {/* 手动勾选 */}
-              <label className={`flex-1 flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                sourceMode === 'manual' 
-                  ? 'border-primary-400 bg-primary-50' 
-                  : 'border-surface-200 hover:border-surface-300'
-              }`}>
-                <input
-                  type="radio"
-                  name="sourceMode"
-                  value="manual"
-                  checked={sourceMode === 'manual'}
-                  onChange={(e) => setSourceMode(e.target.value)}
-                  className="sr-only"
-                />
-                <MousePointer2 className={`w-5 h-5 ${sourceMode === 'manual' ? 'text-primary-600' : 'text-surface-400'}`} />
+              <label className="flex-1 flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all" style={{
+                border: sourceMode === 'manual' ? '2px solid var(--accent-400)' : '2px solid var(--stroke-0)',
+                background: sourceMode === 'manual' ? 'rgba(99,102,241,0.08)' : 'transparent',
+              }}>
+                <input type="radio" name="sourceMode" value="manual" checked={sourceMode === 'manual'} onChange={(e) => setSourceMode(e.target.value)} className="sr-only" />
+                <MousePointer2 className="w-5 h-5" style={{ color: sourceMode === 'manual' ? 'var(--accent-400)' : 'var(--text-2)' }} />
                 <div>
-                  <div className={`font-medium ${sourceMode === 'manual' ? 'text-primary-900' : 'text-surface-700'}`}>
-                    手动勾选
-                  </div>
-                  <div className="text-xs text-surface-500">在下方卡片列表勾选</div>
+                  <div className="font-medium" style={{ color: sourceMode === 'manual' ? 'var(--accent-300)' : 'var(--text-1)' }}>手动勾选</div>
+                  <div className="text-xs" style={{ color: 'var(--text-2)' }}>在下方卡片列表勾选</div>
                 </div>
               </label>
             </div>
 
-            {/* Topic 选择器 或 已选卡片信息 */}
             {sourceMode === 'topic' ? (
               <div className="relative">
                 <select
                   value={selectedTopicTitle}
                   onChange={(e) => setSelectedTopicTitle(e.target.value)}
                   disabled={loading}
-                  className="w-full px-4 py-2.5 bg-white border border-surface-200 rounded-xl text-surface-900 appearance-none cursor-pointer disabled:opacity-50"
+                  className="w-full px-4 py-2.5 rounded-xl appearance-none cursor-pointer disabled:opacity-50"
+                  style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)', color: 'var(--text-0)' }}
                 >
                   <option value="">选择 Topic...</option>
                   {topics.map((topic) => (
-                    <option key={topic.id} value={topic.title}>
-                      {topic.title}
-                    </option>
+                    <option key={topic.id} value={topic.title}>{topic.title}</option>
                   ))}
                 </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400 pointer-events-none" />
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: 'var(--text-2)' }} />
               </div>
             ) : (
-              <div className="px-4 py-3 bg-surface-50 rounded-xl border border-surface-200">
+              <div className="px-4 py-3 rounded-xl" style={{ background: 'rgba(0,0,0,0.15)', border: '1px solid var(--stroke-0)' }}>
                 {selectedCount > 0 ? (
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="text-primary-700 font-medium">{selectedCount}</span>
-                      <span className="text-surface-600"> 张卡片已选中</span>
+                      <span className="font-medium" style={{ color: 'var(--accent-300)' }}>{selectedCount}</span>
+                      <span style={{ color: 'var(--text-1)' }}> 张卡片已选中</span>
                       {inferredTopicFromCards && (
-                        <span className="text-surface-500 text-sm ml-2">
+                        <span className="text-sm ml-2" style={{ color: 'var(--text-2)' }}>
                           (主要来自: {inferredTopicFromCards})
                         </span>
                       )}
                     </div>
-                    <button
-                      onClick={onClearSelection}
-                      className="text-xs text-surface-500 hover:text-surface-700 underline"
-                    >
+                    <button onClick={onClearSelection} className="text-xs underline" style={{ color: 'var(--text-2)' }}>
                       清空选择
                     </button>
                   </div>
                 ) : (
-                  <p className="text-surface-500 text-sm">
+                  <p className="text-sm" style={{ color: 'var(--text-2)' }}>
                     请在下方卡片列表中勾选要作为证据的卡片
                   </p>
                 )}
@@ -429,12 +395,12 @@ function HypothesisSection({ topics = [], selectedCardIds, cards = [], onClearSe
             )}
           </div>
 
-          {/* 操作按钮 */}
           <div className="mt-5 flex flex-wrap gap-3">
             <button
               onClick={handleSuggestHypothesis}
               disabled={loading || (sourceMode === 'topic' ? !selectedTopicTitle : selectedCount === 0)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-purple-50 text-purple-700 font-medium rounded-xl hover:bg-purple-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2.5 font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: 'rgba(168,85,247,0.1)', color: '#A855F7' }}
             >
               {loading && loadingText.includes('分析') ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -447,7 +413,8 @@ function HypothesisSection({ topics = [], selectedCardIds, cards = [], onClearSe
             <button
               onClick={handleEvaluate}
               disabled={loading || !hypothesis.trim() || (sourceMode === 'topic' ? !selectedTopicTitle : selectedCount === 0)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white font-medium rounded-xl hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2.5 font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: 'var(--accent-600)', color: 'white' }}
             >
               {loading && loadingText.includes('验证') ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -458,29 +425,26 @@ function HypothesisSection({ topics = [], selectedCardIds, cards = [], onClearSe
             </button>
 
             {loading && (
-              <span className="flex items-center text-sm text-surface-500">
+              <span className="flex items-center text-sm" style={{ color: 'var(--text-2)' }}>
                 {loadingText}
               </span>
             )}
           </div>
 
-          {/* 验证结果 */}
           {evaluationResult && (
-            <div className="mt-6 pt-6 border-t border-surface-200">
-              {/* 全局摘要 */}
+            <div className="mt-6 pt-6" style={{ borderTop: '1px solid var(--stroke-0)' }}>
               {evaluationResult.global_summary && (
-                <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl">
-                  <h4 className="font-semibold text-surface-900 mb-2">📊 综合分析</h4>
-                  <p className="text-sm text-surface-700 leading-relaxed">
+                <div className="mb-6 p-4 rounded-xl" style={{ background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.15)' }}>
+                  <h4 className="font-semibold mb-2" style={{ color: 'var(--text-0)' }}>📊 综合分析</h4>
+                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text-1)' }}>
                     {evaluationResult.global_summary}
                   </p>
                 </div>
               )}
 
-              {/* 评估详情 */}
               {evaluationResult.evaluations?.length > 0 && (
                 <div>
-                  <h4 className="font-semibold text-surface-900 mb-4">假设评估结果</h4>
+                  <h4 className="font-semibold mb-4" style={{ color: 'var(--text-0)' }}>假设评估结果</h4>
                   {evaluationResult.evaluations.map((evaluation, i) => (
                     <div key={evaluation.hypothesis_id || i}>
                       {renderEvaluation(evaluation)}
@@ -489,9 +453,8 @@ function HypothesisSection({ topics = [], selectedCardIds, cards = [], onClearSe
                 </div>
               )}
 
-              {/* 使用的卡片数量 */}
               {evaluationResult.used_card_ids?.length > 0 && (
-                <div className="mt-4 text-xs text-surface-500">
+                <div className="mt-4 text-xs" style={{ color: 'var(--text-2)' }}>
                   共使用 {evaluationResult.used_card_ids.length} 张卡片进行验证
                 </div>
               )}

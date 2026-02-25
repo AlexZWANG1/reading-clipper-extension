@@ -433,8 +433,8 @@ router.get('/settings/models/:provider', (req, res) => {
             { id: 'gpt-5-nano', name: 'GPT-5 Nano', description: '高吞吐量、简单指令跟随' },
         ],
         anthropic: [
-            { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', description: '平衡性能和成本' },
-            { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus', description: '最强性能' },
+            { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', description: '平衡性能和成本' },
+            { id: 'claude-opus-4-6', name: 'Claude Opus 4.6', description: '最强性能' },
         ],
         custom: [
             { id: '*', name: '自定义模型', description: '使用自定义模型名称' },

@@ -200,63 +200,49 @@ function AddCardSection({ onCardAdded }) {
 
   const canSubmit = (snippet.trim() || imageData || selectedFile) && !loading;
 
+  const inputStyle = { background: 'var(--surface-0)', border: '1px solid var(--stroke-0)', color: 'var(--text-0)' };
+
   return (
-    <div className="bg-white rounded-xl border border-surface-100 p-5 mb-6">
-      <h3 className="text-lg font-semibold text-surface-900 mb-4 flex items-center gap-2">
-        <Plus className="w-5 h-5 text-primary-500" />
+    <div className="rounded-xl p-5 mb-6" style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)' }}>
+      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: 'var(--text-0)' }}>
+        <Plus className="w-5 h-5" style={{ color: 'var(--accent-400)' }} />
         添加新卡片
       </h3>
 
-      {/* 文件上传区域 */}
       <div className="mb-4">
         <div className="flex items-center gap-3 mb-3">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={ACCEPTED_FILE_TYPES}
-            onChange={handleFileSelect}
-            className="hidden"
-          />
+          <input ref={fileInputRef} type="file" accept={ACCEPTED_FILE_TYPES} onChange={handleFileSelect} className="hidden" />
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={loading}
-            className="flex items-center gap-2 px-3 py-2 border border-surface-200 rounded-lg text-sm text-surface-600 hover:bg-surface-50 hover:border-primary-300 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
+            style={{ border: '1px solid var(--stroke-0)', color: 'var(--text-1)' }}
           >
             <Upload className="w-4 h-4" />
             上传文件
           </button>
-          <span className="text-xs text-surface-400">
-            支持 PDF、Word、TXT、Markdown
-          </span>
+          <span className="text-xs" style={{ color: 'var(--text-2)' }}>支持 PDF、Word、TXT、Markdown</span>
         </div>
 
-        {/* 已选择的文件 */}
         {selectedFile && (
-          <div className="flex items-center gap-2 p-3 bg-primary-50 rounded-lg mb-3">
-            <FileText className="w-5 h-5 text-primary-500" />
-            <span className="flex-1 text-sm text-primary-700 truncate">
-              {selectedFile.name}
-            </span>
-            <button
-              onClick={removeFile}
-              className="p-1 text-primary-400 hover:text-primary-600 hover:bg-primary-100 rounded"
-            >
+          <div className="flex items-center gap-2 p-3 rounded-lg mb-3" style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)' }}>
+            <FileText className="w-5 h-5" style={{ color: 'var(--accent-400)' }} />
+            <span className="flex-1 text-sm truncate" style={{ color: 'var(--accent-300)' }}>{selectedFile.name}</span>
+            <button onClick={removeFile} className="p-1 rounded" style={{ color: 'var(--text-2)' }}>
               <X className="w-4 h-4" />
             </button>
           </div>
         )}
       </div>
 
-      {/* 分隔线 */}
       {!selectedFile && (
         <>
           <div className="flex items-center gap-3 mb-4">
-            <div className="flex-1 h-px bg-surface-200" />
-            <span className="text-xs text-surface-400">或</span>
-            <div className="flex-1 h-px bg-surface-200" />
+            <div className="flex-1 h-px" style={{ background: 'var(--stroke-1)' }} />
+            <span className="text-xs" style={{ color: 'var(--text-2)' }}>或</span>
+            <div className="flex-1 h-px" style={{ background: 'var(--stroke-1)' }} />
           </div>
 
-          {/* 文本输入区 */}
           <div className="mb-4">
             <textarea
               ref={textareaRef}
@@ -266,29 +252,21 @@ function AddCardSection({ onCardAdded }) {
               placeholder="在此粘贴文字内容或图片...（支持 Ctrl+V 粘贴图片）"
               rows={4}
               disabled={loading}
-              className="w-full px-4 py-3 bg-surface-50 border border-surface-200 rounded-xl text-surface-900 placeholder-surface-400 input-focus resize-none disabled:opacity-50"
+              className="w-full px-4 py-3 rounded-xl input-focus resize-none disabled:opacity-50"
+              style={inputStyle}
             />
           </div>
 
-          {/* 图片预览 */}
           {imageData && (
-            <div className="mb-4 p-3 bg-surface-50 rounded-xl border border-surface-200">
+            <div className="mb-4 p-3 rounded-xl" style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--stroke-0)' }}>
               <div className="flex items-start gap-3">
-                <img
-                  src={imageData}
-                  alt="预览图片"
-                  className="max-w-[200px] max-h-[150px] rounded-lg border border-surface-200 object-cover"
-                />
+                <img src={imageData} alt="预览图片" className="max-w-[200px] max-h-[150px] rounded-lg object-cover" style={{ border: '1px solid var(--stroke-0)' }} />
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 text-sm text-surface-600 mb-2">
+                  <div className="flex items-center gap-2 text-sm mb-2" style={{ color: 'var(--text-1)' }}>
                     <Image className="w-4 h-4" />
                     已粘贴图片
                   </div>
-                  <button
-                    onClick={removeImage}
-                    disabled={loading}
-                    className="flex items-center gap-1 px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
-                  >
+                  <button onClick={removeImage} disabled={loading} className="flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors disabled:opacity-50" style={{ color: '#FB7185' }}>
                     <X className="w-3 h-3" />
                     移除图片
                   </button>
@@ -299,93 +277,57 @@ function AddCardSection({ onCardAdded }) {
         </>
       )}
 
-      {/* 更多选项 */}
       <div className="mb-4">
         <button
           onClick={() => setShowOptions(!showOptions)}
-          className="flex items-center gap-1 text-sm text-surface-500 hover:text-surface-700 transition-colors"
+          className="flex items-center gap-1 text-sm transition-colors"
+          style={{ color: 'var(--text-2)' }}
         >
-          <ChevronDown
-            className={`w-4 h-4 transition-transform ${showOptions ? 'rotate-180' : ''}`}
-          />
+          <ChevronDown className={`w-4 h-4 transition-transform ${showOptions ? 'rotate-180' : ''}`} />
           更多选项（来源、Topic）
         </button>
 
         {showOptions && (
           <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium text-surface-500 mb-1">
-                <LinkIcon className="w-3 h-3 inline mr-1" />
-                来源名称
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-2)' }}>
+                <LinkIcon className="w-3 h-3 inline mr-1" />来源名称
               </label>
-              <input
-                type="text"
-                value={sourceName}
-                onChange={(e) => setSourceName(e.target.value)}
-                placeholder="文章标题/网站名称"
-                disabled={loading}
-                className="w-full px-3 py-2 text-sm bg-surface-50 border border-surface-200 rounded-lg input-focus disabled:opacity-50"
-              />
+              <input type="text" value={sourceName} onChange={(e) => setSourceName(e.target.value)} placeholder="文章标题/网站名称" disabled={loading} className="w-full px-3 py-2 text-sm rounded-lg input-focus disabled:opacity-50" style={inputStyle} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-surface-500 mb-1">
-                <LinkIcon className="w-3 h-3 inline mr-1" />
-                来源链接
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-2)' }}>
+                <LinkIcon className="w-3 h-3 inline mr-1" />来源链接
               </label>
-              <input
-                type="text"
-                value={sourceUrl}
-                onChange={(e) => setSourceUrl(e.target.value)}
-                placeholder="https://..."
-                disabled={loading}
-                className="w-full px-3 py-2 text-sm bg-surface-50 border border-surface-200 rounded-lg input-focus disabled:opacity-50"
-              />
+              <input type="text" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://..." disabled={loading} className="w-full px-3 py-2 text-sm rounded-lg input-focus disabled:opacity-50" style={inputStyle} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-surface-500 mb-1">
-                <Tag className="w-3 h-3 inline mr-1" />
-                归属 Topic
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-2)' }}>
+                <Tag className="w-3 h-3 inline mr-1" />归属 Topic
               </label>
-              <select
-                value={topicTitle}
-                onChange={(e) => setTopicTitle(e.target.value)}
-                disabled={loading}
-                className="w-full px-3 py-2 text-sm bg-surface-50 border border-surface-200 rounded-lg input-focus cursor-pointer disabled:opacity-50"
-              >
+              <select value={topicTitle} onChange={(e) => setTopicTitle(e.target.value)} disabled={loading} className="w-full px-3 py-2 text-sm rounded-lg input-focus cursor-pointer disabled:opacity-50" style={inputStyle}>
                 <option value="">选择 Topic...</option>
-                {topics.map((topic) => (
-                  <option key={topic.id} value={topic.title}>
-                    {topic.title}
-                  </option>
-                ))}
+                {topics.map((topic) => (<option key={topic.id} value={topic.title}>{topic.title}</option>))}
               </select>
             </div>
           </div>
         )}
       </div>
 
-      {/* 提交按钮 */}
       <div className="flex items-center justify-between">
-        <p className="text-xs text-surface-400">
-          {selectedFile
-            ? '将从文件中提取内容并生成多张卡片'
-            : '将根据内容自动生成摘要和要点'}
+        <p className="text-xs" style={{ color: 'var(--text-2)' }}>
+          {selectedFile ? '将从文件中提取内容并生成多张卡片' : '将根据内容自动生成摘要和要点'}
         </p>
         <button
           onClick={handleSubmit}
           disabled={!canSubmit}
-          className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white font-medium rounded-xl hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 px-4 py-2.5 font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ background: 'var(--accent-600)', color: 'var(--text-0)' }}
         >
           {loading ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              {loadingText || '处理中...'}
-            </>
+            <><Loader2 className="w-4 h-4 animate-spin" />{loadingText || '处理中...'}</>
           ) : (
-            <>
-              <Plus className="w-4 h-4" />
-              {selectedFile ? '从文件生成卡片' : '生成并添加卡片'}
-            </>
+            <><Plus className="w-4 h-4" />{selectedFile ? '从文件生成卡片' : '生成并添加卡片'}</>
           )}
         </button>
       </div>

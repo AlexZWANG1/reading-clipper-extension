@@ -61,6 +61,7 @@ import promptsRouterV2 from "./routes/v2/prompts.mjs";
 import hypothesesRouterV2 from "./routes/v2/hypotheses.mjs";
 import boardsRouterV2 from "./routes/v2/boards.mjs";
 import aiBoardsRouterV2 from "./routes/v2/ai_boards.mjs";
+import chatRouterV2 from "./routes/v2/chat.mjs";
 
 // Adapter (Mock) 路由 - 仅在 Local Mode 使用
 import authMockRouter from "./routes/mock/auth_mock.mjs";
@@ -157,6 +158,7 @@ if (IS_LOCAL_MODE) {
   app.use("/api/v2/hypotheses", hypothesesRouterV2);
   app.use("/api/v2/boards", boardsRouterV2);
   app.use("/api/v2/ai", aiBoardsRouterV2);
+  app.use("/api/v2/chat", chatRouterV2);
 }
 
 // ========= 错误处理 =========

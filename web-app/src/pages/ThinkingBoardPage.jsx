@@ -1,932 +1,1208 @@
-// ========= Strategic Issue Tree (思维画板 - Issue Tree 模式) =========
+// ========= Thinking Board Page — V2 (React Flow) =========
 
-import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Save, Brain, Sparkles, ChevronRight, ChevronDown, Check, X, Play, Minus, Loader2, Plus, Trash2, ExternalLink } from 'lucide-react';
-import { boardsApi, cardsApi, aiBoardsApi } from '../lib/api';
+import {
+    ReactFlow,
+    ReactFlowProvider,
+    Background,
+    Controls,
+    MiniMap,
+    useNodesState,
+    useEdgesState,
+    addEdge,
+    MarkerType,
+    Panel,
+    useReactFlow,
+    BackgroundVariant,
+    useStore,
+    getSmoothStepPath,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import dagre from 'dagre';
+import { ArrowLeft, Plus, ExternalLink, Loader2, LayoutGrid, ZoomIn, ZoomOut, Maximize2, Map, GripVertical, Search } from 'lucide-react';
+import { boardsApi, cardsApi } from '../lib/api';
 import { useUIStore, useCardsStore } from '../lib/store';
 import AddCardSection from '../components/AddCardSection';
+import BoardChatPanel from '../components/BoardChatPanel';
 
-// 构建带 Text Fragment 的高亮链接 (同 CardsPage)
+// Custom nodes
+import QuestionNode from '../components/board/QuestionNode';
+import HypothesisNode from '../components/board/HypothesisNode';
+import EvidenceNode from '../components/board/EvidenceNode';
+
+const nodeTypes = {
+    questionNode: QuestionNode,
+    hypothesisNode: HypothesisNode,
+    evidenceNode: EvidenceNode,
+};
+
+// ========= Custom Edges =========
+function MonoStepEdge({ id, sourceX, sourceY, targetX, targetY, style, markerEnd, data }) {
+    const [path] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY });
+    const glow = !!data?.isFocus;
+
+    return (
+        <>
+            {/* hitbox (thick, transparent, clickable) */}
+            <path d={path} fill="none" stroke="rgba(0,0,0,0)" strokeWidth={12} pointerEvents="stroke" />
+
+            {/* visual (thin, colored) */}
+            <path d={path} fill="none" strokeWidth={style?.strokeWidth || 1.6} stroke={style?.stroke} strokeDasharray={style?.strokeDasharray} markerEnd={markerEnd} />
+
+            {/* glow (only focus chain) */}
+            {glow && (
+                <path
+                    d={path}
+                    fill="none"
+                    stroke="var(--glow)"
+                    strokeWidth={(style?.strokeWidth || 1.6) + 2}
+                    strokeLinecap="round"
+                    style={{ filter: 'drop-shadow(0 0 4px var(--glow))' }}
+                />
+            )}
+        </>
+    );
+}
+
+const edgeTypes = { monoStep: MonoStepEdge };
+
+// ========= Dagre Layout =========
+const dagreGraph = new dagre.graphlib.Graph();
+dagreGraph.setDefaultEdgeLabel(() => ({}));
+
+const NODE_WIDTH = 320;
+
+// Fixed node dimensions per type — keeps dagre layout and actual rendering in sync
+const NODE_DIMS = {
+    questionNode:   { width: NODE_WIDTH, height: 160 },
+    hypothesisNode: { width: NODE_WIDTH, height: 200 },
+    evidenceNode:   { width: 280, height: 180 },
+};
+
+function getLayoutedElements(nodes, edges, direction = 'TB') {
+    dagreGraph.setGraph({ rankdir: direction, ranksep: 120, nodesep: 80, edgesep: 40 });
+
+    // Clear previous graph
+    dagreGraph.nodes().forEach(n => dagreGraph.removeNode(n));
+
+    nodes.forEach(node => {
+        const dims = NODE_DIMS[node.type] || { width: NODE_WIDTH, height: 180 };
+        dagreGraph.setNode(node.id, { width: dims.width, height: dims.height });
+    });
+
+    edges.forEach(edge => {
+        dagreGraph.setEdge(edge.source, edge.target);
+    });
+
+    dagre.layout(dagreGraph);
+
+    const layoutedNodes = nodes.map(node => {
+        const nodeWithPosition = dagreGraph.node(node.id);
+        const dims = NODE_DIMS[node.type] || { width: NODE_WIDTH, height: 180 };
+        return {
+            ...node,
+            position: {
+                x: nodeWithPosition.x - dims.width / 2,
+                y: nodeWithPosition.y - dims.height / 2,
+            },
+            // Set explicit dimensions so React Flow knows the real size
+            style: { ...(node.style || {}), width: dims.width, height: dims.height },
+        };
+    });
+
+    return { nodes: layoutedNodes, edges };
+}
+
+// ========= Edge styles =========
+// Evidence edges (H→E): all SOLID, colored by relation
+function getEvidenceEdgeStyle(relationType) {
+    switch (relationType) {
+        case 'supports':
+            return { stroke: '#10B981', strokeWidth: 2, markerEnd: { type: MarkerType.ArrowClosed, color: '#10B981' } };
+        case 'refutes':
+            return { stroke: '#EF4444', strokeWidth: 2, markerEnd: { type: MarkerType.ArrowClosed, color: '#EF4444' } };
+        default: // neutral
+            return { stroke: '#94A3B8', strokeWidth: 1.6, markerEnd: { type: MarkerType.ArrowClosed, color: '#94A3B8' } };
+    }
+}
+
+// Parent-child edges (Q→Q, Q→H): style depends on target hypo_state
+function getParentEdgeStyle(isHypoTarget, hypoState) {
+    const baseColor = 'var(--stroke-1)';
+    if (isHypoTarget) {
+        // Pending = dashed, Verified = solid
+        const isPending = !hypoState || hypoState === 'pending';
+        return {
+            stroke: isPending ? '#A855F7' : '#7C3AED',
+            strokeWidth: isPending ? 1.6 : 2,
+            strokeDasharray: isPending ? '6 4' : '0',
+            markerEnd: { type: MarkerType.ArrowClosed, color: isPending ? '#A855F7' : '#7C3AED' },
+        };
+    }
+    // Q→Q decompose: always solid gray
+    return {
+        stroke: baseColor,
+        strokeWidth: 1.6,
+        markerEnd: { type: MarkerType.ArrowClosed, color: baseColor },
+    };
+}
+
+// ========= Build highlight URL =========
 function buildHighlightUrl(baseUrl, rawSnippet) {
     if (!baseUrl || !rawSnippet) return baseUrl || '#';
     try {
         const url = new URL(baseUrl);
         const cleanText = rawSnippet.replace(/\s+/g, ' ').trim().slice(0, 80);
         if (!cleanText) return baseUrl;
-        const encodedText = encodeURIComponent(cleanText).replace(/-/g, '%2D');
-        url.hash = `:~:text=${encodedText}`;
+        url.hash = `:~:text=${encodeURIComponent(cleanText).replace(/-/g, '%2D')}`;
         return url.toString();
-    } catch {
-        return baseUrl;
-    }
+    } catch { return baseUrl; }
 }
 
-// ========= Helper: Editable Text Component =========
-const EditableText = ({ text, onSave, className, placeholder, isEditing, setEditing }) => {
-    const inputRef = useRef(null);
-
-    useEffect(() => {
-        if (isEditing && inputRef.current) {
-            inputRef.current.focus();
-            inputRef.current.select();
-        }
-    }, [isEditing]);
-
-    const handleKeyDown = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            onSave(e.target.value);
-            setEditing(false);
-        }
-        if (e.key === 'Escape') {
-            setEditing(false);
-        }
-    };
-
-    const handleBlur = (e) => {
-        onSave(e.target.value);
-        setEditing(false);
-    };
-
-    if (isEditing) {
-        return (
-            <textarea
-                ref={inputRef}
-                defaultValue={text}
-                onKeyDown={handleKeyDown}
-                onBlur={handleBlur}
-                className={`w-full bg-white text-slate-900 p-2 rounded border-2 border-blue-400 outline-none resize-none overflow-hidden ${className}`}
-                placeholder={placeholder}
-                rows={2}
-            />
-        );
-    }
-
-    return (
-        <div
-            className={`cursor-text hover:bg-black/5 p-1 -m-1 rounded transition-colors ${className}`}
-            onClick={(e) => { e.stopPropagation(); setEditing(true); }}
-        >
-            {text || <span className="text-slate-400 italic">{placeholder}</span>}
-        </div>
-    );
-};
-
 // ========= Main Component =========
-export default function ThinkingBoardPage() {
-    const { topicId } = useParams();
+function ThinkingBoardPage() {
+    return (
+        <ReactFlowProvider>
+            <ThinkingBoardInner />
+        </ReactFlowProvider>
+    );
+}
+
+function ThinkingBoardInner() {
+    const { screenToFlowPosition } = useReactFlow();
     const navigate = useNavigate();
+    const { topicId } = useParams();
     const { showToast } = useUIStore();
-    const { cards: allCards, fetchCards } = useCardsStore();
+    const { cards, fetchCards } = useCardsStore();
 
-    // --- Board & Topic Meta State ---
+    // Board state
     const [boardId, setBoardId] = useState(null);
-    const [boardTitle, setBoardTitle] = useState('');
     const [topic, setTopic] = useState(null);
+    const [loading, setLoading] = useState(true);
 
-    // --- Tree State ---
-    const [rootQuestion, setRootQuestion] = useState({
-        id: 'root',
-        text: '',
-        isOpen: true,
-    });
+    // Zoom & LOD state — mini only at extreme zoom-out to avoid hiding content
+    const zoom = useStore(s => s.transform[2]);
+    const lod = zoom < 0.35 ? 'mini' : zoom < 1.15 ? 'normal' : 'full';
 
-    const [subQuestions, setSubQuestions] = useState([]);
-    const [hypotheses, setHypotheses] = useState([]);
-    const [evidence, setEvidence] = useState([]);
+    // React Flow state
+    const [nodes, setNodes, onNodesChange] = useNodesState([]);
+    const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-    // UI States
-    const [expandedSubQs, setExpandedSubQs] = useState(new Set());
-    const [editingNodes, setEditingNodes] = useState(new Set());
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
-    const [showCardCreator, setShowCardCreator] = useState(false);
-    const [showAllCards, setShowAllCards] = useState(false); // Card filter toggle
+    // Sidebar
+    const [showAllCards, setShowAllCards] = useState(false);
+    const [showAddCard, setShowAddCard] = useState(false);
+    const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [focusedChainIds, setFocusedChainIds] = useState(null); // Set<nodeId> or null
 
-    // --- Drag State ---
-    const [draggedCard, setDraggedCard] = useState(null);
-    const [dragOverHypo, setDragOverHypo] = useState(null);
+    // ========= Cinematic Focus Mode =========
+    const handleSelectionChange = useCallback(({ nodes: selectedNodes }) => {
+        if (!selectedNodes || selectedNodes.length === 0) {
+            setFocusedChainIds(null); // Clear focus — show everything
+            return;
+        }
+        if (selectedNodes.length > 1) {
+            setFocusedChainIds(null); // Multi-select doesn't trigger focus
+            return;
+        }
+        const selectedId = selectedNodes[0].id;
+        const chain = new Set([selectedId]);
 
-    // --- Refs ---
-    const canvasRef = useRef(null);
-    const svgRef = useRef(null);
-    const nodeRefs = useRef({});
+        // BFS: 2 hops from selected node
+        let frontier = [selectedId];
+        for (let hop = 0; hop < 2; hop++) {
+            const nextFrontier = [];
+            for (const nodeId of frontier) {
+                edges.forEach(e => {
+                    if (e.source === nodeId && !chain.has(e.target)) {
+                        chain.add(e.target);
+                        nextFrontier.push(e.target);
+                    }
+                    if (e.target === nodeId && !chain.has(e.source)) {
+                        chain.add(e.source);
+                        nextFrontier.push(e.source);
+                    }
+                });
+            }
+            frontier = nextFrontier;
+        }
+        setFocusedChainIds(chain);
+    }, [edges]);
 
-    // Filtered cards based on toggle
-    const filteredCards = showAllCards
-        ? allCards
-        : allCards.filter(card => card.topic_id === topicId);
+    // DB mapping: React Flow node id → DB node id (and vice versa)
+    const dbNodeMapRef = useRef({}); // { rfId: dbNodeId }
+    const dbEdgeMapRef = useRef({}); // { rfEdgeId: dbEdgeId }
 
-    // ========= Load Board Data via Topic =========
+    // ========= Load Board Data =========
     useEffect(() => {
-        fetchCards();
+        fetchCards(showAllCards ? {} : { topic_id: topicId });
+    }, [topicId, fetchCards, showAllCards]);
 
-        const loadBoard = async () => {
-            if (!topicId) {
-                setIsLoading(false);
+    // ========= Load Board Data =========
+    const loadBoard = useCallback(async () => {
+        try {
+            setLoading(true);
+            const response = await boardsApi.getTopicBoard(topicId);
+            const { board, topic: topicData } = response;
+
+            setBoardId(board.id);
+            setTopic(topicData);
+
+            if (!board.nodes || board.nodes.length === 0) {
+                setNodes([]);
+                setEdges([]);
+                setLoading(false);
                 return;
             }
 
-            try {
-                // Use the new idempotent API that gets/creates board for topic
-                const response = await boardsApi.getTopicBoard(topicId);
-                const board = response.board;
-                setTopic(response.topic);
+            // Convert DB nodes to React Flow nodes
+            const rfNodes = [];
+            const idMap = {}; // dbId → rfId (we use dbId as rfId for simplicity)
 
-                if (board) {
-                    setBoardId(board.id);
-                    setBoardTitle(board.title || response.topic?.title || 'Untitled');
+            for (const dbNode of board.nodes) {
+                const rfId = dbNode.id;
+                idMap[dbNode.id] = rfId;
+                dbNodeMapRef.current[rfId] = dbNode.id;
 
-                    // Parse nodes into tree structure
-                    const nodes = board.nodes || [];
-                    const edges = board.edges || [];
-
-                    // Find root node (question with isRoot flag)
-                    const rootNode = nodes.find(n =>
-                        n.node_type === 'question' && n.content?.isRoot
-                    );
-                    const rootDbId = rootNode?.id;
-
-                    if (rootNode) {
-                        // Always use 'root' as internal ID for root node consistency
-                        setRootQuestion({ id: 'root', text: rootNode.content?.text || '', isOpen: true, dbId: rootDbId });
-                    }
-
-                    // Find sub-questions (question with isSubQ flag)
-                    const sqNodes = nodes.filter(n =>
-                        n.node_type === 'question' && n.content?.isSubQ
-                    );
-                    // Hypotheses use the 'hypothesis' type directly
-                    const hypoNodes = nodes.filter(n => n.node_type === 'hypothesis');
-                    // Evidence uses 'card_ref' type
-                    const evNodes = nodes.filter(n => n.node_type === 'card_ref');
-
-                    // Build ID mapping: dbId -> localId
-                    const dbToLocalId = { [rootDbId]: 'root' };
-                    sqNodes.forEach(sq => { dbToLocalId[sq.id] = sq.id; });
-                    hypoNodes.forEach(h => { dbToLocalId[h.id] = h.id; });
-                    evNodes.forEach(ev => { dbToLocalId[ev.id] = ev.id; });
-
-                    // Build relationships from edges (normalize parent IDs)
-                    const newSubQs = sqNodes.map(sq => {
-                        const parentEdge = edges.find(e => e.target_node_id === sq.id);
-                        const parentDbId = parentEdge?.source_node_id;
-                        const parentId = dbToLocalId[parentDbId] || 'root';
-                        return { id: sq.id, parentId, text: sq.content?.text || '' };
-                    });
-
-                    const newHypos = hypoNodes.map(h => {
-                        const parentEdge = edges.find(e => e.target_node_id === h.id);
-                        const parentDbId = parentEdge?.source_node_id;
-                        const parentId = dbToLocalId[parentDbId] || '';
-                        return { id: h.id, parentId, text: h.content?.text || '' };
-                    });
-
-                    const newEvidence = evNodes.map(ev => {
-                        const parentEdge = edges.find(e => e.target_node_id === ev.id);
-                        const parentDbId = parentEdge?.source_node_id;
-                        const parentId = dbToLocalId[parentDbId] || '';
-                        return {
-                            id: ev.id,
-                            parentId,
-                            text: ev.content?.text || '',
-                            status: ev.content?.status || 'neutral',
-                            explanation: ev.content?.explanation || '',
-                            sourceCardId: ev.card_id || null
-                        };
-                    });
-
-                    setSubQuestions(newSubQs);
-                    setHypotheses(newHypos);
-                    setEvidence(newEvidence);
-                    setExpandedSubQs(new Set(sqNodes.map(sq => sq.id)));
+                let rfNode;
+                if (dbNode.node_type === 'question') {
+                    rfNode = {
+                        id: rfId,
+                        type: 'questionNode',
+                        position: { x: dbNode.position_x || 0, y: dbNode.position_y || 0 },
+                        data: {
+                            content: dbNode.content || {},
+                            priority: dbNode.priority || 'normal',
+                            status: dbNode.status || 'open',
+                            decomposition_type: dbNode.decomposition_type,
+                        },
+                    };
+                } else if (dbNode.node_type === 'hypothesis') {
+                    rfNode = {
+                        id: rfId,
+                        type: 'hypothesisNode',
+                        position: { x: dbNode.position_x || 0, y: dbNode.position_y || 0 },
+                        data: {
+                            claim: dbNode.claim || dbNode.content?.text || '',
+                            hypo_state: dbNode.hypo_state || 'pending',
+                            confidence: dbNode.confidence || 0,
+                        },
+                    };
+                } else if (dbNode.node_type === 'evidence') {
+                    rfNode = {
+                        id: rfId,
+                        type: 'evidenceNode',
+                        position: { x: dbNode.position_x || 0, y: dbNode.position_y || 0 },
+                        data: {
+                            content: dbNode.content || {},
+                            card: dbNode.card || null,
+                            evidence_type: dbNode.evidence_type || 'fact',
+                            strength: dbNode.strength || 3,
+                        },
+                    };
                 }
 
-            } catch (error) {
-                console.error('Failed to load board:', error);
-                showToast('加载画板失败', 'error');
+                if (rfNode) rfNodes.push(rfNode);
             }
-            setIsLoading(false);
-        };
 
+            // Build edges from parent_id (decompose tree) + board_edges (evidence relations)
+            const rfEdges = [];
+
+            // Parent-child edges from parent_id
+            for (const dbNode of board.nodes) {
+                if (dbNode.parent_id && idMap[dbNode.parent_id]) {
+                    const isHypo = dbNode.node_type === 'hypothesis';
+                    rfEdges.push({
+                        id: `parent-${dbNode.id}`,
+                        source: idMap[dbNode.parent_id],
+                        target: idMap[dbNode.id],
+                        type: 'monoStep',
+                        animated: false,
+                        style: getParentEdgeStyle(isHypo, dbNode.hypo_state),
+                        data: { isParent: true, isHypoTarget: isHypo },
+                    });
+                }
+            }
+
+            // Board edges (H↔E supports/refutes/neutral, etc.)
+            for (const dbEdge of (board.edges || [])) {
+                const rfEdgeId = `edge-${dbEdge.id}`;
+                dbEdgeMapRef.current[rfEdgeId] = dbEdge.id;
+
+                // Also tell the evidence node what its edge relation is
+                const targetNode = rfNodes.find(n => n.id === dbEdge.target_node_id);
+                if (targetNode && targetNode.type === 'evidenceNode') {
+                    targetNode.data.edgeRelation = dbEdge.relation_type;
+                    targetNode.data._edgeId = rfEdgeId;
+                }
+
+                rfEdges.push({
+                    id: rfEdgeId,
+                    source: dbEdge.source_node_id,
+                    target: dbEdge.target_node_id,
+                    type: 'monoStep',
+                    animated: false,
+                    style: getEvidenceEdgeStyle(dbEdge.relation_type),
+                    data: {
+                        relation_type: dbEdge.relation_type,
+                        dbEdgeId: dbEdge.id,
+                    },
+                });
+            }
+
+            // Always auto-layout on enter to prevent overlaps
+            if (rfNodes.length > 0) {
+                const { nodes: layouted } = getLayoutedElements(rfNodes, rfEdges, 'TB');
+                setNodes(layouted);
+            } else {
+                setNodes(rfNodes);
+            }
+            setEdges(rfEdges);
+
+        } catch (err) {
+            console.error('Failed to load board:', err);
+            const msg = err.message || err.error || '未知错误';
+            showToast(`加载画板失败: ${msg}`, 'error');
+        } finally {
+            setLoading(false);
+        }
+    }, [topicId, showToast, setNodes, setEdges]);
+
+    useEffect(() => {
         loadBoard();
-    }, [topicId, fetchCards, showToast]);
+    }, [loadBoard]);
 
-    // ========= Save Board =========
-    const handleSave = useCallback(async () => {
-        if (isSaving) return;
-        setIsSaving(true);
+    // ========= Node Action Callbacks =========
+    // These get injected into node data so custom nodes can call them
+
+    const handleNodeUpdate = useCallback(async (nodeId, updates) => {
+        const dbId = dbNodeMapRef.current[nodeId] || nodeId;
+        try {
+            await boardsApi.updateNode(boardId, dbId, updates);
+            // Update local node data
+            setNodes(nds => nds.map(n => {
+                if (n.id === nodeId) {
+                    return { ...n, data: { ...n.data, ...updates } };
+                }
+                return n;
+            }));
+        } catch (err) {
+            console.error('Update node failed:', err);
+            showToast('更新失败', 'error');
+        }
+    }, [boardId, setNodes, showToast]);
+
+    const handleEdgeUpdate = useCallback(async (evidenceNodeId, updates) => {
+        // Find the edge connected to this evidence node
+        const edge = edges.find(e => e.target === evidenceNodeId && e.data?.dbEdgeId);
+        if (!edge) return;
 
         try {
-            let currentBoardId = boardId;
+            await boardsApi.updateEdge(boardId, edge.data.dbEdgeId, updates);
 
-            if (!currentBoardId) {
-                showToast('画板未加载，请刷新页面', 'error');
-                setIsSaving(false);
-                return;
-            }
+            // Update edge style
+            setEdges(eds => eds.map(e => {
+                if (e.id === edge.id) {
+                    const newRel = updates.relation_type || e.data?.relation_type;
+                    return {
+                        ...e,
+                        style: getEvidenceEdgeStyle(newRel),
+                        animated: false,
+                        data: { ...e.data, relation_type: newRel },
+                    };
+                }
+                return e;
+            }));
 
-            // Update board title to match topic title
-            await boardsApi.update(currentBoardId, { title: topic?.title || boardTitle });
+            // Update evidence node's edgeRelation
+            setNodes(nds => nds.map(n => {
+                if (n.id === evidenceNodeId) {
+                    return { ...n, data: { ...n.data, edgeRelation: updates.relation_type } };
+                }
+                return n;
+            }));
+        } catch (err) {
+            console.error('Update edge failed:', err);
+            showToast('更新关系失败', 'error');
+        }
+    }, [boardId, edges, setEdges, setNodes, showToast]);
 
-            // 2. Delete all existing nodes (cascade deletes edges)
-            const existingNodes = await boardsApi.listNodes(currentBoardId);
-            for (const node of existingNodes.nodes || []) {
-                await boardsApi.deleteNode(currentBoardId, node.id);
-            }
+    const createChildNode = useCallback(async (parentId, nodeType, extraData = {}) => {
+        const dbParentId = dbNodeMapRef.current[parentId] || parentId;
+        try {
+            const nodeData = {
+                node_type: nodeType,
+                parent_id: dbParentId,
+                content: extraData.content || { text: '' },
+                claim: extraData.claim || '',
+                ...extraData,
+            };
+            const result = await boardsApi.createNode(boardId, nodeData);
+            const newNode = result.node;
 
-            // 3. Create new nodes and track ID mappings
-            const nodeIdMap = {}; // tempId -> dbId
+            const rfId = newNode.id;
+            dbNodeMapRef.current[rfId] = newNode.id;
 
-            // 3.1 Root Node (use 'question' type with isRoot flag)
-            const rootNodeResponse = await boardsApi.createNode(currentBoardId, {
-                node_type: 'question',
-                content: { text: rootQuestion.text, isRoot: true },
-                position_x: 0,
-                position_y: 0
+            const parentNode = nodes.find(n => n.id === parentId);
+            const rfNode = {
+                id: rfId,
+                type: nodeType === 'question' ? 'questionNode' : 'hypothesisNode',
+                position: {
+                    x: (parentNode?.position?.x || 0) + 40,
+                    y: (parentNode?.position?.y || 0) + 180,
+                },
+                data: {
+                    ...(nodeType === 'question' ? {
+                        content: newNode.content || {},
+                        priority: newNode.priority || 'normal',
+                        status: newNode.status || 'open',
+                    } : {
+                        claim: newNode.claim || '',
+                        hypo_state: newNode.hypo_state || 'pending',
+                        confidence: newNode.confidence || 0,
+                    }),
+                },
+            };
+
+            const isHypo = nodeType === 'hypothesis';
+            const newEdge = {
+                id: `parent-${newNode.id}`,
+                source: parentId,
+                target: rfId,
+                type: 'monoStep',
+                style: getParentEdgeStyle(isHypo, 'pending'),
+                data: { isParent: true, isHypoTarget: isHypo },
+            };
+
+            setNodes(nds => [...nds, rfNode]);
+            setEdges(eds => [...eds, newEdge]);
+
+            // Auto re-layout
+            setTimeout(() => autoLayout(), 100);
+
+            showToast(nodeType === 'question' ? '子问题已添加' : '假说已添加', 'success');
+            return newNode;
+        } catch (err) {
+            console.error('Create child node failed:', err);
+            showToast('创建失败', 'error');
+        }
+    }, [boardId, nodes, setNodes, setEdges, showToast]);
+
+    const handleDeleteNode = useCallback(async (nodeId) => {
+        const dbId = dbNodeMapRef.current[nodeId] || nodeId;
+        try {
+            await boardsApi.deleteNode(boardId, dbId);
+
+            // Remove node and all descendants + connected edges
+            const descendantIds = new Set();
+            const findDescendants = (id) => {
+                descendantIds.add(id);
+                edges.filter(e => e.source === id && e.id.startsWith('parent-')).forEach(e => {
+                    findDescendants(e.target);
+                });
+            };
+            findDescendants(nodeId);
+
+            setNodes(nds => nds.filter(n => !descendantIds.has(n.id)));
+            setEdges(eds => eds.filter(e => !descendantIds.has(e.source) && !descendantIds.has(e.target)));
+
+            // Clean up maps
+            descendantIds.forEach(id => delete dbNodeMapRef.current[id]);
+
+            showToast('已删除', 'success');
+        } catch (err) {
+            console.error('Delete node failed:', err);
+            showToast('删除失败', 'error');
+        }
+    }, [boardId, edges, setNodes, setEdges, showToast]);
+
+    // ========= Auto Layout =========
+    const autoLayout = useCallback(() => {
+        setNodes(currentNodes => {
+            setEdges(currentEdges => {
+                const { nodes: layouted, edges: layoutedEdges } = getLayoutedElements(
+                    currentNodes, currentEdges, 'TB'
+                );
+                // We use setTimeout to avoid batch update issues
+                setTimeout(() => setNodes(layouted), 0);
+                return layoutedEdges;
             });
-            nodeIdMap['root'] = rootNodeResponse.node.id;
+            return currentNodes;
+        });
+    }, [setNodes, setEdges]);
 
-            // 3.2 Sub-Questions (use 'question' type with isSubQ flag)
-            for (const sq of subQuestions) {
-                const sqResponse = await boardsApi.createNode(currentBoardId, {
-                    node_type: 'question',
-                    content: { text: sq.text, isSubQ: true },
-                    position_x: 400,
-                    position_y: subQuestions.indexOf(sq) * 200
+    // ========= Inject callbacks into node data =========
+    const nodesWithCallbacks = useMemo(() => {
+        return nodes.map(node => {
+            const childEdges = edges.filter(e => e.source === node.id && e.id.startsWith('parent-'));
+            const childCount = childEdges.length;
+
+            // Focus mode dimming
+            const dimmed = focusedChainIds ? !focusedChainIds.has(node.id) : false;
+            const focusStyle = dimmed
+                ? { opacity: 0.30, transition: 'opacity 0.25s ease', pointerEvents: 'none' }
+                : { opacity: 1, transition: 'opacity 0.25s ease', pointerEvents: 'auto' };
+
+            const baseCallbacks = {
+                onUpdate: handleNodeUpdate,
+                onDelete: handleDeleteNode,
+                childCount,
+                lod, // Inject Level of Detail
+                dimmed, // Expose dimmed state if nodes need it internal
+            };
+
+            const applyFocus = (n) => ({
+                ...n,
+                style: { ...(n.style || {}), ...focusStyle },
+            });
+
+            if (node.type === 'questionNode') {
+                return applyFocus({
+                    ...node,
+                    data: {
+                        ...node.data,
+                        ...baseCallbacks,
+                        onAddSubQuestion: (parentId) => createChildNode(parentId, 'question', { content: { text: '' } }),
+                        onAddHypothesis: (parentId) => createChildNode(parentId, 'hypothesis', { claim: '' }),
+                    },
                 });
-                nodeIdMap[sq.id] = sqResponse.node.id;
-
-                // Edge: Root -> SubQ (use 'answers' relation)
-                await boardsApi.createEdge(currentBoardId, {
-                    source_node_id: nodeIdMap['root'],
-                    target_node_id: sqResponse.node.id,
-                    relation_type: 'related'
+            } else if (node.type === 'hypothesisNode') {
+                return applyFocus({
+                    ...node,
+                    data: {
+                        ...node.data,
+                        ...baseCallbacks,
+                        onAddSubHypothesis: (parentId) => createChildNode(parentId, 'hypothesis', { claim: '' }),
+                    },
+                });
+            } else if (node.type === 'evidenceNode') {
+                return applyFocus({
+                    ...node,
+                    data: {
+                        ...node.data,
+                        ...baseCallbacks,
+                        onEdgeUpdate: handleEdgeUpdate,
+                    },
                 });
             }
+            return applyFocus(node);
+        });
+    }, [nodes, edges, handleNodeUpdate, handleDeleteNode, createChildNode, handleEdgeUpdate, focusedChainIds]);
 
-            // 3.3 Hypotheses
-            for (const h of hypotheses) {
-                const hResponse = await boardsApi.createNode(currentBoardId, {
-                    node_type: 'hypothesis',
-                    content: { text: h.text },
-                    position_x: 800,
-                    position_y: hypotheses.indexOf(h) * 150
-                });
-                nodeIdMap[h.id] = hResponse.node.id;
+    // ========= Energy Packets + Edge Focus Styling =========
+    const styledEdges = useMemo(() => {
+        // Build a map of nodeId -> hypo_state for quick lookup
+        const hypoStateMap = {};
+        nodes.forEach(n => {
+            if (n.type === 'hypothesisNode') {
+                hypoStateMap[n.id] = n.data?.hypo_state || 'pending';
+            }
+        });
 
-                // Edge: SubQ -> Hypothesis (use 'answers' relation)
-                if (nodeIdMap[h.parentId]) {
-                    await boardsApi.createEdge(currentBoardId, {
-                        source_node_id: nodeIdMap[h.parentId],
-                        target_node_id: hResponse.node.id,
-                        relation_type: 'answers'
-                    });
+        return edges.map(edge => {
+            let extraStyle = {};
+            let animated = edge.animated || false;
+
+            // For parent edges targeting a hypothesis, update dash based on live hypo_state
+            if (edge.data?.isParent && edge.data?.isHypoTarget) {
+                const targetState = hypoStateMap[edge.target] || 'pending';
+                const isPending = targetState === 'pending';
+                extraStyle = {
+                    stroke: isPending ? '#A855F7' : '#7C3AED',
+                    strokeWidth: isPending ? 1.6 : 2,
+                    strokeDasharray: isPending ? '6 4' : '0',
+                };
+            }
+
+            // Focus mode: dim edges not connecting focused nodes
+            let inChain = false;
+            if (focusedChainIds) {
+                inChain = focusedChainIds.has(edge.source) && focusedChainIds.has(edge.target);
+                if (!inChain) {
+                    extraStyle.opacity = 0.12;
+                } else {
+                    extraStyle.opacity = 1;
                 }
             }
 
-            // 3.4 Evidence (use 'card_ref' type)
-            for (const ev of evidence) {
-                const evResponse = await boardsApi.createNode(currentBoardId, {
-                    node_type: 'card_ref',
-                    content: { text: ev.text, status: ev.status, explanation: ev.explanation },
-                    card_id: ev.sourceCardId || null,
-                    position_x: 1200,
-                    position_y: evidence.indexOf(ev) * 120
-                });
-                nodeIdMap[ev.id] = evResponse.node.id;
+            return {
+                ...edge,
+                data: { ...(edge.data || {}), isFocus: inChain },
+                animated,
+                style: { ...(edge.style || {}), ...extraStyle, transition: 'opacity 0.3s ease' },
+            };
+        });
+    }, [edges, nodes, focusedChainIds]);
 
-                // Edge: Hypothesis -> Evidence (use 'supports'/'refutes'/'related')
-                if (nodeIdMap[ev.parentId]) {
-                    let relType = 'related';
-                    if (ev.status === 'support') relType = 'supports';
-                    if (ev.status === 'refute') relType = 'refutes';
+    // ========= Drag card from sidebar → create Evidence =========
+    const onDragOver = useCallback((event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+    }, []);
 
-                    await boardsApi.createEdge(currentBoardId, {
-                        source_node_id: nodeIdMap[ev.parentId],
-                        target_node_id: evResponse.node.id,
-                        relation_type: relType
-                    });
-                }
+    const draggedCardRef = useRef(null);
+
+    const handleDragStart = useCallback((card) => {
+        draggedCardRef.current = card;
+    }, []);
+
+    const onDrop = useCallback(async (event) => {
+        event.preventDefault();
+        const card = draggedCardRef.current;
+        if (!card) return;
+        draggedCardRef.current = null;
+
+        // Find the nearest hypothesis node to drop position
+        // For now, we'll prompt user to drop ON a hypothesis — check if drop target intersects
+        // Simple approach: find hypothesis under drop position
+        // Simple approach: find hypothesis under drop position
+        const position = screenToFlowPosition({
+            x: event.clientX,
+            y: event.clientY,
+        });
+        const dropX = position.x;
+        const dropY = position.y;
+
+        // Find closest hypothesis node
+        let closestHypo = null;
+        let minDist = Infinity;
+        for (const node of nodes) {
+            if (node.type !== 'hypothesisNode') continue;
+            const dims = NODE_DIMS[node.type] || { width: NODE_WIDTH, height: 180 };
+            const nodeX = node.position.x + dims.width / 2;
+            const nodeY = node.position.y + dims.height / 2;
+            // Rough screen-to-flow transform (simplified, works at zoom=1)
+            const dist = Math.sqrt((dropX - nodeX) ** 2 + (dropY - nodeY) ** 2);
+            if (dist < minDist) {
+                minDist = dist;
+                closestHypo = node;
             }
-
-            showToast('保存成功！', 'success');
-
-        } catch (error) {
-            console.error('Save failed:', error);
-            showToast(`保存失败: ${error.message}`, 'error');
         }
 
-        setIsSaving(false);
-    }, [isSaving, boardId, boardTitle, rootQuestion, subQuestions, hypotheses, evidence, showToast]);
-
-    // ========= Interaction Handlers =========
-    const updateRootText = (newText) => {
-        setRootQuestion(prev => ({ ...prev, text: newText }));
-    };
-
-    const handleAIAnalyze = useCallback(async () => {
-        if (isAnalyzing) return;
-        if (!rootQuestion.text || rootQuestion.text.length < 5) {
-            showToast('请输入更具体的核心问题', 'error');
+        if (!closestHypo || minDist > 400) {
+            showToast('请拖放到一个假说节点附近', 'warning');
             return;
         }
 
-        setIsAnalyzing(true);
-
         try {
-            showToast('AI 正在拆解问题...', 'info');
-            const response = await aiBoardsApi.analyzeRoot(rootQuestion.text);
-            const result = response.data;
+            // 1. Create evidence node
+            const result = await boardsApi.createNode(boardId, {
+                node_type: 'evidence',
+                card_id: card.id,
+                content: { text: card.summary || card.raw_snippet || '' },
+                evidence_type: 'fact',
+                strength: 3,
+            });
+            const evidenceNode = result.node;
 
-            if (!result || !result.sub_questions) {
-                throw new Error("AI 返回数据格式错误");
-            }
-
-            const newSubQs = [];
-            const newHypos = [];
-            const newExpanded = new Set();
-
-            result.sub_questions.forEach((sq, idx) => {
-                const sqId = `sq-${Date.now()}-${idx}`;
-                newSubQs.push({ id: sqId, parentId: 'root', text: sq.text });
-                newExpanded.add(sqId);
-
-                if (sq.hypotheses) {
-                    sq.hypotheses.forEach((h, hIdx) => {
-                        newHypos.push({ id: `h-${Date.now()}-${idx}-${hIdx}`, parentId: sqId, text: h.text });
-                    });
-                }
+            // 2. Create edge (hypothesis → evidence, default supports)
+            const edgeResult = await boardsApi.createEdge(boardId, {
+                source_node_id: dbNodeMapRef.current[closestHypo.id] || closestHypo.id,
+                target_node_id: evidenceNode.id,
+                relation_type: 'supports',
             });
 
-            setSubQuestions(newSubQs);
-            setHypotheses(newHypos);
-            setExpandedSubQs(newExpanded);
-            showToast('AI 分析完成，正在匹配卡片...', 'info');
+            // 3. Add to React Flow
+            const rfId = evidenceNode.id;
+            dbNodeMapRef.current[rfId] = evidenceNode.id;
 
-            // Auto-match cards from current Topic to hypotheses
-            const topicCards = filteredCards;
-            const newEvidence = [];
+            const rfEdgeId = `edge-${edgeResult.edge.id}`;
+            dbEdgeMapRef.current[rfEdgeId] = edgeResult.edge.id;
 
-            if (topicCards.length > 0 && newHypos.length > 0) {
-                for (const card of topicCards) {
-                    const cardContent = card.summary || card.raw_snippet || '';
-                    if (!cardContent.trim()) continue;
+            const rfNode = {
+                id: rfId,
+                type: 'evidenceNode',
+                position: {
+                    x: closestHypo.position.x + 30,
+                    y: closestHypo.position.y + 200,
+                },
+                data: {
+                    content: evidenceNode.content,
+                    card: card, // pass full card data for display
+                    evidence_type: 'fact',
+                    strength: 3,
+                    edgeRelation: 'supports',
+                    _edgeId: rfEdgeId,
+                },
+            };
 
-                    // Find the most relevant hypothesis for this card
-                    // Simple approach: try to verify against each hypothesis
-                    for (const hypo of newHypos) {
-                        try {
-                            const verifyResult = await aiBoardsApi.verify(hypo.text, cardContent);
-                            const data = verifyResult.data;
+            const rfEdge = {
+                id: rfEdgeId,
+                source: closestHypo.id,
+                target: rfId,
+                type: 'monoStep',
+                animated: false,
+                style: getEvidenceEdgeStyle('supports'),
+                data: { relation_type: 'supports', dbEdgeId: edgeResult.edge.id },
+            };
 
-                            if (data && (data.status === 'support' || data.status === 'refute')) {
-                                // This card is evidence for this hypothesis
-                                newEvidence.push({
-                                    id: `ev-${Date.now()}-${card.id}`,
-                                    parentId: hypo.id,
-                                    text: cardContent.slice(0, 150) + (cardContent.length > 150 ? '...' : ''),
-                                    status: data.status,
-                                    explanation: data.explanation || '',
-                                    sourceCardId: card.id
-                                });
-                                break; // Each card matches at most one hypothesis
-                            }
-                        } catch (err) {
-                            console.warn('Card verification skipped:', err.message);
-                        }
-                    }
-                }
-            }
+            setNodes(nds => [...nds, rfNode]);
+            setEdges(eds => [...eds, rfEdge]);
 
-            setEvidence(newEvidence);
-            setIsAnalyzing(false);
+            setTimeout(() => autoLayout(), 100);
+            showToast(`证据已关联到假说`, 'success');
 
-            const matchCount = newEvidence.length;
-            showToast(`AI 分析完成！${matchCount > 0 ? ` 自动匹配了 ${matchCount} 张卡片` : ''}`, 'success');
-
-        } catch (error) {
-            console.error(error);
-            showToast(`AI 分析失败: ${error.message}`, 'error');
-            setIsAnalyzing(false);
+        } catch (err) {
+            console.error('Drop card failed:', err);
+            showToast('添加证据失败', 'error');
         }
-    }, [isAnalyzing, rootQuestion.text, filteredCards, showToast]);
+    }, [boardId, nodes, setNodes, setEdges, showToast, autoLayout]);
 
-    const toggleEditing = (id, isEditing) => {
-        setEditingNodes(prev => {
-            const next = new Set(prev);
-            if (isEditing) next.add(id);
-            else next.delete(id);
-            return next;
-        });
-    };
+    // ========= Handle Connect (drag handle → handle) =========
+    const onConnect = useCallback(async (connection) => {
+        const { source, target } = connection;
+        if (!source || !target || source === target) return;
 
-    const updateSubQText = (id, newText) => {
-        setSubQuestions(prev => prev.map(sq => sq.id === id ? { ...sq, text: newText } : sq));
-    };
+        const sourceNode = nodes.find(n => n.id === source);
+        const targetNode = nodes.find(n => n.id === target);
+        if (!sourceNode || !targetNode) return;
 
-    const updateHypoText = (id, newText) => {
-        setHypotheses(prev => prev.map(h => h.id === id ? { ...h, text: newText } : h));
-    };
+        const srcType = sourceNode.type; // questionNode, hypothesisNode, evidenceNode
+        const tgtType = targetNode.type;
 
-    const toggleSubQExpand = (id) => {
-        setExpandedSubQs(prev => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-        });
-    };
-
-    // ========= Manual Node Creation =========
-    const addSubQuestion = () => {
-        const newId = `sq-${Date.now()}`;
-        setSubQuestions(prev => [...prev, { id: newId, parentId: 'root', text: '' }]);
-        setExpandedSubQs(prev => new Set([...prev, newId]));
-        // Auto-start editing the new node
-        setTimeout(() => setEditingNodes(prev => new Set([...prev, newId])), 50);
-    };
-
-    const addHypothesis = (parentSqId) => {
-        const newId = `h-${Date.now()}`;
-        setHypotheses(prev => [...prev, { id: newId, parentId: parentSqId, text: '' }]);
-        // Auto-start editing the new node
-        setTimeout(() => setEditingNodes(prev => new Set([...prev, newId])), 50);
-    };
-
-    // ========= Delete Node Handlers =========
-    const deleteSubQuestion = (sqId) => {
-        // Remove the sub-question
-        setSubQuestions(prev => prev.filter(sq => sq.id !== sqId));
-        // Remove all hypotheses under this sub-question
-        const hyposToDelete = hypotheses.filter(h => h.parentId === sqId).map(h => h.id);
-        setHypotheses(prev => prev.filter(h => h.parentId !== sqId));
-        // Remove all evidence under those hypotheses
-        setEvidence(prev => prev.filter(ev => !hyposToDelete.includes(ev.parentId)));
-        // Remove from expanded set
-        setExpandedSubQs(prev => {
-            const next = new Set(prev);
-            next.delete(sqId);
-            return next;
-        });
-    };
-
-    const deleteHypothesis = (hypoId) => {
-        // Remove the hypothesis
-        setHypotheses(prev => prev.filter(h => h.id !== hypoId));
-        // Remove all evidence under this hypothesis
-        setEvidence(prev => prev.filter(ev => ev.parentId !== hypoId));
-    };
-
-    const deleteEvidence = (evId) => {
-        setEvidence(prev => prev.filter(ev => ev.id !== evId));
-    };
-
-    const handleDragStart = (card) => setDraggedCard(card);
-    const handleDragOver = (e, hypoId) => { e.preventDefault(); setDragOverHypo(hypoId); };
-    const handleDragLeave = () => setDragOverHypo(null);
-
-    const handleDrop = async (e, hypoId) => {
-        e.preventDefault();
-        setDragOverHypo(null);
-        if (!draggedCard) return;
-
-        const targetHypo = hypotheses.find(h => h.id === hypoId);
-        if (!targetHypo) return;
-
-        const cardContent = draggedCard.summary || draggedCard.raw_snippet || '(无内容)';
-
-        const newEvidence = {
-            id: `ev-${Date.now()}`,
-            text: cardContent,
-            parentId: hypoId,
-            sourceCardId: draggedCard.id,
-            status: 'analyzing',
-            explanation: '',
-        };
-
-        setEvidence(prev => [...prev, newEvidence]);
-        setDraggedCard(null);
-        showToast('AI 正在验证证据...', 'info');
+        const dbSourceId = dbNodeMapRef.current[source] || source;
+        const dbTargetId = dbNodeMapRef.current[target] || target;
 
         try {
-            const response = await aiBoardsApi.verify(targetHypo.text, cardContent);
-            const { status, explanation } = response.data;
+            // Q→Q: set parent_id (sub-question decomposition)
+            // Q→H: set parent_id (hypothesis under question)
+            // H→H: set parent_id (sub-hypothesis)
+            if (
+                (srcType === 'questionNode' && tgtType === 'questionNode') ||
+                (srcType === 'questionNode' && tgtType === 'hypothesisNode') ||
+                (srcType === 'hypothesisNode' && tgtType === 'hypothesisNode')
+            ) {
+                await boardsApi.updateNode(boardId, dbTargetId, { parent_id: dbSourceId });
 
-            setEvidence(prev => prev.map(ev =>
-                ev.id === newEvidence.id
-                    ? { ...ev, status: status || 'neutral', explanation }
-                    : ev
-            ));
-            showToast('验证完成', 'success');
-        } catch (error) {
-            console.error(error);
-            setEvidence(prev => prev.map(ev =>
-                ev.id === newEvidence.id
-                    ? { ...ev, status: 'neutral', explanation: 'AI 验证失败' }
-                    : ev
-            ));
-            showToast('验证失败', 'error');
-        }
-    };
+                const isHypo = tgtType === 'hypothesisNode';
+                const newEdge = {
+                    id: `parent-${target}`,
+                    source,
+                    target,
+                    type: 'monoStep',
+                    style: getParentEdgeStyle(isHypo, targetNode.data?.hypo_state || 'pending'),
+                    data: { isParent: true, isHypoTarget: isHypo },
+                };
+                setEdges(eds => [...eds.filter(e => e.id !== `parent-${target}`), newEdge]);
+                showToast('已建立父子关系', 'success');
+            }
+            // H→E or E→H: create evidence edge (supports by default)
+            else if (
+                (srcType === 'hypothesisNode' && tgtType === 'evidenceNode') ||
+                (srcType === 'evidenceNode' && tgtType === 'hypothesisNode')
+            ) {
+                const hypoId = srcType === 'hypothesisNode' ? source : target;
+                const evidId = srcType === 'evidenceNode' ? source : target;
+                const dbHypoId = dbNodeMapRef.current[hypoId] || hypoId;
+                const dbEvidId = dbNodeMapRef.current[evidId] || evidId;
 
-    // ========= SVG Drawing =========
-    const drawLines = useCallback(() => {
-        if (!svgRef.current || !canvasRef.current || !rootQuestion) return;
+                // Also set parent_id on evidence → hypothesis
+                await boardsApi.updateNode(boardId, dbEvidId, { parent_id: dbHypoId });
 
-        const svg = svgRef.current;
-        const canvas = canvasRef.current;
-        const canvasRect = canvas.getBoundingClientRect();
-        const scrollLeft = canvas.scrollLeft;
-        const scrollTop = canvas.scrollTop;
-
-        svg.innerHTML = `
-      <defs>
-        <marker id="arrow-gray" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#94a3b8" /></marker>
-        <marker id="arrow-purple" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#a855f7" /></marker>
-        <marker id="arrow-green" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#16a34a" /></marker>
-        <marker id="arrow-red" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#dc2626" /></marker>
-        <marker id="arrow-neutral" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#cbd5e1" /></marker>
-      </defs>
-    `;
-
-        const createBezier = (startId, endId, color, marker) => {
-            const startEl = nodeRefs.current[startId];
-            const endEl = nodeRefs.current[endId];
-            if (!startEl || !endEl) return;
-            const sRect = startEl.getBoundingClientRect();
-            const eRect = endEl.getBoundingClientRect();
-            if (sRect.width === 0 || eRect.width === 0) return;
-
-            const x1 = sRect.right - canvasRect.left + scrollLeft;
-            const y1 = sRect.top + sRect.height / 2 - canvasRect.top + scrollTop;
-            const x2 = eRect.left - canvasRect.left + scrollLeft;
-            const y2 = eRect.top + eRect.height / 2 - canvasRect.top + scrollTop;
-
-            const cpOFFSET = 60;
-            const d = `M ${x1} ${y1} C ${x1 + cpOFFSET} ${y1}, ${x2 - cpOFFSET} ${y2}, ${x2} ${y2}`;
-
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            path.setAttribute('d', d);
-            path.setAttribute('stroke', color);
-            path.setAttribute('stroke-width', '2');
-            path.setAttribute('fill', 'none');
-            if (marker) path.setAttribute('marker-end', marker);
-            svg.appendChild(path);
-        };
-
-        subQuestions.forEach(sq => createBezier('root', sq.id, '#94a3b8', 'url(#arrow-gray)'));
-
-        expandedSubQs.forEach(sqId => {
-            hypotheses.filter(h => h.parentId === sqId).forEach(h => {
-                createBezier(sqId, h.id, '#a855f7', 'url(#arrow-purple)');
-                evidence.filter(e => e.parentId === h.id).forEach(ev => {
-                    let color = '#cbd5e1';
-                    let marker = 'url(#arrow-neutral)';
-                    if (ev.status === 'support') { color = '#16a34a'; marker = 'url(#arrow-green)'; }
-                    if (ev.status === 'refute') { color = '#dc2626'; marker = 'url(#arrow-red)'; }
-
-                    createBezier(h.id, ev.id, color, marker);
+                const edgeResult = await boardsApi.createEdge(boardId, {
+                    source_node_id: dbHypoId,
+                    target_node_id: dbEvidId,
+                    relation_type: 'supports',
                 });
+
+                const rfEdgeId = `edge-${edgeResult.edge.id}`;
+                dbEdgeMapRef.current[rfEdgeId] = edgeResult.edge.id;
+
+                const rfEdge = {
+                    id: rfEdgeId,
+                    source: hypoId,
+                    target: evidId,
+                    type: 'monoStep',
+                    style: getEvidenceEdgeStyle('supports'),
+                    data: { relation_type: 'supports', dbEdgeId: edgeResult.edge.id },
+                };
+
+                // Update parent edge for evidence
+                const parentEdgeId = `parent-${evidId}`;
+                const parentEdge = {
+                    id: parentEdgeId,
+                    source: hypoId,
+                    target: evidId,
+                    type: 'monoStep',
+                    style: getParentEdgeStyle(false),
+                    data: { isParent: true, isHypoTarget: false },
+                };
+
+                setEdges(eds => [...eds.filter(e => e.id !== parentEdgeId), parentEdge, rfEdge]);
+
+                // Update evidence node's edgeRelation
+                setNodes(nds => nds.map(n => {
+                    if (n.id === evidId) {
+                        return { ...n, data: { ...n.data, edgeRelation: 'supports', _edgeId: rfEdgeId } };
+                    }
+                    return n;
+                }));
+
+                showToast('已建立证据关系（默认支持）', 'success');
+            } else {
+                showToast('不支持的连接类型', 'warning');
+                return;
+            }
+
+            setTimeout(() => autoLayout(), 100);
+        } catch (err) {
+            console.error('Connect failed:', err);
+            showToast('连接失败', 'error');
+        }
+    }, [boardId, nodes, setEdges, setNodes, showToast, autoLayout]);
+
+    // ========= Save positions on drag end =========
+    const onNodeDragStop = useCallback(async (event, node) => {
+        const dbId = dbNodeMapRef.current[node.id] || node.id;
+        try {
+            await boardsApi.updateNode(boardId, dbId, {
+                position_x: node.position.x,
+                position_y: node.position.y,
             });
-        });
-    }, [subQuestions, expandedSubQs, hypotheses, evidence, rootQuestion]);
+        } catch (err) {
+            console.warn('Position save failed:', err);
+        }
+    }, [boardId]);
 
-    useLayoutEffect(() => { setTimeout(drawLines, 50); }, [drawLines, expandedSubQs, hypotheses, evidence]);
-    useEffect(() => {
-        const handleResize = () => drawLines();
-        window.addEventListener('resize', handleResize);
-        canvasRef.current?.addEventListener('scroll', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, [drawLines]);
+    // ========= Create Root Question =========
+    const createRootQuestion = useCallback(async () => {
+        if (!boardId) {
+            showToast('画板尚未加载完全，请稍后再试', 'warning');
+            return;
+        }
+        try {
+            const result = await boardsApi.createNode(boardId, {
+                node_type: 'question',
+                content: { text: topic?.title || '核心问题?' },
+                priority: 'critical',
+                status: 'open',
+                position_x: 400,
+                position_y: 50,
+            });
+            const newNode = result.node;
+            dbNodeMapRef.current[newNode.id] = newNode.id;
 
-    const setNodeRef = (id) => (el) => { nodeRefs.current[id] = el; };
+            setNodes([{
+                id: newNode.id,
+                type: 'questionNode',
+                position: { x: 400, y: 50 },
+                data: {
+                    content: newNode.content,
+                    priority: 'critical',
+                    status: 'open',
+                },
+            }]);
+            showToast('根问题已创建', 'success');
+        } catch (err) {
+            console.error('Create root failed:', err);
+            showToast(`创建失败: ${err.message}`, 'error');
+        }
+    }, [boardId, topic, setNodes, showToast]);
 
-    // ========= Render =========
-    if (isLoading) {
+    // ========= Sidebar Cards =========
+    const filteredCards = useMemo(() => {
+        let result = showAllCards ? cards : cards.filter(c => c.topic_id === topicId);
+        if (searchQuery.trim()) {
+            const q = searchQuery.trim().toLowerCase();
+            result = result.filter(c =>
+                (c.summary || '').toLowerCase().includes(q) ||
+                (c.raw_snippet || '').toLowerCase().includes(q) ||
+                (c.source?.name || '').toLowerCase().includes(q)
+            );
+        }
+        return result;
+    }, [cards, showAllCards, topicId, searchQuery]);
+
+    // ========= Loading =========
+    if (loading) {
         return (
-            <div className="h-full flex items-center justify-center bg-slate-50">
-                <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+            <div className="h-full flex items-center justify-center" style={{ background: 'var(--bg-0)' }}>
+                <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent-400)' }} />
+                <span className="ml-3" style={{ color: 'var(--text-1)' }}>加载画板中...</span>
             </div>
         );
     }
 
     return (
-        <div className="h-full flex flex-col bg-slate-50 text-slate-900">
-            {/* Toolbar */}
-            <div className="flex-none bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm z-30">
-                <div className="flex items-center gap-4">
-                    <button onClick={() => navigate('/')} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500">
-                        <ArrowLeft size={20} />
-                    </button>
-                    <div className="flex items-center gap-2">
-                        <div className="p-2 bg-gradient-to-br from-purple-100 to-blue-50 rounded-lg border border-purple-100">
-                            <Brain className="w-6 h-6 text-purple-600" />
-                        </div>
-                        <div>
-                            <h1 className="text-xl font-bold text-slate-800">
-                                {topic?.title || boardTitle || '思维画板'}
-                            </h1>
-                            <p className="text-xs text-slate-500">AI-Powered Strategic Issue Tree</p>
+        <div className="flex" style={{ height: '100vh', width: '100%', background: 'var(--bg-0)' }}>
+            {/* ========= Canvas ========= */}
+            <div className="flex-1 relative" style={{ height: '100%' }} onDragOver={onDragOver} onDrop={onDrop}>
+                {nodes.length === 0 ? (
+                    /* Empty state — McKinsey Professional */
+                    <div className="flex flex-col items-center justify-center gap-4" style={{ height: '100%', background: 'var(--surface-1)' }}>
+                        <div className="text-center">
+                            <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--text-0)' }}>
+                                {topic?.title || 'Thinking Board'}
+                            </h2>
+                            <p className="text-sm mb-6" style={{ color: 'var(--text-2)' }}>
+                                从一个核心问题开始，逐步拆解、提出假说、收集证据
+                            </p>
+                            <button
+                                onClick={createRootQuestion}
+                                className="inline-flex items-center gap-2 px-6 py-3 font-medium rounded-xl transition-all"
+                                style={{
+                                    background: 'var(--accent-600)',
+                                    color: 'var(--text-0)',
+                                    boxShadow: '0 0 24px rgba(99,102,241,0.3)',
+                                }}
+                            >
+                                <Plus size={18} /> 创建根问题
+                            </button>
                         </div>
                     </div>
-                </div>
-                <button
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isSaving
-                        ? 'bg-slate-200 text-slate-400 cursor-wait'
-                        : 'bg-purple-600 hover:bg-purple-700 text-white shadow-md'
-                        }`}
-                >
-                    {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                    {isSaving ? '保存中...' : '保存'}
-                </button>
+                ) : (
+                    <ReactFlow
+                        nodes={nodesWithCallbacks}
+                        edges={styledEdges}
+                        onNodesChange={onNodesChange}
+                        onEdgesChange={onEdgesChange}
+                        onConnect={onConnect}
+                        onNodesDelete={(deleted) => deleted.forEach(n => handleDeleteNode(n.id))}
+                        onNodeDragStop={onNodeDragStop}
+                        onSelectionChange={handleSelectionChange}
+                        nodeTypes={nodeTypes}
+                        edgeTypes={edgeTypes}
+                        fitView
+                        fitViewOptions={{ padding: 0.3, maxZoom: 1, minZoom: 0.5 }}
+                        minZoom={0.2}
+                        maxZoom={2}
+                        proOptions={{ hideAttribution: true }}
+                        style={{ background: 'var(--bg-0)' }}
+                    >
+                        <Background
+                            variant={BackgroundVariant.Dots}
+                            gap={24}
+                            size={1}
+                            color="rgba(148,163,184,0.10)"
+                        />
+
+                        {/* Floating bottom toolbar — merged Controls + MiniMap + Auto Layout */}
+                        <Panel position="top-left">
+                            <div className="flex items-center gap-2 px-4 py-2 rounded-xl glass-surface" style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.4)' }}>
+                                <button
+                                    onClick={() => navigate(-1)}
+                                    className="p-2 rounded-lg transition-colors"
+                                    style={{ color: 'var(--text-1)' }}
+                                    title="返回"
+                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(148,163,184,0.1)'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                >
+                                    <ArrowLeft size={18} />
+                                </button>
+                                <div className="h-5 w-px" style={{ background: 'var(--stroke-0)' }} />
+                                <h1 className="text-sm font-bold max-w-[200px] truncate" style={{ color: 'var(--text-0)' }}>
+                                    {topic?.title || 'Thinking Board'}
+                                </h1>
+                            </div>
+                        </Panel>
+
+                        <Panel position="bottom-center">
+                            <div className="flex items-center gap-1 px-3 py-2 rounded-xl glass-surface" style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.4)' }}>
+                                <button
+                                    onClick={autoLayout}
+                                    className="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
+                                    style={{ color: 'var(--text-1)' }}
+                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(148,163,184,0.1)'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                    title="自动排列"
+                                >
+                                    <LayoutGrid size={16} />
+                                </button>
+                            </div>
+                        </Panel>
+
+                        <Controls
+                            position="bottom-left"
+                            showInteractive={false}
+                            style={{
+                                background: 'var(--surface-0)',
+                                backdropFilter: 'blur(12px)',
+                                border: '1px solid var(--stroke-0)',
+                                borderRadius: '12px',
+                                boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+                            }}
+                        />
+                        <MiniMap
+                            position="bottom-right"
+                            nodeColor={(n) => {
+                                if (n.type === 'questionNode') return '#1D4ED8';
+                                if (n.type === 'hypothesisNode') return '#6B21A8';
+                                return '#10B981';
+                            }}
+                            maskColor="rgba(248,250,252,0.8)"
+                            style={{
+                                background: 'var(--surface-0)',
+                                border: '1px solid var(--stroke-0)',
+                                borderRadius: '12px',
+                            }}
+                        />
+                    </ReactFlow>
+                )}
             </div>
 
-            <div className="flex-1 flex overflow-hidden">
-                {/* Sidebar */}
-                <div className="w-80 bg-white border-r flex flex-col shadow-lg z-20 flex-none">
-                    <div className="p-5 border-b bg-slate-50/50">
-                        <h3 className="font-bold text-slate-800 flex items-center gap-2">📚 Evidence Pool</h3>
-                        <p className="text-xs text-slate-500 mt-1">Drag cards to Hypotheses (AI Verify)</p>
-
-                        {/* Topic Filter Toggle */}
-                        <div className="mt-3 flex items-center gap-2">
+            {/* ========= Sidebar — Deep Space ========= */}
+            {sidebarOpen && (
+                <div className="w-72 flex flex-col h-full shrink-0" style={{ background: 'var(--surface-1)', borderLeft: '1px solid var(--stroke-0)' }}>
+                    {/* Sidebar header */}
+                    <div className="p-4" style={{ borderBottom: '1px solid var(--stroke-1)' }}>
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="font-bold text-sm" style={{ color: 'var(--text-0)' }}>Evidence Pool</h3>
+                            <button
+                                onClick={() => setSidebarOpen(false)}
+                                className="p-1 rounded transition-colors"
+                                style={{ color: 'var(--text-2)' }}
+                                onMouseEnter={e => e.currentTarget.style.color = 'var(--text-1)'}
+                                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-2)'}
+                            >✕</button>
+                        </div>
+                        {/* Search bar */}
+                        <div className="relative mb-3">
+                            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-2)' }} />
+                            <input
+                                type="text"
+                                placeholder="搜索证据..."
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                className="w-full pl-8 pr-3 py-2 text-xs rounded-lg outline-none transition-all"
+                                style={{
+                                    background: 'var(--bg-0)',
+                                    color: 'var(--text-0)',
+                                    border: '1px solid var(--stroke-0)',
+                                }}
+                                onFocus={e => e.target.style.borderColor = 'var(--accent-400)'}
+                                onBlur={e => e.target.style.borderColor = 'rgba(148,163,184,0.18)'}
+                            />
+                        </div>
+                        <div className="flex gap-1">
                             <button
                                 onClick={() => setShowAllCards(false)}
-                                className={`text-xs px-2 py-1 rounded-full transition-all ${!showAllCards
-                                    ? 'bg-blue-100 text-blue-700 font-medium'
-                                    : 'text-slate-500 hover:bg-slate-100'}`}
+                                className="flex-1 text-xs py-1.5 rounded-lg font-medium transition-colors"
+                                style={{
+                                    background: !showAllCards ? 'rgba(99,102,241,0.15)' : 'transparent',
+                                    color: !showAllCards ? 'var(--accent-300)' : 'var(--text-2)',
+                                }}
                             >
                                 当前 Topic
                             </button>
                             <button
                                 onClick={() => setShowAllCards(true)}
-                                className={`text-xs px-2 py-1 rounded-full transition-all ${showAllCards
-                                    ? 'bg-blue-100 text-blue-700 font-medium'
-                                    : 'text-slate-500 hover:bg-slate-100'}`}
+                                className="flex-1 text-xs py-1.5 rounded-lg font-medium transition-colors"
+                                style={{
+                                    background: showAllCards ? 'rgba(99,102,241,0.15)' : 'transparent',
+                                    color: showAllCards ? 'var(--accent-300)' : 'var(--text-2)',
+                                }}
                             >
                                 全部卡片
                             </button>
                         </div>
                     </div>
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+
+                    {/* Card list */}
+                    <div className="flex-1 overflow-y-auto p-3 space-y-2">
                         {filteredCards.map(card => {
                             const sourceName = card.source?.name || (card.source_url ? (() => { try { return new URL(card.source_url).hostname.replace('www.', ''); } catch { return ''; } })() : '');
                             return (
-                                <div key={card.id} draggable onDragStart={() => handleDragStart(card)}
-                                    className="bg-white border p-3 rounded-lg hover:border-blue-500 cursor-grab shadow-sm text-sm group/card"
+                                <div
+                                    key={card.id}
+                                    draggable
+                                    onDragStart={() => handleDragStart(card)}
+                                    className="group/card flex items-start gap-2 p-3 rounded-xl cursor-grab text-sm transition-all"
+                                    style={{
+                                        background: 'var(--surface-0)',
+                                        border: '1px solid var(--stroke-0)',
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                    }}
+                                    onMouseEnter={e => {
+                                        e.currentTarget.style.borderColor = 'var(--accent-400)';
+                                        e.currentTarget.style.transform = 'translateY(-1px)';
+                                    }}
+                                    onMouseLeave={e => {
+                                        e.currentTarget.style.borderColor = 'var(--stroke-0)';
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                    }}
                                 >
-                                    <div className="flex items-center justify-between mb-1">
-                                        <div className="font-bold text-slate-500 text-[10px]">CARD #{card.id.slice(0, 4)}</div>
-                                        {card.source_url && (
-                                            <a
-                                                href={buildHighlightUrl(card.source_url, card.raw_snippet)}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="opacity-0 group-hover/card:opacity-100 text-blue-500 hover:text-blue-700 transition-all p-0.5"
-                                                title="跳转原文高亮"
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                <ExternalLink size={12} />
-                                            </a>
+                                    {/* Drag affordance icon */}
+                                    <div className="shrink-0 pt-0.5 opacity-30 group-hover/card:opacity-70 transition-opacity" style={{ color: 'var(--text-2)' }}>
+                                        <GripVertical size={14} />
+                                    </div>
+                                    {/* Card content */}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <span className="font-mono font-bold text-[10px]" style={{ color: 'var(--text-2)' }}>#{card.id.slice(0, 6)}</span>
+                                            {card.source_url && (
+                                                <a
+                                                    href={buildHighlightUrl(card.source_url, card.raw_snippet)}
+                                                    target="_blank" rel="noopener noreferrer"
+                                                    className="opacity-0 group-hover/card:opacity-100 transition-all p-0.5"
+                                                    style={{ color: 'var(--accent-300)' }}
+                                                    title="跳转原文"
+                                                    onClick={e => e.stopPropagation()}
+                                                >
+                                                    <ExternalLink size={11} />
+                                                </a>
+                                            )}
+                                        </div>
+                                        {sourceName && <div className="text-[10px] mb-1.5 truncate" style={{ color: 'var(--accent-300)' }}>📰 {sourceName}</div>}
+                                        <div className="line-clamp-3 text-[11px] font-medium" style={{ color: 'var(--text-1)', lineHeight: '1.55' }}>{card.summary || '(无内容)'}</div>
+                                        {card.raw_snippet && (
+                                            <details className="mt-2">
+                                                <summary className="text-[10px] cursor-pointer select-none" style={{ color: 'var(--text-2)' }}>查看原文</summary>
+                                                <div className="mt-1 p-2 rounded text-[11px] max-h-24 overflow-y-auto whitespace-pre-wrap break-words" style={{ background: 'var(--bg-0)', border: '1px solid var(--stroke-0)', color: 'var(--text-2)', lineHeight: '1.55' }}>
+                                                    {card.raw_snippet}
+                                                </div>
+                                            </details>
                                         )}
                                     </div>
-                                    {sourceName && (
-                                        <div className="text-[10px] text-blue-600 mb-1 truncate">📰 {sourceName}</div>
-                                    )}
-                                    <div className="line-clamp-2 text-slate-700 mb-1">{card.summary || 'No Content'}</div>
-                                    {card.raw_snippet && (
-                                        <details className="group/details">
-                                            <summary className="text-[10px] text-slate-400 cursor-pointer hover:text-slate-600 select-none">查看原文</summary>
-                                            <div className="mt-1 p-2 bg-slate-50 rounded text-[11px] text-slate-600 leading-relaxed max-h-32 overflow-y-auto whitespace-pre-wrap break-words">
-                                                {card.raw_snippet}
-                                            </div>
-                                        </details>
-                                    )}
                                 </div>
                             );
                         })}
-
                         {filteredCards.length === 0 && (
-                            <div className="text-center text-slate-400 text-sm py-8">
-                                {showAllCards ? '暂无卡片，点击下方创建' : '当前 Topic 暂无卡片'}
-                            </div>
+                            <div className="text-center text-xs py-8" style={{ color: 'var(--text-2)' }}>暂无卡片</div>
                         )}
                     </div>
 
-                    {/* Card Creator Section */}
-                    <div className="border-t">
+                    {/* Add card toggle */}
+                    <div className="p-3" style={{ borderTop: '1px solid var(--stroke-1)' }}>
                         <button
-                            onClick={() => setShowCardCreator(!showCardCreator)}
-                            className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors"
+                            onClick={() => setShowAddCard(!showAddCard)}
+                            className="w-full text-xs py-2 rounded-lg font-medium transition-colors hover:bg-black/5"
+                            style={{ background: 'var(--bg-1)', border: '1px solid var(--stroke-0)', color: 'var(--text-1)' }}
                         >
-                            <span className="font-semibold text-slate-700 flex items-center gap-2">
-                                <Plus size={16} className="text-green-600" />
-                                新建卡片
-                            </span>
-                            {showCardCreator ? <ChevronDown size={16} className="text-slate-400" /> : <ChevronRight size={16} className="text-slate-400" />}
+                            {showAddCard ? '收起' : '+ 新建卡片'}
                         </button>
-
-                        {showCardCreator && (
-                            <div className="p-4 pt-0 border-t bg-slate-50/50">
-                                <AddCardSection onCardAdded={() => { fetchCards(); setShowCardCreator(false); }} />
+                        {showAddCard && (
+                            <div className="mt-3">
+                                <AddCardSection />
                             </div>
                         )}
                     </div>
                 </div>
+            )}
 
-                {/* Canvas */}
-                <div ref={canvasRef} className="flex-1 relative overflow-auto bg-slate-50"
-                    style={{ backgroundImage: 'radial-gradient(#cbd5e1 1.5px, transparent 1.5px)', backgroundSize: '32px 32px' }}>
+            {/* Sidebar toggle when closed */}
+            {!sidebarOpen && (
+                <button
+                    onClick={() => setSidebarOpen(true)}
+                    className="fixed right-4 top-1/2 -translate-y-1/2 rounded-xl px-2 py-4 transition-colors z-10 glass-surface"
+                    style={{ color: 'var(--text-1)', boxShadow: '0 4px 24px rgba(0,0,0,0.4)' }}
+                    title="打开 Evidence Pool"
+                >
+                    <span className="text-xs font-bold" style={{ writingMode: 'vertical-rl' }}>Evidence</span>
+                </button>
+            )}
 
-                    <svg ref={svgRef} className="absolute top-0 left-0 pointer-events-none z-0" style={{ width: '4000px', height: '4000px' }} />
-
-                    <div className="inline-flex flex-row items-center p-20 gap-32 min-w-max min-h-[800px]">
-
-                        {/* LEVEL 1: Root */}
-                        <div className="flex flex-col justify-center h-full">
-                            <div ref={setNodeRef('root')} className="w-96 p-6 rounded-3xl bg-slate-900 text-white shadow-2xl border-4 border-slate-700 z-10 transition-transform">
-                                <div className="text-xs uppercase tracking-widest opacity-60 font-bold mb-2">Core Issue</div>
-
-                                <EditableText
-                                    text={rootQuestion.text}
-                                    onSave={updateRootText}
-                                    isEditing={editingNodes.has('root')}
-                                    setEditing={(val) => toggleEditing('root', val)}
-                                    className="text-2xl font-bold bg-transparent border-transparent hover:bg-slate-800 text-white"
-                                    placeholder="输入你的核心问题..."
-                                />
-
-                                <div className="mt-6 pt-4 border-t border-slate-700 flex justify-end">
-                                    <button
-                                        onClick={handleAIAnalyze}
-                                        disabled={isAnalyzing}
-                                        className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-sm transition-all ${isAnalyzing
-                                            ? 'bg-slate-700 text-slate-400 cursor-wait'
-                                            : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:scale-105 text-white shadow-lg'
-                                            }`}
-                                    >
-                                        {isAnalyzing ? (
-                                            <><Sparkles className="animate-spin" size={16} /> Breaking Down...</>
-                                        ) : (
-                                            <><Play size={16} fill="currentColor" /> AI Auto-Analyze</>
-                                        )}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* LEVEL 2-4: SubQs -> Hypos -> Evidence */}
-                        {rootQuestion.isOpen && (
-                            <div className="flex flex-col gap-12 py-10">
-                                {subQuestions.map(sq => {
-                                    const isExpanded = expandedSubQs.has(sq.id);
-                                    const childHypos = hypotheses.filter(h => h.parentId === sq.id);
-
-                                    return (
-                                        <div key={sq.id} className="flex flex-row items-start gap-32">
-
-                                            {/* Sub-Question Node */}
-                                            <div className="relative z-10 group">
-                                                <div ref={setNodeRef(sq.id)} className="w-80 bg-white border-2 border-slate-200 rounded-2xl shadow-sm hover:shadow-md transition-all">
-                                                    <div className="p-5" onClick={() => toggleSubQExpand(sq.id)}>
-                                                        <div className="flex justify-between items-start mb-2">
-                                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Level 2</span>
-                                                            <div className="flex items-center gap-2">
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); deleteSubQuestion(sq.id); }}
-                                                                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all p-1 rounded hover:bg-red-50"
-                                                                    title="删除子问题"
-                                                                >
-                                                                    <Trash2 size={14} />
-                                                                </button>
-                                                                {isExpanded ? <ChevronDown size={16} className="text-blue-500" /> : <ChevronRight size={16} className="text-slate-400" />}
-                                                            </div>
-                                                        </div>
-                                                        <EditableText
-                                                            text={sq.text}
-                                                            onSave={(val) => updateSubQText(sq.id, val)}
-                                                            isEditing={editingNodes.has(sq.id)}
-                                                            setEditing={(val) => toggleEditing(sq.id, val)}
-                                                            className="font-semibold text-slate-700 text-lg leading-snug"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Hypotheses Column */}
-                                            {isExpanded && (
-                                                <div className="flex flex-col gap-8">
-                                                    {childHypos.map(h => {
-                                                        const isDragOver = dragOverHypo === h.id;
-                                                        const childEvidence = evidence.filter(e => e.parentId === h.id);
-
-                                                        return (
-                                                            <div key={h.id} className="flex flex-row items-start gap-32">
-                                                                {/* Hypothesis Node */}
-                                                                <div className="relative z-10">
-                                                                    <div
-                                                                        ref={setNodeRef(h.id)}
-                                                                        onDragOver={(e) => handleDragOver(e, h.id)}
-                                                                        onDragLeave={handleDragLeave}
-                                                                        onDrop={(e) => handleDrop(e, h.id)}
-                                                                        className={`w-80 p-5 rounded-2xl border-2 transition-all group/hypo ${isDragOver
-                                                                            ? 'bg-purple-50 border-purple-500 border-dashed scale-105 shadow-xl'
-                                                                            : 'bg-white border-purple-200 shadow-md'
-                                                                            }`}
-                                                                    >
-                                                                        <div className="flex gap-3">
-                                                                            <div className="mt-1 w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-xs font-bold flex-none">H</div>
-                                                                            <div className="flex-1">
-                                                                                <EditableText
-                                                                                    text={h.text}
-                                                                                    onSave={(val) => updateHypoText(h.id, val)}
-                                                                                    isEditing={editingNodes.has(h.id)}
-                                                                                    setEditing={(val) => toggleEditing(h.id, val)}
-                                                                                    className="font-medium text-slate-700 text-sm leading-relaxed"
-                                                                                />
-                                                                            </div>
-                                                                            <button
-                                                                                onClick={() => deleteHypothesis(h.id)}
-                                                                                className="opacity-0 group-hover/hypo:opacity-100 text-slate-400 hover:text-red-500 transition-all p-1 rounded hover:bg-red-50 flex-none"
-                                                                                title="删除假设"
-                                                                            >
-                                                                                <Trash2 size={14} />
-                                                                            </button>
-                                                                        </div>
-                                                                        {isDragOver && (
-                                                                            <div className="mt-3 text-center text-xs font-bold text-purple-600 animate-pulse">
-                                                                                Drop to Verify Evidence
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* Evidence Column */}
-                                                                <div className="flex flex-col gap-4">
-                                                                    {childEvidence.map(ev => (
-                                                                        <div key={ev.id} ref={setNodeRef(ev.id)} className={`w-72 p-4 rounded-xl border-l-4 shadow-sm bg-white relative z-10 transition-all group/ev ${ev.status === 'support' ? 'border-l-green-500 bg-green-50/30' :
-                                                                            ev.status === 'refute' ? 'border-l-red-500 bg-red-50/30' : 'border-l-gray-300'
-                                                                            }`}>
-                                                                            <div className="mb-2 flex items-center justify-between">
-                                                                                <div className="flex items-center gap-2">
-                                                                                    {ev.status === 'analyzing' && <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded animate-pulse">AI Checking...</span>}
-                                                                                    {ev.status === 'support' && <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1"><Check size={10} /> Support</span>}
-                                                                                    {ev.status === 'refute' && <span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1"><X size={10} /> Refute</span>}
-                                                                                    {ev.status === 'neutral' && <span className="bg-gray-100 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1"><Minus size={10} /> Neutral</span>}
-                                                                                </div>
-                                                                                <button
-                                                                                    onClick={() => deleteEvidence(ev.id)}
-                                                                                    className="opacity-0 group-hover/ev:opacity-100 text-slate-400 hover:text-red-500 transition-all p-1 rounded hover:bg-red-50"
-                                                                                    title="删除证据"
-                                                                                >
-                                                                                    <Trash2 size={12} />
-                                                                                </button>
-                                                                            </div>
-                                                                            <div className="text-xs text-slate-800 font-medium line-clamp-3 mb-1">{ev.text}</div>
-                                                                            {ev.explanation && (
-                                                                                <div className="text-[10px] text-slate-500 italic border-t pt-1 mt-1">
-                                                                                    AI: {ev.explanation}
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-
-                                                    {/* Add Hypothesis Button */}
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); addHypothesis(sq.id); }}
-                                                        className="flex items-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-purple-300 text-purple-600 hover:bg-purple-50 hover:border-purple-400 transition-all text-sm font-medium w-80"
-                                                    >
-                                                        <Plus size={16} />
-                                                        添加假设
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-
-                                {/* Add Sub-Question Button */}
-                                <button
-                                    onClick={addSubQuestion}
-                                    className="flex items-center gap-2 px-5 py-4 rounded-2xl border-2 border-dashed border-slate-300 text-slate-600 hover:bg-slate-100 hover:border-slate-400 transition-all text-sm font-medium w-80"
-                                >
-                                    <Plus size={18} />
-                                    添加子问题
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
+            {/* AI Chat Panel */}
+            {boardId && (
+                <BoardChatPanel
+                    boardId={boardId}
+                    topicId={topicId}
+                    topicTitle={topic?.title}
+                    onBoardMutated={loadBoard}
+                />
+            )}
         </div>
     );
 }
+
+export default ThinkingBoardPage;

@@ -64,25 +64,24 @@ export default function BoardsListPage() {
 
     return (
         <div className="p-6 max-w-5xl mx-auto">
-            {/* 页头 */}
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                    <Brain className="w-8 h-8 text-primary-500" />
-                    <h1 className="text-2xl font-bold text-gray-800">思维画板</h1>
+                    <Brain className="w-8 h-8" style={{ color: 'var(--accent-400)' }} />
+                    <h1 className="text-2xl font-bold" style={{ color: 'var(--text-0)' }}>思维画板</h1>
                 </div>
                 <button
                     onClick={handleCreate}
                     disabled={creating}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg disabled:opacity-50 transition-colors"
+                    style={{ background: 'var(--accent-600)', color: 'white' }}
                 >
                     <Plus size={20} />
                     {creating ? '创建中...' : '新建画板'}
                 </button>
             </div>
 
-            {/* 画板列表 */}
             {boards.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
+                <div className="text-center py-12" style={{ color: 'var(--text-2)' }}>
                     <Brain className="w-16 h-16 mx-auto mb-4 opacity-30" />
                     <p>还没有思维画板</p>
                     <p className="text-sm mt-1">点击"新建画板"开始组织你的思维</p>
@@ -93,23 +92,25 @@ export default function BoardsListPage() {
                         <div
                             key={board.id}
                             onClick={() => navigate(`/boards/${board.id}`)}
-                            className="group p-5 bg-white border rounded-xl cursor-pointer hover:border-primary-400 hover:shadow-lg transition-all"
+                            className="group p-5 rounded-xl cursor-pointer transition-all"
+                            style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)' }}
                         >
                             <div className="flex items-start justify-between">
-                                <h3 className="font-semibold text-gray-800 group-hover:text-primary-600">
+                                <h3 className="font-semibold" style={{ color: 'var(--text-0)' }}>
                                     {board.title}
                                 </h3>
                                 <button
                                     onClick={(e) => handleDelete(board.id, e)}
-                                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                    className="p-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                    style={{ color: 'var(--text-2)' }}
                                 >
                                     <Trash2 size={16} />
                                 </button>
                             </div>
                             {board.description && (
-                                <p className="mt-2 text-sm text-gray-500 line-clamp-2">{board.description}</p>
+                                <p className="mt-2 text-sm line-clamp-2" style={{ color: 'var(--text-2)' }}>{board.description}</p>
                             )}
-                            <div className="mt-3 flex items-center gap-1 text-xs text-gray-400">
+                            <div className="mt-3 flex items-center gap-1 text-xs" style={{ color: 'var(--text-2)' }}>
                                 <Clock size={12} />
                                 <span>
                                     {new Date(board.updated_at).toLocaleDateString('zh-CN', {

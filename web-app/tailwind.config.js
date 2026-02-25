@@ -32,6 +32,24 @@ export default {
           800: '#27272a',
           900: '#18181b',
         },
+        // Deep Space palette
+        ds: {
+          bg0: '#070A12',
+          bg1: '#0B1020',
+          surface0: 'rgba(17, 24, 39, 0.88)',
+          surface1: 'rgba(15, 23, 42, 0.92)',
+          text0: '#F8FAFC',
+          text1: '#94A3B8',
+          text2: '#64748B',
+          stroke: 'rgba(148, 163, 184, 0.18)',
+          accent: {
+            300: '#A5B4FC',
+            400: '#818CF8',
+            500: '#6366F1',
+            600: '#4F46E5',
+            700: '#4338CA',
+          },
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
@@ -40,6 +58,7 @@ export default {
       animation: {
         'slide-up': 'slideUp 0.3s ease-out',
         'fade-in': 'fadeIn 0.2s ease-out',
+        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
       },
       keyframes: {
         slideUp: {
@@ -50,6 +69,13 @@ export default {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
         },
+      },
+      backdropBlur: {
+        xs: '2px',
+      },
+      boxShadow: {
+        'glow': '0 0 12px rgba(129, 140, 248, 0.25)',
+        'glow-lg': '0 0 24px rgba(129, 140, 248, 0.35)',
       },
     },
   },

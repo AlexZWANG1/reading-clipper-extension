@@ -22,9 +22,9 @@ const CATEGORIES = [
 ];
 
 const IMPORTANCE_LEVELS = [
-  { value: 1, label: '🔴 重要 (Level 1)', color: 'bg-red-500' },
-  { value: 2, label: '🟠 普通 (Level 2)', color: 'bg-orange-400' },
-  { value: 3, label: '⚪ 闲聊 (Level 3)', color: 'bg-gray-300' },
+  { value: 1, label: '🔴 重要 (Level 1)', color: '#EF4444' },
+  { value: 2, label: '🟠 普通 (Level 2)', color: '#FB923C' },
+  { value: 3, label: '⚪ 闲聊 (Level 3)', color: '#9CA3AF' },
 ];
 
 const REGIONS = [
@@ -88,14 +88,15 @@ function SourceModal({ isOpen, onClose, onSubmit, editingSource }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 animate-slide-up max-h-[90vh] overflow-y-auto">
+      <div className="relative rounded-2xl shadow-xl w-full max-w-lg p-6 animate-slide-up max-h-[90vh] overflow-y-auto" style={{ background: 'var(--surface-0)' }}>
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-surface-900">
+          <h2 className="text-xl font-semibold" style={{ color: 'var(--text-0)' }}>
             {editingSource ? '编辑信息源' : '添加信息源'}
           </h2>
           <button
             onClick={onClose}
-            className="p-2 text-surface-400 hover:text-surface-600 hover:bg-surface-100 rounded-lg"
+            className="p-2 rounded-lg transition-colors"
+            style={{ color: 'var(--text-2)' }}
           >
             <X className="w-5 h-5" />
           </button>
@@ -105,7 +106,7 @@ function SourceModal({ isOpen, onClose, onSubmit, editingSource }) {
           {/* 名称 */}
           <div>
             <label className="block text-sm font-medium text-surface-700 mb-1.5">
-              信息源名称 <span className="text-red-500">*</span>
+              信息源名称 <span style={{ color: '#EF4444' }}>*</span>
             </label>
             <input
               type="text"
@@ -120,7 +121,7 @@ function SourceModal({ isOpen, onClose, onSubmit, editingSource }) {
           {/* URL */}
           <div>
             <label className="block text-sm font-medium text-surface-700 mb-1.5">
-              网站地址 <span className="text-red-500">*</span>
+              网站地址 <span style={{ color: '#EF4444' }}>*</span>
             </label>
             <input
               type="url"
@@ -271,7 +272,8 @@ function SourceRow({ source, onEdit, onDelete }) {
       <td className="px-4 py-4">
         <div className="flex items-center gap-2">
           <span
-            className={`w-2.5 h-2.5 rounded-full ${importanceLevel?.color || 'bg-gray-300'}`}
+            className="w-2.5 h-2.5 rounded-full"
+            style={{ background: importanceLevel?.color || '#9CA3AF' }}
           />
           <span className="text-sm text-surface-600">Level {source.importance_level}</span>
         </div>
@@ -312,7 +314,7 @@ function SourceRow({ source, onEdit, onDelete }) {
                 </button>
                 <button
                   onClick={() => {
-                    onDelete(source.source_id);
+                    onDelete(source.id);
                     setMenuOpen(false);
                   }}
                   className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
@@ -344,7 +346,7 @@ function SourcesPage() {
   const handleCreate = async (data) => {
     try {
       if (editingSource) {
-        await updateSource(editingSource.source_id, data);
+        await updateSource(editingSource.id, data);
         showToast('信息源已更新', 'success');
       } else {
         await createSource(data);
@@ -427,7 +429,7 @@ function SourcesPage() {
             <tbody className="divide-y divide-surface-100">
               {sources.map((source) => (
                 <SourceRow
-                  key={source.source_id}
+                  key={source.id}
                   source={source}
                   onEdit={handleEdit}
                   onDelete={handleDelete}

@@ -19,9 +19,9 @@ import AddCardSection from '../components/AddCardSection';
 import HypothesisSection from '../components/HypothesisSection';
 
 const IMPORTANCE_COLORS = {
-  1: 'bg-red-500',
-  2: 'bg-orange-400',
-  3: 'bg-gray-300',
+  1: '#EF4444',
+  2: '#FB923C',
+  3: '#9CA3AF',
 };
 
 const IMPORTANCE_LABELS = {
@@ -53,13 +53,13 @@ function buildHighlightUrl(baseUrl, rawSnippet) {
 
   try {
     const url = new URL(baseUrl);
-    
+
     // 清理文本：移除多余空白、换行，取前 80 个字符作为锚点
     const cleanText = rawSnippet
       .replace(/\s+/g, ' ')  // 多个空白合并为一个空格
       .trim()
       .slice(0, 80);  // 限制长度，避免 URL 过长
-    
+
     if (!cleanText) return baseUrl;
 
     // URL 编码特殊字符
@@ -69,7 +69,7 @@ function buildHighlightUrl(baseUrl, rawSnippet) {
     // 添加 Text Fragment
     // 格式: #:~:text=<encoded_text>
     url.hash = `:~:text=${encodedText}`;
-    
+
     return url.toString();
   } catch {
     // URL 解析失败，返回原链接
@@ -91,20 +91,20 @@ function EditCardModal({ card, onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fade-in">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 m-4" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-bold text-surface-900 mb-4">编辑卡片</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in" style={{ background: 'rgba(0,0,0,0.6)' }}>
+      <div className="rounded-xl shadow-xl w-full max-w-md p-6 m-4" style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)' }} onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-bold mb-4" style={{ color: 'var(--text-0)' }}>编辑卡片</h3>
 
         <div className="space-y-4">
-          {/* Topic Input with Datalist for suggestions */}
           <div>
-            <label className="block text-sm font-medium text-surface-700 mb-1">Topic (主题)</label>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-1)' }}>Topic (主题)</label>
             <input
               list="topics-list"
               type="text"
               value={topicTitle}
               onChange={(e) => setTopicTitle(e.target.value)}
-              className="w-full px-3 py-2 border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+              style={{ background: 'var(--bg-0)', border: '1px solid var(--stroke-0)', color: 'var(--text-0)', '--tw-ring-color': 'var(--accent-500)' }}
               placeholder="输入或选择主题..."
             />
             <datalist id="topics-list">
@@ -112,14 +112,14 @@ function EditCardModal({ card, onClose, onSave }) {
             </datalist>
           </div>
 
-          {/* Note Input */}
           <div>
-            <label className="block text-sm font-medium text-surface-700 mb-1">Note (批注)</label>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-1)' }}>Note (批注)</label>
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows="4"
-              className="w-full px-3 py-2 border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+              style={{ background: 'var(--bg-0)', border: '1px solid var(--stroke-0)', color: 'var(--text-0)', '--tw-ring-color': 'var(--accent-500)' }}
               placeholder="添加你的想法..."
             />
           </div>
@@ -128,14 +128,16 @@ function EditCardModal({ card, onClose, onSave }) {
         <div className="flex justify-end gap-3 mt-6">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-surface-600 hover:bg-surface-100 rounded-lg transition-colors"
+            className="px-4 py-2 rounded-lg transition-colors"
+            style={{ color: 'var(--text-1)' }}
           >
             取消
           </button>
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className="px-4 py-2 bg-primary-600 text-white hover:bg-primary-700 rounded-lg transition-colors disabled:opacity-50"
+            className="px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+            style={{ background: 'var(--accent-600)', color: 'var(--text-0)' }}
           >
             {isSaving ? '保存中...' : '保存'}
           </button>
@@ -163,7 +165,7 @@ function CardItem({ card, onEdit, onDelete, isSelected, onToggleSelect }) {
   const getSourceDisplayName = () => {
     // 已匹配信息源 → 使用信息源名称
     if (card.source?.name) return card.source.name;
-    
+
     // 未匹配 → 优先从 URL 提取域名
     if (card.source_url) {
       try {
@@ -172,7 +174,7 @@ function CardItem({ card, onEdit, onDelete, isSelected, onToggleSelect }) {
         return '未分类信息源';
       }
     }
-    
+
     // 没有 URL → 显示兜底文案
     return '未分类信息源';
   };
@@ -186,15 +188,24 @@ function CardItem({ card, onEdit, onDelete, isSelected, onToggleSelect }) {
   };
 
   return (
-    <div className={`bg-white rounded-xl border p-5 card-hover group flex flex-col h-full shadow-sm hover:shadow-md transition-all duration-200 ${isSelected ? 'border-primary-400 ring-2 ring-primary-100' : 'border-surface-100'}`}>
-      {/* 头部：勾选框 + 来源徽章 + 菜单 */}
+    <div
+      className={`rounded-xl p-5 card-hover group flex flex-col h-full transition-all duration-200`}
+      style={{
+        background: 'var(--surface-0)',
+        border: isSelected ? '1px solid var(--accent-500)' : '1px solid var(--stroke-0)',
+        boxShadow: isSelected
+          ? '0 0 0 2px var(--glow), 0 4px 6px -1px rgb(0 0 0 / 0.1)'
+          : '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+      }}
+    >
+      {/* Header: checkbox + source badge + menu */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center flex-wrap gap-2">
-          {/* 勾选框 */}
           {onToggleSelect && (
             <button
               onClick={() => onToggleSelect(card.id)}
-              className={`p-0.5 rounded transition-colors ${isSelected ? 'text-primary-600' : 'text-surface-300 hover:text-surface-500'}`}
+              className="p-0.5 rounded transition-colors"
+              style={{ color: isSelected ? 'var(--accent-400)' : 'var(--text-2)' }}
               title={isSelected ? '取消选择' : '选择此卡片'}
             >
               {isSelected ? (
@@ -204,31 +215,31 @@ function CardItem({ card, onEdit, onDelete, isSelected, onToggleSelect }) {
               )}
             </button>
           )}
-          {/* Source Badge - 区分已匹配/未匹配状态 */}
+          {/* Source Badge */}
           {hasMatchedSource ? (
-            // 已匹配信息源：显示完整徽章
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border border-surface-200 bg-gradient-to-br from-green-50 to-green-100 text-green-800">
-              {/* Importance Dot */}
-              <span className={`w-1.5 h-1.5 rounded-full ${IMPORTANCE_COLORS[sourceImportance] || 'bg-gray-300'}`} />
-              {/* Region Icon */}
+            <div
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+              style={{ background: 'rgba(52,211,153,0.1)', color: '#34D399', border: '1px solid rgba(52,211,153,0.2)' }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: IMPORTANCE_COLORS[sourceImportance] || '#9CA3AF' }} />
               {sourceRegion && (
                 <span className="text-[10px] opacity-80">{getRegionIcon(sourceRegion)}</span>
               )}
-              {/* Source Name */}
               <span className="max-w-[100px] truncate" title={sourceName}>
                 {sourceName}
               </span>
-              {/* Category Tag */}
               {sourceCategory && (
-                <span className="text-[9px] px-1.5 py-0.5 bg-green-200/50 text-green-700 rounded">
+                <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(52,211,153,0.15)', color: '#34D399' }}>
                   {sourceCategory}
                 </span>
               )}
             </div>
           ) : (
-            // 未匹配信息源：显示兜底徽章
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border border-surface-200 bg-surface-50 text-surface-500">
-              <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+            <div
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+              style={{ background: 'rgba(148,163,184,0.1)', color: 'var(--text-2)', border: '1px solid var(--stroke-0)' }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#9CA3AF' }} />
               <span className="max-w-[120px] truncate" title={sourceName}>
                 {sourceName}
               </span>
@@ -236,7 +247,7 @@ function CardItem({ card, onEdit, onDelete, isSelected, onToggleSelect }) {
           )}
 
           {/* Date */}
-          <div className="flex items-center gap-1 text-xs text-surface-400">
+          <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-2)' }}>
             <Clock className="w-3 h-3" />
             <span>
               {new Date(card.created_at).toLocaleDateString('zh-CN', {
@@ -250,7 +261,8 @@ function CardItem({ card, onEdit, onDelete, isSelected, onToggleSelect }) {
         <div className="relative">
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="p-1.5 text-surface-400 hover:text-surface-600 hover:bg-surface-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+            className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+            style={{ color: 'var(--text-2)' }}
           >
             <MoreVertical className="w-4 h-4" />
           </button>
@@ -260,13 +272,14 @@ function CardItem({ card, onEdit, onDelete, isSelected, onToggleSelect }) {
                 className="fixed inset-0 z-10"
                 onClick={() => setMenuOpen(false)}
               />
-              <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-surface-100 py-1 z-20 min-w-[120px]">
+              <div className="absolute right-0 top-full mt-1 rounded-lg shadow-lg py-1 z-20 min-w-[120px]" style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)' }}>
                 <button
                   onClick={() => {
                     onEdit(card);
                     setMenuOpen(false);
                   }}
-                  className="w-full px-3 py-2 text-left text-sm text-surface-700 hover:bg-surface-50 flex items-center gap-2"
+                  className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors"
+                  style={{ color: 'var(--text-1)' }}
                 >
                   <Edit3 className="w-4 h-4" />
                   编辑
@@ -276,7 +289,8 @@ function CardItem({ card, onEdit, onDelete, isSelected, onToggleSelect }) {
                     onDelete(card.id);
                     setMenuOpen(false);
                   }}
-                  className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                  className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors"
+                  style={{ color: '#FB7185' }}
                 >
                   <Trash2 className="w-4 h-4" />
                   删除
@@ -287,74 +301,81 @@ function CardItem({ card, onEdit, onDelete, isSelected, onToggleSelect }) {
         </div>
       </div>
 
-      {/* 标题 (新增) */}
+      {/* Title */}
       {card.title && (
-        <h4 className="text-base font-semibold text-surface-900 mb-2 leading-tight">
+        <h4 className="text-base font-semibold mb-2 leading-tight" style={{ color: 'var(--text-0)' }}>
           {card.title}
         </h4>
       )}
 
-      {/* 摘要 */}
-      <h3 className={`text-surface-800 font-medium mb-3 text-sm leading-relaxed ${card.title ? '' : 'text-base text-surface-900'}`}>
+      {/* Summary */}
+      <h3
+        className={`font-medium mb-3 text-sm leading-relaxed ${card.title ? '' : 'text-base'}`}
+        style={{ color: card.title ? 'var(--text-1)' : 'var(--text-0)' }}
+      >
         {card.summary}
       </h3>
 
-      {/* 要点 */}
+      {/* Key points */}
       {card.key_points?.length > 0 && (
-        <ul className="text-sm text-surface-600 space-y-1.5 mb-4 pl-1">
+        <ul className="text-sm space-y-1.5 mb-4 pl-1" style={{ color: 'var(--text-1)' }}>
           {card.key_points.slice(0, 3).map((point, i) => (
             <li key={i} className="flex items-start gap-2">
-              <span className="text-primary-500 mt-1.5 w-1 h-1 rounded-full bg-primary-500 shrink-0" />
+              <span className="mt-1.5 w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--accent-400)' }} />
               <span className="opacity-90 leading-normal">{point}</span>
             </li>
           ))}
           {card.key_points.length > 3 && (
-            <li className="text-surface-400 text-xs pl-3 pt-1">
+            <li className="text-xs pl-3 pt-1" style={{ color: 'var(--text-2)' }}>
               +{card.key_points.length - 3} 更多要点
             </li>
           )}
         </ul>
       )}
 
-      {/* 底部功能区 */}
-      <div className="mt-auto pt-3 border-t border-surface-100/50 flex flex-col gap-3">
-        {/* 折叠原文区域 */}
+      {/* Footer */}
+      <div className="mt-auto pt-3 flex flex-col gap-3" style={{ borderTop: '1px solid var(--stroke-1)' }}>
+        {/* Collapsible snippet */}
         <div className="text-xs">
           <button
             onClick={() => setSnippetOpen(!snippetOpen)}
-            className="flex items-center gap-1 text-surface-500 hover:text-surface-700 font-medium transition-colors select-none"
+            className="flex items-center gap-1 font-medium transition-colors select-none"
+            style={{ color: 'var(--text-2)' }}
           >
             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${snippetOpen ? 'rotate-180' : ''}`} />
             {snippetOpen ? '收起原文' : '查看原文'}
           </button>
           {snippetOpen && (
-            <div className="mt-2 p-3 bg-surface-50 rounded-lg text-surface-600 font-mono leading-relaxed whitespace-pre-wrap break-words border border-surface-100 max-h-60 overflow-y-auto">
+            <div
+              className="mt-2 p-3 rounded-lg font-mono leading-relaxed whitespace-pre-wrap break-words max-h-60 overflow-y-auto"
+              style={{ background: 'var(--bg-0)', color: 'var(--text-2)', border: '1px solid var(--stroke-1)' }}
+            >
               {card.raw_snippet || "（无原文内容）"}
-              {/* 图片显示 */}
               {card.image_url && (
                 <div className="mt-2">
-                  <img src={card.image_url} alt="Card Image" className="max-w-full rounded border border-surface-200" />
+                  <img src={card.image_url} alt="Card Image" className="max-w-full rounded" style={{ border: '1px solid var(--stroke-0)' }} />
                 </div>
               )}
             </div>
           )}
         </div>
 
-        {/* 底部元数据: Topic 与 链接 */}
+        {/* Bottom metadata */}
         <div className="flex items-center justify-between">
-          {/* Topic Badge with Note Indicator */}
           <div className="flex items-center gap-2">
             {card.topic_title ? (
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-primary-50 text-primary-700 rounded text-[11px] font-medium border border-primary-100/50">
+              <span
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium"
+                style={{ background: 'rgba(99,102,241,0.1)', color: 'var(--accent-300)', border: '1px solid rgba(99,102,241,0.15)' }}
+              >
                 <Tag className="w-3 h-3" />
                 {card.topic_title}
               </span>
             ) : (
-              <span className="text-[11px] text-surface-300">#未分类</span>
+              <span className="text-[11px]" style={{ color: 'var(--text-2)' }}>#未分类</span>
             )}
-            {/* Note Indicator */}
             {card.note && (
-              <span className="w-2 h-2 rounded-full bg-yellow-400" title="有批注" />
+              <span className="w-2 h-2 rounded-full" style={{ background: '#FBBF24' }} title="有批注" />
             )}
           </div>
 
@@ -363,8 +384,8 @@ function CardItem({ card, onEdit, onDelete, isSelected, onToggleSelect }) {
               href={buildHighlightUrl(card.source_url, card.raw_snippet)}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-surface-400 hover:text-primary-600 transition-colors flex items-center gap-1 text-xs group/link"
-              title="跳转到原文并高亮选中内容"
+              className="transition-colors flex items-center gap-1 text-xs group/link"
+              style={{ color: 'var(--text-2)' }}
             >
               <span className="group-hover/link:underline">回到原文</span>
               <ExternalLink className="w-3.5 h-3.5" />
@@ -390,7 +411,7 @@ function CardsPage() {
   const [selectedImportance, setSelectedImportance] = useState('');
 
   const [editingCard, setEditingCard] = useState(null);
-  
+
   // 假设验证用的卡片选择
   const [selectedCardIds, setSelectedCardIds] = useState(new Set());
 
@@ -494,22 +515,22 @@ function CardsPage() {
         />
       )}
 
-      {/* 页面标题 */}
+      {/* Page title */}
       <div>
-        <h1 className="text-2xl font-bold text-surface-900">
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-0)' }}>
           {currentTopic ? currentTopic.title : '全部卡片'}
         </h1>
-        <p className="text-surface-500 mt-1">
+        <p className="mt-1" style={{ color: 'var(--text-2)' }}>
           共 {filteredCards.length} 张卡片
           {filteredCards.length !== cards.length && ` (已筛选，共 ${cards.length} 张)`}
           {currentTopic && ` · ${currentTopic.title}`}
         </p>
       </div>
 
-      {/* 添加卡片区域 */}
+      {/* Add card */}
       <AddCardSection />
 
-      {/* 假设验证区域 */}
+      {/* Hypothesis section */}
       <HypothesisSection
         topics={topics}
         selectedCardIds={selectedCardIds}
@@ -517,16 +538,17 @@ function CardsPage() {
         onClearSelection={clearSelection}
       />
 
-      {/* 搜索和筛选 */}
+      {/* Search & filters */}
       <div className="flex flex-col xl:flex-row gap-3">
         <form onSubmit={handleSearch} className="flex-1 relative min-w-[200px]">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: 'var(--text-2)' }} />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="搜索卡片内容..."
-            className="w-full pl-11 pr-4 py-2.5 bg-white border border-surface-200 rounded-xl text-surface-900 placeholder-surface-400 input-focus"
+            className="w-full pl-11 pr-4 py-2.5 rounded-xl input-focus"
+            style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)', color: 'var(--text-0)' }}
           />
           {searchQuery && (
             <button
@@ -535,7 +557,8 @@ function CardsPage() {
                 setSearchQuery('');
                 fetchCards(selectedTopic ? { topic_id: selectedTopic } : {});
               }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-surface-400 hover:text-surface-600"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1"
+              style={{ color: 'var(--text-2)' }}
             >
               <X className="w-4 h-4" />
             </button>
@@ -548,7 +571,8 @@ function CardsPage() {
               <select
                 value={selectedTopic}
                 onChange={(e) => setSelectedTopic(e.target.value)}
-                className="appearance-none w-full sm:w-40 pl-4 pr-9 py-2.5 bg-white border border-surface-200 rounded-xl text-surface-900 input-focus cursor-pointer text-sm"
+                className="appearance-none w-full sm:w-40 pl-4 pr-9 py-2.5 rounded-xl input-focus cursor-pointer text-sm"
+                style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)', color: 'var(--text-0)' }}
               >
                 <option value="">全部 Topic</option>
                 {topics.map((topic) => (
@@ -557,16 +581,16 @@ function CardsPage() {
                   </option>
                 ))}
               </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400 pointer-events-none" />
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: 'var(--text-2)' }} />
             </div>
           )}
 
-          {/* Category Filter - 按信息源分类筛选 */}
           <div className="relative">
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="appearance-none w-full sm:w-40 pl-4 pr-9 py-2.5 bg-white border border-surface-200 rounded-xl text-surface-900 input-focus cursor-pointer text-sm"
+              className="appearance-none w-full sm:w-40 pl-4 pr-9 py-2.5 rounded-xl input-focus cursor-pointer text-sm"
+              style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)', color: 'var(--text-0)' }}
             >
               <option value="">全部分类</option>
               {categories.map((category) => (
@@ -575,27 +599,27 @@ function CardsPage() {
                 </option>
               ))}
             </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400 pointer-events-none" />
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: 'var(--text-2)' }} />
           </div>
 
-          {/* Importance Filter */}
           <div className="relative">
             <select
               value={selectedImportance}
               onChange={(e) => setSelectedImportance(e.target.value)}
-              className="appearance-none w-full sm:w-32 pl-4 pr-9 py-2.5 bg-white border border-surface-200 rounded-xl text-surface-900 input-focus cursor-pointer text-sm"
+              className="appearance-none w-full sm:w-32 pl-4 pr-9 py-2.5 rounded-xl input-focus cursor-pointer text-sm"
+              style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)', color: 'var(--text-0)' }}
             >
               <option value="">全部重要度</option>
               <option value="1">🔴 重要</option>
               <option value="2">🟠 普通</option>
               <option value="3">⚪ 闲聊</option>
             </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400 pointer-events-none" />
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: 'var(--text-2)' }} />
           </div>
         </div>
       </div>
 
-      {/* 卡片列表 */}
+      {/* Card list */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => (
@@ -616,12 +640,12 @@ function CardsPage() {
           ))}
         </div>
       ) : (
-        <div className="text-center py-16 bg-white rounded-xl border border-surface-100">
-          <Search className="w-12 h-12 mx-auto mb-4 text-surface-300" />
-          <p className="text-surface-600 font-medium">
+        <div className="text-center py-16 rounded-xl" style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)' }}>
+          <Search className="w-12 h-12 mx-auto mb-4" style={{ color: 'var(--text-2)' }} />
+          <p className="font-medium" style={{ color: 'var(--text-1)' }}>
             {searchQuery ? '没有找到匹配的卡片' : (selectedCategory || selectedImportance) ? '没有符合筛选条件的卡片' : '暂无卡片'}
           </p>
-          <p className="text-surface-400 text-sm mt-1">
+          <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>
             {searchQuery
               ? '试试其他关键词'
               : (selectedCategory || selectedImportance)

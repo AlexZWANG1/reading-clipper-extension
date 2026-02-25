@@ -18,6 +18,10 @@ import {
     Image,
     Sparkles,
     Key,
+    Cpu,
+    MessageSquare,
+    Zap,
+    Database,
 } from 'lucide-react';
 import { promptsApi, settingsApi } from '../lib/api';
 import { useUIStore } from '../lib/store';
@@ -33,12 +37,271 @@ const PROMPT_ICONS = {
     document_storyline: FileText,
 };
 
+// 模型分配总览数据
+const MODEL_OVERVIEW = [
+    {
+        group: '卡片生成',
+        color: '#34D399',
+        items: [
+            {
+                func: '卡片生成（纯文字）',
+                model: 'gpt-5-mini',
+                tier: 'standard',
+                api: 'Responses API',
+                promptType: 'Stored Prompt',
+                promptId: 'pmpt_692adaa1...',
+                note: '文字高亮 → 结构化笔记卡片',
+            },
+            {
+                func: '卡片生成（图片）',
+                model: 'gpt-5.2',
+                tier: 'complex',
+                api: 'Responses API',
+                promptType: 'Inline (vision_card_generator)',
+                note: 'Vision API，分析图片内容',
+            },
+            {
+                func: '整文件生成卡片',
+                model: 'gpt-5.2',
+                tier: 'complex',
+                api: 'Responses API',
+                promptType: 'Inline (full_document_generator)',
+                note: 'PDF/Word 全文 → 多张卡片',
+            },
+        ],
+    },
+    {
+        group: '文档结构',
+        color: '#818CF8',
+        items: [
+            {
+                func: '文档故事线生成',
+                model: 'gpt-5.2',
+                tier: 'complex',
+                api: 'Responses API',
+                promptType: 'Stored Prompt',
+                promptId: 'pmpt_692aef79...',
+                note: '生成问题、假设、故事单元结构',
+            },
+            {
+                func: '文档 Q&H 助手',
+                model: 'gpt-5.2',
+                tier: 'complex',
+                api: 'Responses API',
+                promptType: 'Stored Prompt',
+                note: '文档级问题与假设辅助',
+            },
+            {
+                func: '故事单元精炼',
+                model: 'gpt-5.2',
+                tier: 'complex',
+                api: 'Responses API',
+                promptType: 'Stored Prompt',
+                note: '优化故事单元内容',
+            },
+            {
+                func: '文档标题生成',
+                model: 'gpt-5-nano',
+                tier: 'simple',
+                api: 'Chat Completions',
+                promptType: '硬编码 Inline',
+                note: '快速生成文档标题，低成本',
+            },
+            {
+                func: '故事单元标题建议',
+                model: 'gpt-5-nano',
+                tier: 'simple',
+                api: 'Chat Completions',
+                promptType: '硬编码 Inline',
+                note: '批量生成单元标题候选',
+            },
+        ],
+    },
+    {
+        group: '搜索与假设',
+        color: '#FBBF24',
+        items: [
+            {
+                func: 'AI 语义搜索',
+                model: 'gpt-5-mini',
+                tier: 'standard',
+                api: 'Chat Completions',
+                promptType: 'Inline (search_agent)',
+                note: '从卡片列表中找出最相关结果',
+            },
+            {
+                func: '假设建议',
+                model: 'gpt-5-mini',
+                tier: 'standard',
+                api: 'Chat Completions',
+                promptType: 'Inline (hypothesis_suggest)',
+                note: '基于主题和卡片生成候选假设',
+            },
+            {
+                func: '问题建议',
+                model: 'gpt-5-mini',
+                tier: 'standard',
+                api: 'Chat Completions',
+                promptType: '硬编码 Inline',
+                note: '为文档生成研究问题候选',
+            },
+            {
+                func: '假设验证',
+                model: 'gpt-5-mini',
+                tier: 'standard',
+                api: 'Responses API',
+                promptType: 'Inline (hypothesis_evaluator) + file_search',
+                note: 'Vector Store 检索证据，评估假设支持度',
+            },
+            {
+                func: '来源匹配',
+                model: 'gpt-5-mini',
+                tier: 'standard',
+                api: 'Chat Completions',
+                promptType: '硬编码 Inline',
+                note: '将卡片匹配到已有来源，temp=0.1',
+            },
+        ],
+    },
+    {
+        group: '对话助手（用户配置模型）',
+        color: '#60A5FA',
+        items: [
+            {
+                func: '看板 Chat 助手',
+                model: '用户配置',
+                tier: 'user',
+                api: 'Chat Completions',
+                promptType: '硬编码 System Prompt',
+                note: '多轮工具调用，管理看板节点',
+            },
+            {
+                func: '根因分析 Agent',
+                model: '用户配置',
+                tier: 'user',
+                api: 'Chat Completions',
+                promptType: '硬编码 System Prompt',
+                note: '分析看板中的根因关系',
+            },
+            {
+                func: '证据验证 Agent',
+                model: '用户配置',
+                tier: 'user',
+                api: 'Chat Completions',
+                promptType: '硬编码 System Prompt',
+                note: '验证看板节点的证据链',
+            },
+        ],
+    },
+];
+
+const TIER_STYLES = {
+    complex: { label: 'gpt-5.2', bg: 'rgba(129,140,248,0.15)', color: '#818CF8', border: 'rgba(129,140,248,0.3)' },
+    standard: { label: 'gpt-5-mini', bg: 'rgba(52,211,153,0.12)', color: '#34D399', border: 'rgba(52,211,153,0.25)' },
+    simple: { label: 'gpt-5-nano', bg: 'rgba(251,191,36,0.12)', color: '#FBBF24', border: 'rgba(251,191,36,0.25)' },
+    user: { label: '用户配置', bg: 'rgba(96,165,250,0.12)', color: '#60A5FA', border: 'rgba(96,165,250,0.25)' },
+};
+
+/**
+ * 模型分配总览卡片
+ */
+function ModelOverviewCard() {
+    const [expanded, setExpanded] = useState(false);
+
+    return (
+        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)' }}>
+            <button
+                onClick={() => setExpanded(!expanded)}
+                className="w-full px-6 py-4 flex items-center justify-between"
+            >
+                <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg" style={{ background: 'rgba(99,102,241,0.1)' }}>
+                        <Cpu className="w-5 h-5" style={{ color: 'var(--accent-400)' }} />
+                    </div>
+                    <div className="text-left">
+                        <h2 className="font-semibold" style={{ color: 'var(--text-0)' }}>模型分配总览</h2>
+                        <p className="text-sm" style={{ color: 'var(--text-2)' }}>各功能使用的模型、API 类型和 Prompt 来源</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-3">
+                    <div className="hidden sm:flex items-center gap-2">
+                        {Object.entries(TIER_STYLES).map(([tier, s]) => (
+                            <span key={tier} className="text-xs px-2 py-0.5 rounded-full font-mono" style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
+                                {s.label}
+                            </span>
+                        ))}
+                    </div>
+                    {expanded ? <ChevronUp className="w-5 h-5" style={{ color: 'var(--text-2)' }} /> : <ChevronDown className="w-5 h-5" style={{ color: 'var(--text-2)' }} />}
+                </div>
+            </button>
+
+            {expanded && (
+                <div className="px-6 pb-6 space-y-5" style={{ borderTop: '1px solid var(--stroke-0)' }}>
+                    <div className="pt-4 flex flex-wrap gap-3">
+                        {Object.entries(TIER_STYLES).map(([tier, s]) => (
+                            <div key={tier} className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-2)' }}>
+                                <span className="px-2 py-0.5 rounded-full font-mono" style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>{s.label}</span>
+                                <span>
+                                    {tier === 'complex' && '旗舰 · 复杂推理 / Vision'}
+                                    {tier === 'standard' && '标准 · 快速低成本'}
+                                    {tier === 'simple' && '轻量 · 简单指令'}
+                                    {tier === 'user' && '跟随用户 API 设置'}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+
+                    {MODEL_OVERVIEW.map((group) => (
+                        <div key={group.group}>
+                            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: group.color }}>
+                                <span className="w-2 h-2 rounded-full inline-block" style={{ background: group.color }} />
+                                {group.group}
+                            </h3>
+                            <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--stroke-0)' }}>
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr style={{ background: 'rgba(0,0,0,0.15)' }}>
+                                            <th className="text-left px-4 py-2 font-medium" style={{ color: 'var(--text-2)', width: '22%' }}>功能</th>
+                                            <th className="text-left px-4 py-2 font-medium" style={{ color: 'var(--text-2)', width: '14%' }}>模型</th>
+                                            <th className="text-left px-4 py-2 font-medium" style={{ color: 'var(--text-2)', width: '16%' }}>API 类型</th>
+                                            <th className="text-left px-4 py-2 font-medium" style={{ color: 'var(--text-2)', width: '24%' }}>Prompt 来源</th>
+                                            <th className="text-left px-4 py-2 font-medium" style={{ color: 'var(--text-2)' }}>说明</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {group.items.map((item, i) => {
+                                            const ts = TIER_STYLES[item.tier];
+                                            return (
+                                                <tr key={i} style={{ borderTop: i > 0 ? '1px solid var(--stroke-0)' : undefined }}>
+                                                    <td className="px-4 py-2.5 font-medium" style={{ color: 'var(--text-0)' }}>{item.func}</td>
+                                                    <td className="px-4 py-2.5">
+                                                        <span className="text-xs px-2 py-0.5 rounded-full font-mono" style={{ background: ts.bg, color: ts.color, border: `1px solid ${ts.border}` }}>
+                                                            {item.model}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-2.5 text-xs font-mono" style={{ color: 'var(--text-1)' }}>{item.api}</td>
+                                                    <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-1)' }}>{item.promptType}</td>
+                                                    <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-2)' }}>{item.note}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 /**
  * OpenAI API 配置卡片
  */
 function APIConfigCard({ settings, onUpdate, saving, testing, testResult, onTest }) {
     const [apiKey, setApiKey] = useState('');
-    const [model, setModel] = useState(settings?.model || 'gpt-4o-mini');
+    const [model, setModel] = useState(settings?.model || 'gpt-5-mini');
     const [models, setModels] = useState([]);
 
     // 加载模型列表
@@ -81,27 +344,29 @@ function APIConfigCard({ settings, onUpdate, saving, testing, testResult, onTest
         });
     };
 
+    const inputStyle = { background: 'var(--surface-0)', border: '1px solid var(--stroke-0)', color: 'var(--text-0)' };
+
     return (
-        <div className="bg-white rounded-xl border border-surface-100 p-6 space-y-5">
+        <div className="rounded-xl p-6 space-y-5" style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)' }}>
             <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary-50 rounded-lg">
-                    <Key className="w-5 h-5 text-primary-600" />
+                <div className="p-2 rounded-lg" style={{ background: 'rgba(99,102,241,0.1)' }}>
+                    <Key className="w-5 h-5" style={{ color: 'var(--accent-400)' }} />
                 </div>
                 <div>
-                    <h2 className="font-semibold text-surface-900">OpenAI API 配置</h2>
-                    <p className="text-sm text-surface-500">配置 AI 模型和 API 密钥</p>
+                    <h2 className="font-semibold" style={{ color: 'var(--text-0)' }}>OpenAI API 配置</h2>
+                    <p className="text-sm" style={{ color: 'var(--text-2)' }}>配置 AI 模型和 API 密钥</p>
                 </div>
             </div>
 
-            {/* 模型选择 */}
             <div>
-                <label className="block text-sm font-medium text-surface-700 mb-2">
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-1)' }}>
                     模型选择
                 </label>
                 <select
                     value={model}
                     onChange={(e) => setModel(e.target.value)}
-                    className="w-full px-4 py-3 bg-surface-50 border border-surface-200 rounded-xl text-surface-900 input-focus"
+                    className="w-full px-4 py-3 rounded-xl input-focus"
+                    style={inputStyle}
                 >
                     {models.map((m) => (
                         <option key={m.id} value={m.id}>
@@ -111,12 +376,11 @@ function APIConfigCard({ settings, onUpdate, saving, testing, testResult, onTest
                 </select>
             </div>
 
-            {/* API Key 输入 */}
             <div>
-                <label className="block text-sm font-medium text-surface-700 mb-2">
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-1)' }}>
                     API 密钥
                     {settings?.has_custom_api_key && (
-                        <span className="ml-2 text-xs text-green-600 font-normal">
+                        <span className="ml-2 text-xs font-normal" style={{ color: '#34D399' }}>
                             ✓ 已配置
                         </span>
                     )}
@@ -126,19 +390,20 @@ function APIConfigCard({ settings, onUpdate, saving, testing, testResult, onTest
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                     placeholder={settings?.has_custom_api_key ? '留空保持不变，输入新值则覆盖' : '输入 OpenAI API Key'}
-                    className="w-full px-4 py-3 bg-surface-50 border border-surface-200 rounded-xl text-surface-900 placeholder-surface-400 input-focus font-mono text-sm"
+                    className="w-full px-4 py-3 rounded-xl input-focus font-mono text-sm"
+                    style={inputStyle}
                 />
-                <p className="text-xs text-surface-400 mt-1">
+                <p className="text-xs mt-1" style={{ color: 'var(--text-2)' }}>
                     如不提供，将使用系统默认配置
                 </p>
             </div>
 
-            {/* 操作按钮 */}
-            <div className="flex items-center gap-3 pt-2 border-t border-surface-100">
+            <div className="flex items-center gap-3 pt-2" style={{ borderTop: '1px solid var(--stroke-0)' }}>
                 <button
                     onClick={handleTest}
                     disabled={testing}
-                    className="flex items-center gap-2 px-4 py-2 text-surface-600 hover:bg-surface-100 rounded-lg transition-colors disabled:opacity-50"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                    style={{ color: 'var(--text-1)' }}
                 >
                     {testing ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -149,7 +414,7 @@ function APIConfigCard({ settings, onUpdate, saving, testing, testResult, onTest
                 </button>
 
                 {testResult && (
-                    <div className={`flex items-center gap-2 text-sm ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
+                    <div className="flex items-center gap-2 text-sm" style={{ color: testResult.success ? '#34D399' : '#FB7185' }}>
                         {testResult.success ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
                         {testResult.message}
                     </div>
@@ -160,7 +425,8 @@ function APIConfigCard({ settings, onUpdate, saving, testing, testResult, onTest
                 <button
                     onClick={handleSave}
                     disabled={saving}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white font-medium rounded-xl hover:bg-primary-700 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-2 px-5 py-2.5 font-medium rounded-xl transition-colors disabled:opacity-50"
+                    style={{ background: 'var(--accent-600)', color: 'white' }}
                 >
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     保存
@@ -204,7 +470,6 @@ function PromptCard({ prompt, onSave, saving }) {
     const renderTemplateWithHighlights = (template) => {
         if (!template) return null;
 
-        // 匹配 {{VAR_NAME}} 格式的变量
         const parts = template.split(/(\\{\\{[A-Za-z_]+\\}\\})/g);
 
         return parts.map((part, index) => {
@@ -212,7 +477,8 @@ function PromptCard({ prompt, onSave, saving }) {
                 return (
                     <span
                         key={index}
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 mx-0.5 bg-blue-100 text-blue-700 rounded text-xs font-mono border border-blue-200"
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 mx-0.5 rounded text-xs font-mono"
+                        style={{ background: 'rgba(99,102,241,0.15)', color: 'var(--accent-300)', border: '1px solid rgba(99,102,241,0.25)' }}
                         title="模板变量"
                     >
                         {part}
@@ -224,104 +490,99 @@ function PromptCard({ prompt, onSave, saving }) {
     };
 
     return (
-        <div className="bg-white rounded-xl border border-surface-100 overflow-hidden">
-            {/* 头部 */}
+        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)' }}>
             <button
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="w-full px-5 py-4 flex items-center justify-between hover:bg-surface-50 transition-colors"
+                className="w-full px-5 py-4 flex items-center justify-between transition-colors"
             >
                 <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${isEditable ? 'bg-emerald-50' : 'bg-slate-50'}`}>
-                        <Icon className={`w-5 h-5 ${isEditable ? 'text-emerald-600' : 'text-slate-500'}`} />
+                    <div className="p-2 rounded-lg" style={{ background: isEditable ? 'rgba(52,211,153,0.1)' : 'rgba(148,163,184,0.1)' }}>
+                        <Icon className="w-5 h-5" style={{ color: isEditable ? '#34D399' : 'var(--text-2)' }} />
                     </div>
                     <div className="text-left">
                         <div className="flex items-center gap-2">
-                            <h3 className="font-semibold text-surface-900">{prompt.name}</h3>
+                            <h3 className="font-semibold" style={{ color: 'var(--text-0)' }}>{prompt.name}</h3>
                             {isEditable ? (
-                                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(52,211,153,0.1)', color: '#34D399', border: '1px solid rgba(52,211,153,0.2)' }}>
                                     可编辑
                                 </span>
                             ) : (
-                                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(148,163,184,0.1)', color: 'var(--text-2)', border: '1px solid rgba(148,163,184,0.15)' }}>
                                     只读
                                 </span>
                             )}
                             {hasChanges && (
-                                <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                                <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(251,191,36,0.1)', color: '#FBBF24', border: '1px solid rgba(251,191,36,0.2)' }}>
                                     未保存
                                 </span>
                             )}
                         </div>
-                        <p className="text-xs text-surface-500 mt-0.5">{prompt.description}</p>
+                        <p className="text-xs mt-0.5" style={{ color: 'var(--text-2)' }}>{prompt.description}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
                     {isEditable ? (
-                        <Unlock className="w-4 h-4 text-emerald-500" />
+                        <Unlock className="w-4 h-4" style={{ color: '#34D399' }} />
                     ) : (
-                        <Lock className="w-4 h-4 text-slate-400" />
+                        <Lock className="w-4 h-4" style={{ color: 'var(--text-2)' }} />
                     )}
                     {isExpanded ? (
-                        <ChevronUp className="w-5 h-5 text-surface-400" />
+                        <ChevronUp className="w-5 h-5" style={{ color: 'var(--text-2)' }} />
                     ) : (
-                        <ChevronDown className="w-5 h-5 text-surface-400" />
+                        <ChevronDown className="w-5 h-5" style={{ color: 'var(--text-2)' }} />
                     )}
                 </div>
             </button>
 
-            {/* 展开内容 */}
             {isExpanded && (
-                <div className="px-5 pb-5 border-t border-surface-100">
-                    {/* Stored Prompt：只显示 ID */}
+                <div className="px-5 pb-5" style={{ borderTop: '1px solid var(--stroke-0)' }}>
                     {prompt.type === 'stored' && (
                         <div className="mt-4">
-                            <label className="block text-sm font-medium text-surface-700 mb-2">
+                            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-1)' }}>
                                 OpenAI Stored Prompt ID
                             </label>
-                            <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                                <Code className="w-4 h-4 text-slate-500" />
-                                <code className="text-sm text-slate-700 font-mono">{prompt.prompt_id}</code>
+                            <div className="flex items-center gap-2 p-3 rounded-lg" style={{ background: 'rgba(0,0,0,0.15)', border: '1px solid var(--stroke-0)' }}>
+                                <Code className="w-4 h-4" style={{ color: 'var(--text-2)' }} />
+                                <code className="text-sm font-mono" style={{ color: 'var(--text-1)' }}>{prompt.prompt_id}</code>
                             </div>
-                            <p className="text-xs text-surface-400 mt-2">
+                            <p className="text-xs mt-2" style={{ color: 'var(--text-2)' }}>
                                 此 Prompt 存储在 OpenAI 服务器上，无法在此编辑。如需修改，请前往 OpenAI Platform。
                             </p>
                         </div>
                     )}
 
-                    {/* Inline Prompt：可编辑 */}
                     {prompt.type === 'inline' && (
                         <div className="mt-4 space-y-4">
-                            {/* 锁定变量说明 */}
                             {prompt.locked_vars && Object.keys(prompt.locked_vars).length > 0 && (
-                                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                    <h4 className="text-sm font-medium text-blue-800 mb-2 flex items-center gap-1">
+                                <div className="p-3 rounded-lg" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.15)' }}>
+                                    <h4 className="text-sm font-medium mb-2 flex items-center gap-1" style={{ color: 'var(--accent-300)' }}>
                                         <Lock className="w-4 h-4" />
                                         锁定变量（不可删除）
                                     </h4>
                                     <div className="space-y-1">
                                         {Object.keys(prompt.locked_vars).map((varName) => (
-                                            <div key={varName} className="text-xs text-blue-700 font-mono">
+                                            <div key={varName} className="text-xs font-mono" style={{ color: 'var(--accent-300)' }}>
                                                 {`{{${varName}}}`}
                                             </div>
                                         ))}
                                     </div>
-                                    <p className="text-xs text-blue-600 mt-2">
+                                    <p className="text-xs mt-2" style={{ color: 'var(--text-2)' }}>
                                         这些变量确保输出格式正确，模板中必须包含它们。
                                     </p>
                                 </div>
                             )}
 
-                            {/* 输出字段说明 */}
                             {prompt.output_fields && prompt.output_fields.length > 0 && (
-                                <div className="p-3 bg-surface-50 rounded-lg border border-surface-200">
-                                    <h4 className="text-sm font-medium text-surface-700 mb-2">
+                                <div className="p-3 rounded-lg" style={{ background: 'rgba(0,0,0,0.15)', border: '1px solid var(--stroke-0)' }}>
+                                    <h4 className="text-sm font-medium mb-2" style={{ color: 'var(--text-1)' }}>
                                         期望输出字段
                                     </h4>
                                     <div className="flex flex-wrap gap-2">
                                         {prompt.output_fields.map((field) => (
                                             <span
                                                 key={field}
-                                                className="text-xs px-2 py-1 bg-white rounded border border-surface-200 font-mono"
+                                                className="text-xs px-2 py-1 rounded font-mono"
+                                                style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--stroke-0)', color: 'var(--text-1)' }}
                                             >
                                                 {field}
                                             </span>
@@ -330,9 +591,8 @@ function PromptCard({ prompt, onSave, saving }) {
                                 </div>
                             )}
 
-                            {/* Template 编辑器 */}
                             <div>
-                                <label className="block text-sm font-medium text-surface-700 mb-2">
+                                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-1)' }}>
                                     Prompt Template
                                 </label>
                                 <textarea
@@ -340,18 +600,19 @@ function PromptCard({ prompt, onSave, saving }) {
                                     onChange={(e) => setEditedTemplate(e.target.value)}
                                     disabled={!isEditable}
                                     rows={12}
-                                    className="w-full px-4 py-3 bg-surface-50 border border-surface-200 rounded-xl text-surface-900 font-mono text-sm leading-relaxed input-focus resize-y disabled:opacity-60 disabled:cursor-not-allowed"
+                                    className="w-full px-4 py-3 rounded-xl font-mono text-sm leading-relaxed input-focus resize-y disabled:opacity-60 disabled:cursor-not-allowed"
+                                    style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)', color: 'var(--text-0)' }}
                                     placeholder="输入 prompt 内容..."
                                 />
                             </div>
 
-                            {/* 操作按钮 */}
                             {isEditable && (
                                 <div className="flex items-center justify-end gap-3 pt-2">
                                     <button
                                         onClick={handleReset}
                                         disabled={!hasChanges || saving}
-                                        className="flex items-center gap-2 px-4 py-2 text-surface-600 hover:bg-surface-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        style={{ color: 'var(--text-1)' }}
                                     >
                                         <RotateCcw className="w-4 h-4" />
                                         重置
@@ -359,7 +620,8 @@ function PromptCard({ prompt, onSave, saving }) {
                                     <button
                                         onClick={handleSave}
                                         disabled={!hasChanges || saving}
-                                        className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white font-medium rounded-xl hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="flex items-center gap-2 px-4 py-2.5 font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        style={{ background: 'var(--accent-600)', color: 'white' }}
                                     >
                                         {saving ? (
                                             <Loader2 className="w-4 h-4 animate-spin" />
@@ -495,43 +757,39 @@ function AISettingsPage() {
 
     return (
         <div className="space-y-6 animate-fade-in">
-            {/* 页面标题 */}
             <div>
-                <h1 className="text-2xl font-bold text-surface-900 flex items-center gap-2">
-                    <Settings2 className="w-7 h-7 text-primary-500" />
+                <h1 className="text-2xl font-bold flex items-center gap-2" style={{ color: 'var(--text-0)' }}>
+                    <Settings2 className="w-7 h-7" style={{ color: 'var(--accent-400)' }} />
                     AI 设置
                 </h1>
-                <p className="text-surface-500 mt-1">
-                    配置 OpenAI API 和管理 AI Prompts
+                <p className="mt-1" style={{ color: 'var(--text-2)' }}>
+                    配置 OpenAI API、查看模型分配和管理 AI Prompts
                 </p>
             </div>
 
-            {/* 加载状态 */}
             {isLoading && (
                 <div className="flex items-center justify-center py-16">
-                    <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
-                    <span className="ml-3 text-surface-500">加载中...</span>
+                    <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent-400)' }} />
+                    <span className="ml-3" style={{ color: 'var(--text-2)' }}>加载中...</span>
                 </div>
             )}
 
-            {/* 错误状态 */}
             {error && !isLoading && (
-                <div className="flex flex-col items-center justify-center py-16 bg-red-50 rounded-xl border border-red-200">
-                    <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
-                    <p className="text-red-700 font-medium">{error}</p>
+                <div className="flex flex-col items-center justify-center py-16 rounded-xl" style={{ background: 'rgba(251,113,133,0.08)', border: '1px solid rgba(251,113,133,0.2)' }}>
+                    <AlertCircle className="w-12 h-12 mb-4" style={{ color: '#FB7185' }} />
+                    <p className="font-medium" style={{ color: '#FB7185' }}>{error}</p>
                     <button
                         onClick={() => { loadSettings(); loadPrompts(); }}
-                        className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                        className="mt-4 px-4 py-2 rounded-lg transition-colors"
+                        style={{ background: 'rgba(251,113,133,0.15)', color: '#FB7185' }}
                     >
                         重试
                     </button>
                 </div>
             )}
 
-            {/* 主内容 */}
             {!isLoading && !error && (
                 <>
-                    {/* OpenAI API 配置 */}
                     <APIConfigCard
                         settings={settings}
                         onUpdate={handleUpdateSettings}
@@ -541,12 +799,13 @@ function AISettingsPage() {
                         onTest={handleTestApi}
                     />
 
-                    {/* 可编辑 Prompts */}
+                    <ModelOverviewCard />
+
                     <div>
-                        <h2 className="text-lg font-semibold text-surface-900 mb-4 flex items-center gap-2">
-                            <Unlock className="w-5 h-5 text-emerald-500" />
+                        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: 'var(--text-0)' }}>
+                            <Unlock className="w-5 h-5" style={{ color: '#34D399' }} />
                             可编辑 Prompts
-                            <span className="text-sm font-normal text-surface-500">
+                            <span className="text-sm font-normal" style={{ color: 'var(--text-2)' }}>
                                 ({editablePrompts.length})
                             </span>
                         </h2>
@@ -562,13 +821,12 @@ function AISettingsPage() {
                         </div>
                     </div>
 
-                    {/* Stored Prompts */}
                     {storedPrompts.length > 0 && (
                         <div>
-                            <h2 className="text-lg font-semibold text-surface-900 mb-4 flex items-center gap-2">
-                                <Lock className="w-5 h-5 text-slate-500" />
+                            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: 'var(--text-0)' }}>
+                                <Lock className="w-5 h-5" style={{ color: 'var(--text-2)' }} />
                                 Stored Prompts（只读）
-                                <span className="text-sm font-normal text-surface-500">
+                                <span className="text-sm font-normal" style={{ color: 'var(--text-2)' }}>
                                     ({storedPrompts.length})
                                 </span>
                             </h2>
@@ -585,13 +843,12 @@ function AISettingsPage() {
                         </div>
                     )}
 
-                    {/* 使用提示 */}
-                    <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
-                        <h3 className="font-medium text-amber-800 mb-2 flex items-center gap-2">
+                    <div className="p-4 rounded-xl" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.15)' }}>
+                        <h3 className="font-medium mb-2 flex items-center gap-2" style={{ color: '#FBBF24' }}>
                             <AlertCircle className="w-5 h-5" />
                             使用提示
                         </h3>
-                        <ul className="text-sm text-amber-700 space-y-1 list-disc list-inside">
+                        <ul className="text-sm space-y-1 list-disc list-inside" style={{ color: 'var(--text-1)' }}>
                             <li>
                                 如不提供 API 密钥，将使用系统默认配置
                             </li>
