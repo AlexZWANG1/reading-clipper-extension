@@ -20,7 +20,9 @@
       "mcp__context7__resolve-library-id",
       "mcp__context7__query-docs",
       "Bash(grep:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(wc -l /c/Users/Admin/Dropbox/项目开发/reading-clipper-extension/.claude/worktrees/clever-cohen/reading-cards-backend/src/services/*.mjs /c/Users/Admin/Dropbox/项目开发/reading-clipper-extension/.claude/worktrees/clever-cohen/web-app/src/pages/*.jsx)",
+      "Bash(git commit:*)"
     ]
   }
 }

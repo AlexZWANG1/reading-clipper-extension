@@ -10,7 +10,7 @@ import {
   createEdge,
 } from "../services/supabase/boards.mjs";
 import { listDocuments, getDocument } from "../services/supabase/documents.mjs";
-import { listSources } from "../services/sources.mjs";
+import { listSources } from "../services/supabase/sources.mjs";
 
 /**
  * Execute a single tool call.
@@ -68,7 +68,7 @@ export async function executeTool(name, args, ctx) {
 
     // ── Sources (read) ──
     case "list_sources": {
-      const sources = listSources({
+      const sources = await listSources(supabase, userId, {
         category: args.category,
         status: args.status,
       });
