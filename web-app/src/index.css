@@ -118,7 +118,23 @@ body {
 
 /* 卡片悬停效果 */
 .card-hover {
-  @apply transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5;
+  @apply transition-all duration-300 hover:shadow-[0_8px_20px_rgb(0,0,0,0.06)] hover:-translate-y-[1px];
+}
+
+/* Readwise 风格卡片 */
+.card-readwise {
+  @apply relative pl-6 pr-5 py-6 sm:pl-8 sm:pr-7 sm:py-7;
+}
+.card-readwise::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: -1px;
+  bottom: -1px;
+  width: 4px;
+  border-top-left-radius: 0.75rem;
+  border-bottom-left-radius: 0.75rem;
+  background-color: var(--accent-500);
 }
 
 /* 输入框焦点效果 */

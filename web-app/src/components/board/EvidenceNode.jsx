@@ -20,6 +20,9 @@ function EvidenceNode({ id, data, selected }) {
 
     const sourceName = card?.source_name || (card?.source_url ? (() => { try { return new URL(card.source_url).hostname.replace('www.', ''); } catch { return ''; } })() : '');
     const displayText = card?.summary || content?.text || '(无内容)';
+    const cardTitle = card?.title || '新卡片';
+    const factOrView = card?.fact_or_view === 'view' ? 'VIEW' : 'FACT';
+    const factOrViewColor = factOrView === 'VIEW' ? 'var(--accent-400)' : '#10B981';
 
     const buildHighlightUrl = (baseUrl, rawSnippet) => {
         if (!baseUrl || !rawSnippet) return baseUrl || '#';
@@ -34,7 +37,7 @@ function EvidenceNode({ id, data, selected }) {
 
     return (
         <>
-            <NodeResizer minWidth={260} minHeight={140} isVisible={selected} />
+            <NodeResizer minWidth={320} minHeight={160} isVisible={selected} />
             <div
                 className="relative group rounded-xl transition-all font-sans flex flex-col overflow-hidden"
                 style={{
@@ -45,8 +48,8 @@ function EvidenceNode({ id, data, selected }) {
                     backdropFilter: 'blur(12px)',
                     width: '100%',
                     height: '100%',
-                    minWidth: 260,
-                    minHeight: 140,
+                    minWidth: 320,
+                    minHeight: 160,
                     opacity: dimmed ? 0.3 : 1,
                     pointerEvents: dimmed ? 'none' : 'auto'
                 }}
@@ -55,8 +58,13 @@ function EvidenceNode({ id, data, selected }) {
                 <Handle type="target" position={Position.Top} className="neuro-handle" />
 
                 {/* Header */}
-                <div className={`flex items-center gap-2 px-2 pt-2 ${lod === 'mini' ? 'pb-2' : 'mb-1'}`}>
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wide" style={{ color: 'var(--text-0)' }}>EVI</span>
+                <div className={`flex items-center gap-2 px-3 pt-3 ${lod === 'mini' ? 'pb-2' : 'mb-2'}`}>
+                    <span
+                        className="text-[10px] font-mono font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-sm"
+                        style={{ color: '#fff', backgroundColor: factOrViewColor }}
+                    >
+                        {factOrView}
+                    </span>
                     <select
                         value={edgeRelation || 'neutral'}
                         onChange={e => onEdgeUpdate?.(id, { relation_type: e.target.value })}
@@ -72,8 +80,11 @@ function EvidenceNode({ id, data, selected }) {
 
                 {/* Content & Actions (Hidden in mini LOD) */}
                 {lod !== 'mini' && (
-                    <div className="px-2 pb-2 flex-1 flex flex-col">
-                        <div className={`text-[12px] leading-snug font-medium mb-1.5 flex-1 overflow-y-auto ${lod === 'normal' ? 'line-clamp-6' : ''}`} style={{ color: 'var(--text-0)' }}>
+                    <div className="px-3 pb-3 flex-1 flex flex-col">
+                        <div className="font-bold text-base mb-2 leading-tight" style={{ color: 'var(--text-0)' }}>
+                            {cardTitle}
+                        </div>
+                        <div className={`text-[14px] leading-relaxed font-normal mb-2 flex-1 overflow-y-auto ${lod === 'normal' ? 'line-clamp-6' : ''}`} style={{ color: 'var(--text-1)' }}>
                             {rel.icon} {displayText}
                         </div>
 

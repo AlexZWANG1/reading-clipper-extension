@@ -49,6 +49,8 @@ export async function executeTool(name, args, ctx) {
     case "create_card": {
       const cardData = {
         topic_title: args.topic_title,
+        title: args.title || "",
+        fact_or_view: args.fact_or_view || "fact",
         summary: args.summary || "",
         key_points: Array.isArray(args.key_points) ? args.key_points : [],
         raw_snippet: args.raw_snippet || "",

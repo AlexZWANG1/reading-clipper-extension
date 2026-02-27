@@ -28,16 +28,16 @@ function loadPromptsConfig() {
   try {
     const stats = fs.statSync(PROMPTS_CONFIG_PATH);
     const mtime = stats.mtimeMs;
-    
+
     // 如果文件未修改，使用缓存
     if (promptsConfigCache && mtime === configLastModified) {
       return promptsConfigCache;
     }
-    
+
     const content = fs.readFileSync(PROMPTS_CONFIG_PATH, "utf-8");
     promptsConfigCache = JSON.parse(content);
     configLastModified = mtime;
-    
+
     console.log("✅ Prompts 配置已加载/刷新");
     return promptsConfigCache;
   } catch (error) {
@@ -57,23 +57,23 @@ function getPromptTemplate(promptId) {
     console.warn(`⚠️ Prompt "${promptId}" 未找到，使用硬编码兜底`);
     return null;
   }
-  
+
   const prompt = config.prompts[promptId];
-  
+
   // Stored prompt 不返回 template
   if (prompt.type === "stored") {
     return null;
   }
-  
+
   let template = prompt.template || "";
-  
+
   // 注入锁定变量
   const lockedVars = prompt.locked_vars || {};
   for (const [varName, value] of Object.entries(lockedVars)) {
     const placeholder = `{{${varName}}}`;
     template = template.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value);
   }
-  
+
   return template;
 }
 
@@ -280,6 +280,8 @@ async function callHighlightSummarizer({ snippet, preSummary, sourceName, source
 function parseSnippetNoteMarkdown(markdownText) {
   const lines = markdownText.split(/\r?\n/);
 
+  let title = "";
+  let fact_or_view = "fact";
   let summary = "";
   const keyPoints = [];
   let sourceLine = "";
@@ -293,6 +295,20 @@ function parseSnippetNoteMarkdown(markdownText) {
 
     // 跳过标题行
     if (trimmed.startsWith("####") || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    if (trimmed.match(/^-\s*title\s*:/i)) {
+      title = trimmed.replace(/^-\s*title\s*:/i, "").trim();
+      inKeyPoints = false;
+      inRawSnippet = false;
+      continue;
+    }
+
+    if (trimmed.match(/^-\s*fact_or_view\s*:/i)) {
+      fact_or_view = trimmed.replace(/^-\s*fact_or_view\s*:/i, "").trim().toLowerCase();
+      inKeyPoints = false;
+      inRawSnippet = false;
       continue;
     }
 
@@ -364,6 +380,8 @@ function parseSnippetNoteMarkdown(markdownText) {
   const raw_snippet = rawSnippetLines.join("\n").trim();
 
   return {
+    title,
+    fact_or_view,
     summary,
     key_points: keyPoints,
     source_name,
@@ -387,6 +405,8 @@ async function callHighlightSummarizerWithImage({ snippetText, imageData, preSum
     basePrompt = `You are an intelligent reading assistant. Your task is to analyze the user's input (which includes text and/or an image) and extract structured knowledge.
 
 Please extract the following fields and return them in JSON format:
+- title: A short, catchy title (3-8 words).
+- fact_or_view: Classify the core content as either "fact" (objective reality, data) or "view" (opinion, subjective analysis, hypothesis).
 - summary: A concise summary of the content (1-3 sentences).
 - key_points: A list of key takeaways or bullet points.
 - source_name: The name of the source (use the provided source_name if available, otherwise try to infer from context).
@@ -566,6 +586,8 @@ export async function runAgent1({
 
   // 3) 映射到 Card 字段
   return {
+    title: cardObj.title || "",
+    fact_or_view: cardObj.fact_or_view === "view" ? "view" : "fact",
     summary: cardObj.summary || "",
     key_points: Array.isArray(cardObj.key_points) ? cardObj.key_points : [],
     source_name:
@@ -1063,7 +1085,7 @@ export async function suggestHypotheses({ topicTitle, questions, cardSummaries }
   // 从配置加载 prompt，兜底使用硬编码
   let basePrompt = getPromptTemplate("hypothesis_suggest");
   let prompt;
-  
+
   if (basePrompt) {
     prompt = basePrompt.replace("{{CONTEXT}}", context);
   } else {
@@ -1595,7 +1617,7 @@ function getFullDocumentSystemPrompt() {
   if (configPrompt) {
     return configPrompt;
   }
-  
+
   // 兜底使用硬编码
   return FULL_DOCUMENT_SYSTEM_PROMPT_FALLBACK;
 }
@@ -1872,7 +1894,7 @@ export async function runFullDocumentCardGenerator({
   // 根据 OpenAI 官方文档，使用 input 数组格式
   // system message + user message（含文件和文本）
   const systemPrompt = getFullDocumentSystemPrompt();
-  
+
   const payload = {
     model: OPENAI_MODEL_COMPLEX, // 使用 gpt-5.1 处理复杂文档分析任务
     input: [

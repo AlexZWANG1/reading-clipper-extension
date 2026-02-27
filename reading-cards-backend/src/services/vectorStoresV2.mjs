@@ -106,6 +106,8 @@ function buildCardFileContent(card) {
 
     lines.push(`card_id: ${card.id}`);
     lines.push(`user_id: ${card.user_id || ""}`);
+    lines.push(`title: ${card.title || ""}`);
+    lines.push(`fact_or_view: ${card.fact_or_view || "fact"}`);
     lines.push("");
     lines.push(`summary:`);
     lines.push(card.summary || "");

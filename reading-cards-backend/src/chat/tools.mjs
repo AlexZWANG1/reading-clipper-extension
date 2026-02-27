@@ -151,6 +151,15 @@ export const TOOL_DEFINITIONS = [
             type: "string",
             description: "Topic name for the card. Auto-created if it doesn't exist.",
           },
+          title: {
+            type: "string",
+            description: "A short, catchy title (3-8 words).",
+          },
+          fact_or_view: {
+            type: "string",
+            enum: ["fact", "view"],
+            description: "Whether the card is an objective fact/data or a subjective view/opinion. Default: fact.",
+          },
           summary: {
             type: "string",
             description: "A concise 1-3 sentence summary of the card content.",

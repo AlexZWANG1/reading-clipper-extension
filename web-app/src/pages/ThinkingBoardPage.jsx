@@ -75,9 +75,9 @@ const NODE_WIDTH = 320;
 
 // Fixed node dimensions per type — keeps dagre layout and actual rendering in sync
 const NODE_DIMS = {
-    questionNode:   { width: NODE_WIDTH, height: 160 },
+    questionNode: { width: NODE_WIDTH, height: 160 },
     hypothesisNode: { width: NODE_WIDTH, height: 200 },
-    evidenceNode:   { width: 280, height: 180 },
+    evidenceNode: { width: 280, height: 180 },
 };
 
 function getLayoutedElements(nodes, edges, direction = 'TB') {
@@ -1128,13 +1128,27 @@ function ThinkingBoardInner() {
                                     </div>
                                     {/* Card content */}
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex items-center justify-between mb-1.5">
-                                            <span className="font-mono font-bold text-[10px]" style={{ color: 'var(--text-2)' }}>#{card.id.slice(0, 6)}</span>
+                                        <div className="flex items-start justify-between mb-1.5 gap-2">
+                                            <div className="flex items-start gap-1.5 flex-1 min-w-0">
+                                                <span
+                                                    className="text-[9px] font-mono font-bold uppercase tracking-wide px-1 rounded-sm shrink-0"
+                                                    style={{
+                                                        color: '#fff',
+                                                        backgroundColor: card.fact_or_view === 'view' ? 'var(--accent-400)' : '#10B981',
+                                                        marginTop: '2px'
+                                                    }}
+                                                >
+                                                    {card.fact_or_view === 'view' ? 'VIEW' : 'FACT'}
+                                                </span>
+                                                <span className="font-bold text-[12px] leading-snug line-clamp-2" style={{ color: 'var(--text-0)' }}>
+                                                    {card.title || '暂未命名'}
+                                                </span>
+                                            </div>
                                             {card.source_url && (
                                                 <a
                                                     href={buildHighlightUrl(card.source_url, card.raw_snippet)}
                                                     target="_blank" rel="noopener noreferrer"
-                                                    className="opacity-0 group-hover/card:opacity-100 transition-all p-0.5"
+                                                    className="opacity-0 group-hover/card:opacity-100 transition-all p-0.5 shrink-0"
                                                     style={{ color: 'var(--accent-300)' }}
                                                     title="跳转原文"
                                                     onClick={e => e.stopPropagation()}

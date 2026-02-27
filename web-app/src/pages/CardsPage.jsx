@@ -151,22 +151,9 @@ function CardItem({ card, onEdit, onDelete, isSelected, onToggleSelect }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [snippetOpen, setSnippetOpen] = useState(false);
 
-  // 判断是否匹配了信息源（参考旧前端逻辑）
-  const hasMatchedSource = !!card.source;
-
-  // 已匹配信息源时，使用 source 对象的字段
-  const sourceImportance = card.source?.importance_level || 2;
-  const sourceRegion = card.source?.region || '';
-  const sourceCategory = card.source?.category || '';
-
   // 获取来源名称
-  // 已匹配: 使用 source.name
-  // 未匹配: 优先用域名，不用 source_name（那是页面标题，如 "Democrats threaten to..."）
   const getSourceDisplayName = () => {
-    // 已匹配信息源 → 使用信息源名称
     if (card.source?.name) return card.source.name;
-
-    // 未匹配 → 优先从 URL 提取域名
     if (card.source_url) {
       try {
         return new URL(card.source_url).hostname.replace('www.', '');
@@ -174,88 +161,48 @@ function CardItem({ card, onEdit, onDelete, isSelected, onToggleSelect }) {
         return '未分类信息源';
       }
     }
-
-    // 没有 URL → 显示兜底文案
     return '未分类信息源';
   };
   const sourceName = getSourceDisplayName();
 
-  // 地区图标映射（参考旧前端）
-  const getRegionIcon = (region) => {
-    if (region === 'domestic') return '🇨🇳';
-    if (region === 'overseas') return '🌍';
-    return REGION_FLAGS[region] || '';
-  };
+  const formattedDate = new Date(card.created_at).toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  });
+
+  const cardTitle = card.title || "暂未命名";
+  const factOrView = card.fact_or_view === 'view' ? 'VIEW' : 'FACT';
+  const factOrViewColor = factOrView === 'VIEW' ? 'var(--accent-400)' : '#10B981';
 
   return (
     <div
-      className={`rounded-xl p-5 card-hover group flex flex-col h-full transition-all duration-200`}
+      className={`card-readwise rounded-xl card-hover group flex flex-col transition-all duration-200`}
       style={{
         background: 'var(--surface-0)',
         border: isSelected ? '1px solid var(--accent-500)' : '1px solid var(--stroke-0)',
         boxShadow: isSelected
-          ? '0 0 0 2px var(--glow), 0 4px 6px -1px rgb(0 0 0 / 0.1)'
-          : '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+          ? '0 0 0 2px var(--glow), 0 2px 8px rgb(0 0 0 / 0.05)'
+          : '0 2px 8px rgb(0 0 0 / 0.05)',
       }}
     >
-      {/* Header: checkbox + source badge + menu */}
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center flex-wrap gap-2">
+      {/* Top action bar: Edit, Delete, Select */}
+      <div className="flex items-start justify-between mb-2">
+        <div>
           {onToggleSelect && (
             <button
               onClick={() => onToggleSelect(card.id)}
-              className="p-0.5 rounded transition-colors"
+              className="p-1 rounded transition-colors -ml-1"
               style={{ color: isSelected ? 'var(--accent-400)' : 'var(--text-2)' }}
               title={isSelected ? '取消选择' : '选择此卡片'}
             >
               {isSelected ? (
                 <CheckSquare className="w-5 h-5" />
               ) : (
-                <Square className="w-5 h-5" />
+                <Square className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity" />
               )}
             </button>
           )}
-          {/* Source Badge */}
-          {hasMatchedSource ? (
-            <div
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
-              style={{ background: 'rgba(52,211,153,0.1)', color: '#34D399', border: '1px solid rgba(52,211,153,0.2)' }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: IMPORTANCE_COLORS[sourceImportance] || '#9CA3AF' }} />
-              {sourceRegion && (
-                <span className="text-[10px] opacity-80">{getRegionIcon(sourceRegion)}</span>
-              )}
-              <span className="max-w-[100px] truncate" title={sourceName}>
-                {sourceName}
-              </span>
-              {sourceCategory && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(52,211,153,0.15)', color: '#34D399' }}>
-                  {sourceCategory}
-                </span>
-              )}
-            </div>
-          ) : (
-            <div
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
-              style={{ background: 'rgba(148,163,184,0.1)', color: 'var(--text-2)', border: '1px solid var(--stroke-0)' }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#9CA3AF' }} />
-              <span className="max-w-[120px] truncate" title={sourceName}>
-                {sourceName}
-              </span>
-            </div>
-          )}
-
-          {/* Date */}
-          <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-2)' }}>
-            <Clock className="w-3 h-3" />
-            <span>
-              {new Date(card.created_at).toLocaleDateString('zh-CN', {
-                month: 'numeric',
-                day: 'numeric',
-              })}
-            </span>
-          </div>
         </div>
 
         <div className="relative">
@@ -301,97 +248,102 @@ function CardItem({ card, onEdit, onDelete, isSelected, onToggleSelect }) {
         </div>
       </div>
 
-      {/* Title */}
-      {card.title && (
-        <h4 className="text-base font-semibold mb-2 leading-tight" style={{ color: 'var(--text-0)' }}>
-          {card.title}
-        </h4>
-      )}
-
-      {/* Summary */}
-      <h3
-        className={`font-medium mb-3 text-sm leading-relaxed ${card.title ? '' : 'text-base'}`}
-        style={{ color: card.title ? 'var(--text-1)' : 'var(--text-0)' }}
-      >
-        {card.summary}
-      </h3>
+      {/* Main Content: Title & Summary */}
+      <div className="mb-5">
+        <div className="flex items-center gap-2 mb-3">
+          <span
+            className="text-[10px] font-mono font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-sm shrink-0"
+            style={{ color: '#fff', backgroundColor: factOrViewColor }}
+          >
+            {factOrView}
+          </span>
+          <h4 className="text-xl font-bold leading-tight line-clamp-2" style={{ color: 'var(--text-0)' }}>
+            {cardTitle}
+          </h4>
+        </div>
+        <h3
+          className={`font-medium text-lg leading-8`}
+          style={{ color: 'var(--text-1)' }}
+        >
+          {card.summary}
+        </h3>
+      </div>
 
       {/* Key points */}
       {card.key_points?.length > 0 && (
-        <ul className="text-sm space-y-1.5 mb-4 pl-1" style={{ color: 'var(--text-1)' }}>
-          {card.key_points.slice(0, 3).map((point, i) => (
-            <li key={i} className="flex items-start gap-2">
-              <span className="mt-1.5 w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--accent-400)' }} />
-              <span className="opacity-90 leading-normal">{point}</span>
+        <ul className="text-base space-y-3 mb-6 pl-1" style={{ color: 'var(--text-1)' }}>
+          {card.key_points.map((point, i) => (
+            <li key={i} className="flex items-start gap-3">
+              <span className="mt-2.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'var(--accent-400)' }} />
+              <span className="opacity-90 leading-relaxed">{point}</span>
             </li>
           ))}
-          {card.key_points.length > 3 && (
-            <li className="text-xs pl-3 pt-1" style={{ color: 'var(--text-2)' }}>
-              +{card.key_points.length - 3} 更多要点
-            </li>
-          )}
         </ul>
       )}
 
-      {/* Footer */}
-      <div className="mt-auto pt-3 flex flex-col gap-3" style={{ borderTop: '1px solid var(--stroke-1)' }}>
-        {/* Collapsible snippet */}
-        <div className="text-xs">
-          <button
-            onClick={() => setSnippetOpen(!snippetOpen)}
-            className="flex items-center gap-1 font-medium transition-colors select-none"
-            style={{ color: 'var(--text-2)' }}
+      {/* Collapsible snippet */}
+      <div className="mb-5 font-sans">
+        <button
+          onClick={() => setSnippetOpen(!snippetOpen)}
+          className="flex items-center gap-1.5 font-medium transition-colors select-none text-sm hover:underline"
+          style={{ color: 'var(--text-2)' }}
+        >
+          <ChevronDown className={`w-4 h-4 transition-transform ${snippetOpen ? 'rotate-180' : ''}`} />
+          {snippetOpen ? '收起原文片段' : '查看原文片段'}
+        </button>
+        {snippetOpen && (
+          <div
+            className="mt-3 p-4 rounded-xl text-sm leading-relaxed whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto"
+            style={{ background: 'var(--bg-0)', color: 'var(--text-1)', border: '1px solid var(--stroke-1)' }}
           >
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${snippetOpen ? 'rotate-180' : ''}`} />
-            {snippetOpen ? '收起原文' : '查看原文'}
-          </button>
-          {snippetOpen && (
-            <div
-              className="mt-2 p-3 rounded-lg font-mono leading-relaxed whitespace-pre-wrap break-words max-h-60 overflow-y-auto"
-              style={{ background: 'var(--bg-0)', color: 'var(--text-2)', border: '1px solid var(--stroke-1)' }}
-            >
-              {card.raw_snippet || "（无原文内容）"}
-              {card.image_url && (
-                <div className="mt-2">
-                  <img src={card.image_url} alt="Card Image" className="max-w-full rounded" style={{ border: '1px solid var(--stroke-0)' }} />
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+            {card.raw_snippet || "（无原文内容）"}
+            {card.image_url && (
+              <div className="mt-3">
+                <img src={card.image_url} alt="Card Image" className="max-w-full rounded-lg" style={{ border: '1px solid var(--stroke-0)' }} />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
-        {/* Bottom metadata */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {card.topic_title ? (
+      {/* Footer: Source Domain, Date, Topic */}
+      <div className="mt-auto pt-4 flex flex-wrap items-center justify-between gap-3" style={{ borderTop: '1px solid var(--stroke-0)' }}>
+        <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-2)' }}>
+          <span className="font-medium" title="来源网站">{sourceName}</span>
+          <span>·</span>
+          <span>{formattedDate}</span>
+
+          {card.topic_title && (
+            <>
+              <span>·</span>
               <span
-                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium"
-                style={{ background: 'rgba(99,102,241,0.1)', color: 'var(--accent-300)', border: '1px solid rgba(99,102,241,0.15)' }}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium"
+                style={{ background: 'rgba(99,102,241,0.1)', color: 'var(--accent-500)' }}
               >
                 <Tag className="w-3 h-3" />
                 {card.topic_title}
               </span>
-            ) : (
-              <span className="text-[11px]" style={{ color: 'var(--text-2)' }}>#未分类</span>
-            )}
-            {card.note && (
-              <span className="w-2 h-2 rounded-full" style={{ background: '#FBBF24' }} title="有批注" />
-            )}
-          </div>
+            </>
+          )}
 
-          {card.source_url && (
-            <a
-              href={buildHighlightUrl(card.source_url, card.raw_snippet)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="transition-colors flex items-center gap-1 text-xs group/link"
-              style={{ color: 'var(--text-2)' }}
-            >
-              <span className="group-hover/link:underline">回到原文</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+          {card.note && (
+            <span className="w-2 h-2 rounded-full ml-1" style={{ background: '#FBBF24' }} title="有批注" />
           )}
         </div>
+
+        {card.source_url && (
+          <a
+            href={buildHighlightUrl(card.source_url, card.raw_snippet)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors flex items-center gap-1.5 text-sm group/link hover:underline"
+            style={{ color: 'var(--text-2)' }}
+            title="去源文档查看"
+          >
+            <span>原文链接</span>
+            <ExternalLink className="w-4 h-4" />
+          </a>
+        )}
       </div>
     </div>
   );
@@ -621,13 +573,13 @@ function CardsPage() {
 
       {/* Card list */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="max-w-4xl xl:max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-2 gap-5">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-48 skeleton rounded-xl" />
+            <div key={i} className="h-48 skeleton rounded-xl card-readwise" />
           ))}
         </div>
       ) : filteredCards.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="max-w-4xl xl:max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-2 gap-5">
           {filteredCards.map((card) => (
             <CardItem
               key={card.id}
