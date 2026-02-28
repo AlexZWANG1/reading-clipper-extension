@@ -37,7 +37,7 @@ function Layout() {
     navigate('/login');
   };
 
-  const isFullScreenPage = /^\/topics\/[^/]+$/.test(location.pathname);
+  const isFullScreenPage = /^\/(topics\/[^/]+|cards)$/.test(location.pathname);
 
   return (
     <div className="h-screen flex flex-col lg:flex-row overflow-hidden" style={{ background: 'var(--bg-0)' }}>

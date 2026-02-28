@@ -121,20 +121,9 @@ body {
   @apply transition-all duration-300 hover:shadow-[0_8px_20px_rgb(0,0,0,0.06)] hover:-translate-y-[1px];
 }
 
-/* Readwise 风格卡片 */
+/* Readwise 风格卡片（已移除左侧彩条） */
 .card-readwise {
-  @apply relative pl-6 pr-5 py-6 sm:pl-8 sm:pr-7 sm:py-7;
-}
-.card-readwise::before {
-  content: '';
-  position: absolute;
-  left: -1px;
-  top: -1px;
-  bottom: -1px;
-  width: 4px;
-  border-top-left-radius: 0.75rem;
-  border-bottom-left-radius: 0.75rem;
-  background-color: var(--accent-500);
+  @apply relative px-6 py-6 sm:px-7 sm:py-7;
 }
 
 /* 输入框焦点效果 */
@@ -222,4 +211,18 @@ body {
 .board-focused {
   opacity: 1;
   transition: opacity 0.3s ease;
+}
+
+/* 卡片高亮闪烁动画 */
+@keyframes highlightFlash {
+  0%, 100% {
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.05);
+  }
+  50% {
+    box-shadow: 0 0 0 3px var(--glow), 0 4px 16px rgb(0 0 0 / 0.1);
+  }
+}
+
+.highlight-flash {
+  animation: highlightFlash 1s ease-in-out 2;
 }
