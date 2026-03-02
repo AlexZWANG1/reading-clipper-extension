@@ -21,7 +21,7 @@ const MODELS_CONFIG_PATH = path.join(__dirname, "../config/models.config.json");
 let modelsConfigCache = null;
 function loadModelsConfig() {
   if (modelsConfigCache) return modelsConfigCache;
-  
+
   try {
     const content = fs.readFileSync(MODELS_CONFIG_PATH, "utf-8");
     modelsConfigCache = JSON.parse(content);
@@ -54,7 +54,7 @@ async function getUserSettings(userId, supabaseClient) {
       // 如果没有设置，返回默认值
       return {
         provider: "openai",
-        model: "gpt-5-mini",
+        model: "gpt-5.2",
         api_key_encrypted: null,
         api_endpoint: null,
       };
@@ -65,7 +65,7 @@ async function getUserSettings(userId, supabaseClient) {
     console.error("获取用户设置失败:", error);
     return {
       provider: "openai",
-      model: "gpt-5-mini",
+      model: "gpt-5.2",
       api_key_encrypted: null,
       api_endpoint: null,
     };
@@ -130,7 +130,15 @@ export async function createAIClientConfig(userId = null, supabaseClient = null)
 
   // 如果没有用户设置，使用默认值
   const provider = userSettings?.provider || "openai";
-  const model = userSettings?.model || config.providers[provider]?.default_model || "gpt-5-mini";
+
+  // 支持从环境变量读取默认模型
+  let model = userSettings?.model;
+  if (!model && provider === "openai") {
+    model = process.env.OPENAI_MODEL;
+  }
+  if (!model) {
+    model = config.providers[provider]?.default_model || "gpt-5.2";
+  }
 
   // 获取用户自定义 API Key（如果有）
   const userApiKey = getUserApiKey(userSettings);
@@ -186,7 +194,7 @@ export async function callChatAPI(config, messages, options = {}) {
   }
 
   const payload = {
-    model: model === "*" ? options.customModelName || "gpt-5-mini" : model,
+    model: model === "*" ? options.customModelName || "gpt-5.2" : model,
     messages,
     ...options,
   };
@@ -289,7 +297,7 @@ export async function callResponsesAPI(config, prompt, input, options = {}) {
   }
 
   const payload = {
-    model: model === "*" ? options.customModelName || "gpt-5-mini" : model,
+    model: model === "*" ? options.customModelName || "gpt-5.2" : model,
     prompt,
     input,
     ...options,
@@ -349,12 +357,12 @@ export async function testAPIConnection(config) {
     const testMessages = [
       { role: "user", content: "Hello" },
     ];
-    
+
     await callChatAPI(config, testMessages, {
       max_tokens: 10,
       temperature: 0,
     });
-    
+
     return true;
   } catch (error) {
     console.error("API连接测试失败:", error);

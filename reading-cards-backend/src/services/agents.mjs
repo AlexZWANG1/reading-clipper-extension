@@ -104,9 +104,9 @@ const HYPOTHESIS_EVAL_PROMPT_ID = process.env.HYPOTHESIS_EVAL_PROMPT_ID || "pmpt
 // ========= 模型配置（根据 OpenAI 官方文档优化）=========
 // 根据任务复杂度选择合适的模型：
 // - gpt-5.2: 最新旗舰，复杂推理、多步骤任务、Vision
-// - gpt-5-mini: 快速低成本推理（400K上下文，支持 file_search）
+// - gpt-5.2: 快速低成本推理（400K上下文，支持 file_search）
 // - gpt-5-nano: 高吞吐量、简单指令跟随
-const OPENAI_MODEL = "gpt-5-mini"; // 默认用于 Stored Prompt（Agent1 文本、Search Agent）
+const OPENAI_MODEL = "gpt-5.2"; // 默认用于 Stored Prompt（Agent1 文本、Search Agent）
 const OPENAI_MODEL_COMPLEX = "gpt-5.2"; // 用于复杂推理任务（Agent2、文档 Q/H、Story Unit Refiner）
 const OPENAI_MODEL_SIMPLE = "gpt-5-nano"; // 用于简单任务（标题生成、单元标题）
 const HIGHLIGHT_SUMMARIZER_PROMPT_ID = "pmpt_692adaa16b2081909364455f9306be420aa65b20d7fe063b";
@@ -740,7 +740,7 @@ ${JSON.stringify(compactCards, null, 2)}
 请返回最相关的卡片 ID 列表（按相关性排序），格式：{ "card_ids": [...] }`;
 
   const payload = {
-    model: OPENAI_MODEL, // Search Agent 使用 gpt-5-mini（成本优化的推理）
+    model: OPENAI_MODEL, // Search Agent 使用 gpt-5.2（成本优化的推理）
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userMessage }
@@ -1025,7 +1025,7 @@ export async function suggestQuestions({ topicTitle, cardSummaries }) {
 
   try {
     const payload = {
-      model: OPENAI_MODEL, // 建议问题需要一定推理能力，使用 gpt-5-mini
+      model: OPENAI_MODEL, // 建议问题需要一定推理能力，使用 gpt-5.2
       messages: [{ role: "user", content: prompt }],
       temperature: 0.7,
       response_format: { type: "json_object" }
@@ -1104,7 +1104,7 @@ ${context}
 
   try {
     const payload = {
-      model: OPENAI_MODEL, // 建议问题需要一定推理能力，使用 gpt-5-mini
+      model: OPENAI_MODEL, // 建议问题需要一定推理能力，使用 gpt-5.2
       messages: [{ role: "user", content: prompt }],
       temperature: 0.7,
       response_format: { type: "json_object" }
@@ -1441,9 +1441,9 @@ export async function runHypothesisEvaluatorV2({
   }
 
   // 构建 payload，确保格式正确
-  // gpt-5-mini 支持 file_search，无需降级到旧模型
+  // gpt-5.2 支持 file_search，无需降级到旧模型
   const payload = {
-    model: OPENAI_MODEL, // gpt-5-mini 支持 file_search
+    model: OPENAI_MODEL, // gpt-5.2 支持 file_search
     prompt: { id: HYPOTHESIS_EVAL_PROMPT_ID },
     input: inputLines.join("\n"),
     tools: [
@@ -2052,7 +2052,7 @@ ${sourcesText}
 请返回最匹配的 source_id (JSON格式):`;
 
   const payload = {
-    model: OPENAI_MODEL, // gpt-5-mini 支持 JSON mode
+    model: OPENAI_MODEL, // gpt-5.2 支持 JSON mode
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userMessage }

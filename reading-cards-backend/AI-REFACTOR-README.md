@@ -130,7 +130,7 @@ node test-ai-refactor.mjs
 ========= 测试 Chat API =========
 ✅ 配置创建成功
   提供商: openai
-  模型: gpt-5-mini
+  模型: gpt-5.2
   Chat 端点: http://localhost:8080/v1/chat/completions
   运行模式: proxy
 
@@ -161,7 +161,7 @@ Chat API: ✅ 通过
 **后端日志应显示：**
 ```
 ✅ [AI Runtime] 代理模式已启用: http://localhost:8080/v1
-[callChatAPI] 代理模式: http://localhost:8080/v1/chat/completions, model: gpt-5-mini
+[callChatAPI] 代理模式: http://localhost:8080/v1/chat/completions, model: gpt-5.2
 [callChatAPI] 代理响应成功
 ```
 

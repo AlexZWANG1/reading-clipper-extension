@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(curl:*)",
+      "Bash(node:*)",
+      "Bash(netstat:*)",
+      "Bash(tasklist:*)",
+      "Bash(echo:*)",
+      "Bash(sed:*)",
+      "Bash(NO_PROXY=localhost,127.0.0.1,::1 node:*)",
+      "WebFetch(domain:help.router-for.me)"
+    ]
+  }
+}

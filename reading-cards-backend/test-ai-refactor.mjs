@@ -1,6 +1,17 @@
 // ========= AI API 重构验证脚本 =========
 // 测试代理模式和直连模式下的 AI 调用
 
+// 加载环境变量
+import dotenv from "dotenv";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const envPath = join(__dirname, ".env");
+
+dotenv.config({ path: envPath, override: true });
+
 import { createAIClientConfig, callChatAPI } from "./src/services/aiClient.mjs";
 import { getRuntimeSummary } from "./src/services/aiRuntime.mjs";
 
@@ -31,6 +42,11 @@ async function testChatAPI() {
 
     // 测试简单的 Chat API 调用
     console.log("发送测试消息...");
+
+    // 直接使用配置的模型（gpt-5.2）
+    const testModel = config.model;
+    console.log(`使用模型: ${testModel}`);
+
     const response = await callChatAPI(
       config,
       [{ role: "user", content: "Say 'Hello from Reading Clipper!'" }],

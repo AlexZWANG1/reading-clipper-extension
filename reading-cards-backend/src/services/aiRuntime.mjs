@@ -18,14 +18,14 @@
 /**
  * 代理配置（最高优先级）
  */
-const AI_PROXY_ENDPOINT = process.env.AI_PROXY_ENDPOINT || null;
-const AI_PROXY_API_KEY = process.env.AI_PROXY_API_KEY || null;
+const getProxyEndpoint = () => process.env.AI_PROXY_ENDPOINT || null;
+const getProxyApiKey = () => process.env.AI_PROXY_API_KEY || null;
 
 /**
  * 直连配置（fallback）
  */
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || null;
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || null;
+const getOpenAiKey = () => process.env.OPENAI_API_KEY || null;
+const getAnthropicKey = () => process.env.ANTHROPIC_API_KEY || null;
 
 // ========= 运行时模式检测 =========
 
@@ -34,7 +34,7 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || null;
  * @returns {boolean}
  */
 export function isProxyMode() {
-  return !!(AI_PROXY_ENDPOINT && AI_PROXY_API_KEY);
+  return !!(getProxyEndpoint() && getProxyApiKey());
 }
 
 /**
@@ -57,7 +57,7 @@ export function getRuntimeMode() {
 export function buildEndpoint(provider, endpointType, customBaseUrl = null) {
   // 代理模式：所有请求统一走代理
   if (isProxyMode()) {
-    const baseUrl = AI_PROXY_ENDPOINT.replace(/\/$/, "");
+    const baseUrl = getProxyEndpoint().replace(/\/$/, "");
 
     // CLI Proxy 使用 OpenAI 兼容格式
     switch (endpointType) {
@@ -134,16 +134,16 @@ export function getApiKey(provider, userApiKey = null) {
 
   // 2. 代理模式：使用代理 Key
   if (isProxyMode()) {
-    return AI_PROXY_API_KEY;
+    return getProxyApiKey();
   }
 
   // 3. 直连模式：使用对应提供商的 Key
   if (provider === "openai" || provider === "custom") {
-    return OPENAI_API_KEY;
+    return getOpenAiKey();
   }
 
   if (provider === "anthropic") {
-    return ANTHROPIC_API_KEY;
+    return getAnthropicKey();
   }
 
   return null;
@@ -190,18 +190,18 @@ export function validateRuntimeConfig() {
   const mode = getRuntimeMode();
 
   if (mode === "proxy") {
-    if (!AI_PROXY_ENDPOINT) {
-      throw new Error("代理模式：缺少 AI_PROXY_ENDPOINT 环境变量");
+    if (!getProxyEndpoint()) {
+      console.warn("⚠️ 代理模式：缺少 AI_PROXY_ENDPOINT 环境变量");
     }
-    if (!AI_PROXY_API_KEY) {
-      throw new Error("代理模式：缺少 AI_PROXY_API_KEY 环境变量");
+    if (!getProxyApiKey()) {
+      console.warn("⚠️ 代理模式：缺少 AI_PROXY_API_KEY 环境变量");
     }
-    console.log(`✅ [AI Runtime] 代理模式已启用: ${AI_PROXY_ENDPOINT}`);
+    console.log(`✅ [AI Runtime] 代理模式已启用: ${getProxyEndpoint()}`);
   } else {
-    if (!OPENAI_API_KEY) {
+    if (!getOpenAiKey()) {
       console.warn("⚠️ [AI Runtime] 直连模式：未设置 OPENAI_API_KEY");
     }
-    if (!ANTHROPIC_API_KEY) {
+    if (!getAnthropicKey()) {
       console.warn("⚠️ [AI Runtime] 直连模式：未设置 ANTHROPIC_API_KEY");
     }
     console.log("✅ [AI Runtime] 直连模式已启用");
@@ -217,10 +217,10 @@ export function validateRuntimeConfig() {
 export function getRuntimeSummary() {
   return {
     mode: getRuntimeMode(),
-    proxyEndpoint: AI_PROXY_ENDPOINT || "未设置",
-    hasProxyKey: !!AI_PROXY_API_KEY,
-    hasOpenAIKey: !!OPENAI_API_KEY,
-    hasAnthropicKey: !!ANTHROPIC_API_KEY,
+    proxyEndpoint: getProxyEndpoint() || "未设置",
+    hasProxyKey: !!getProxyApiKey(),
+    hasOpenAIKey: !!getOpenAiKey(),
+    hasAnthropicKey: !!getAnthropicKey(),
   };
 }
 
