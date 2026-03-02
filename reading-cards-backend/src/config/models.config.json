@@ -2,7 +2,7 @@
   "providers": {
     "openai": {
       "name": "OpenAI",
-      "description": "OpenAI官方API",
+      "description": "OpenAI官方API（或通过代理）",
       "models": [
         {
           "id": "gpt-5-mini",
@@ -33,15 +33,11 @@
           "supports_file_search": false
         }
       ],
-      "default_model": "gpt-5-mini",
-      "api_endpoint": "https://api.openai.com/v1",
-      "chat_endpoint": "https://api.openai.com/v1/chat/completions",
-      "responses_endpoint": "https://api.openai.com/v1/responses",
-      "files_endpoint": "https://api.openai.com/v1/files"
+      "default_model": "gpt-5-mini"
     },
     "anthropic": {
       "name": "Anthropic",
-      "description": "Anthropic Claude API",
+      "description": "Anthropic Claude API（或通过代理）",
       "models": [
         {
           "id": "claude-sonnet-4-6",
@@ -58,11 +54,7 @@
           "supports_file_search": false
         }
       ],
-      "default_model": "claude-sonnet-4-6",
-      "api_endpoint": "https://api.anthropic.com/v1",
-      "chat_endpoint": "https://api.anthropic.com/v1/messages",
-      "responses_endpoint": null,
-      "files_endpoint": null
+      "default_model": "claude-sonnet-4-6"
     },
     "custom": {
       "name": "自定义API",
@@ -76,18 +68,12 @@
           "supports_file_search": false
         }
       ],
-      "default_model": "*",
-      "api_endpoint": null,
-      "chat_endpoint": null,
-      "responses_endpoint": null,
-      "files_endpoint": null
+      "default_model": "*"
     }
   },
   "metadata": {
-    "version": "2.0.0",
-    "last_updated": "2025-02",
-    "description": "Reading Clipper AI模型配置"
+    "version": "2.1.0",
+    "last_updated": "2026-03",
+    "description": "Reading Clipper AI模型配置 - 所有端点通过 aiRuntime 统一管理"
   }
 }
-
-

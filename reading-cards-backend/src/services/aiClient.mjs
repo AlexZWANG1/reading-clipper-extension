@@ -1,9 +1,17 @@
 // ========= AI客户端工厂服务 =========
 // 支持多提供商（OpenAI, Anthropic, 自定义）的统一AI客户端
+// 所有 AI 调用统一通过 aiRuntime 配置入口
 
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import {
+  buildEndpoint,
+  getApiKey,
+  buildHeaders,
+  isProxyMode,
+  getRuntimeMode,
+} from "./aiRuntime.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -81,66 +89,25 @@ function decryptApiKey(encryptedKey) {
 }
 
 /**
- * 获取API Key（优先使用用户配置，否则使用环境变量）
+ * 获取用户自定义 API Key（如果有）
  * @param {Object} userSettings - 用户设置
- * @param {string} provider - 提供商名称
- * @returns {string|null} API Key
+ * @returns {string|null} 解密后的用户 API Key
  */
-function getApiKey(userSettings, provider) {
-  // 如果用户配置了自己的API Key
+function getUserApiKey(userSettings) {
   if (userSettings?.api_key_encrypted) {
     const decrypted = decryptApiKey(userSettings.api_key_encrypted);
     if (decrypted) return decrypted;
   }
-
-  // 否则使用环境变量
-  if (provider === "openai") {
-    return process.env.OPENAI_API_KEY || null;
-  } else if (provider === "anthropic") {
-    return process.env.ANTHROPIC_API_KEY || null;
-  }
-
   return null;
 }
 
 /**
- * 获取API端点
+ * 获取用户自定义端点（仅 custom provider）
  * @param {Object} userSettings - 用户设置
- * @param {string} provider - 提供商名称
- * @param {string} endpointType - 端点类型（chat, responses, files）
- * @returns {string|null} API端点URL
+ * @returns {string|null} 用户自定义的 base URL
  */
-function getApiEndpoint(userSettings, provider, endpointType) {
-  const config = loadModelsConfig();
-  if (!config || !config.providers[provider]) {
-    return null;
-  }
-
-  const providerConfig = config.providers[provider];
-
-  // 自定义提供商：使用用户配置的端点
-  if (provider === "custom" && userSettings?.api_endpoint) {
-    const baseUrl = userSettings.api_endpoint.replace(/\/$/, "");
-    if (endpointType === "chat") {
-      return `${baseUrl}/chat/completions`;
-    } else if (endpointType === "responses") {
-      return `${baseUrl}/responses`;
-    } else if (endpointType === "files") {
-      return `${baseUrl}/files`;
-    }
-    return baseUrl;
-  }
-
-  // 标准提供商：使用配置的端点
-  if (endpointType === "chat") {
-    return providerConfig.chat_endpoint || null;
-  } else if (endpointType === "responses") {
-    return providerConfig.responses_endpoint || null;
-  } else if (endpointType === "files") {
-    return providerConfig.files_endpoint || null;
-  }
-
-  return providerConfig.api_endpoint || null;
+function getUserCustomEndpoint(userSettings) {
+  return userSettings?.api_endpoint || null;
 }
 
 /**
@@ -164,22 +131,37 @@ export async function createAIClientConfig(userId = null, supabaseClient = null)
   // 如果没有用户设置，使用默认值
   const provider = userSettings?.provider || "openai";
   const model = userSettings?.model || config.providers[provider]?.default_model || "gpt-5-mini";
-  const apiKey = getApiKey(userSettings, provider);
-  const apiEndpoint = getApiEndpoint(userSettings, provider, "chat");
+
+  // 获取用户自定义 API Key（如果有）
+  const userApiKey = getUserApiKey(userSettings);
+
+  // 获取用户自定义端点（仅 custom provider）
+  const customBaseUrl = provider === "custom" ? getUserCustomEndpoint(userSettings) : null;
+
+  // 通过 aiRuntime 统一获取 API Key 和端点
+  const apiKey = getApiKey(provider, userApiKey);
+  const chatEndpoint = buildEndpoint(provider, "chat", customBaseUrl);
+  const responsesEndpoint = buildEndpoint(provider, "responses", customBaseUrl);
+  const filesEndpoint = buildEndpoint(provider, "files", customBaseUrl);
 
   if (!apiKey) {
-    throw new Error(`未配置 ${provider} API Key`);
+    const mode = getRuntimeMode();
+    if (mode === "proxy") {
+      throw new Error(`代理模式：未配置 AI_PROXY_API_KEY`);
+    } else {
+      throw new Error(`直连模式：未配置 ${provider} API Key`);
+    }
   }
 
   return {
     provider,
     model,
     apiKey,
-    apiEndpoint,
-    chatEndpoint: getApiEndpoint(userSettings, provider, "chat"),
-    responsesEndpoint: getApiEndpoint(userSettings, provider, "responses"),
-    filesEndpoint: getApiEndpoint(userSettings, provider, "files"),
+    chatEndpoint,
+    responsesEndpoint,
+    filesEndpoint,
     userSettings,
+    runtimeMode: getRuntimeMode(),
   };
 }
 
@@ -196,6 +178,7 @@ export async function callChatAPI(config, messages, options = {}) {
     chatEndpoint,
     provider,
     model,
+    runtimeMode,
   } = config;
 
   if (!chatEndpoint) {
@@ -208,22 +191,41 @@ export async function callChatAPI(config, messages, options = {}) {
     ...options,
   };
 
-  // Anthropic API格式略有不同
+  // 构建请求头（统一通过 aiRuntime）
+  const headers = buildHeaders(provider, apiKey);
+
+  // 代理模式：统一使用 OpenAI 格式
+  if (runtimeMode === "proxy") {
+    console.log(`[callChatAPI] 代理模式: ${chatEndpoint}, model: ${payload.model}`);
+
+    const response = await fetch(chatEndpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      console.error("[callChatAPI] 代理错误:", response.status, errorText);
+      throw new Error(`代理 API 请求失败：${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    console.log("[callChatAPI] 代理响应成功");
+    return result;
+  }
+
+  // 直连模式：Anthropic 需要特殊处理
   if (provider === "anthropic") {
-    // Anthropic使用messages API，格式不同
     const anthropicPayload = {
       model: payload.model,
       max_tokens: options.max_tokens || 4096,
       messages: payload.messages,
     };
-    
+
     const response = await fetch(chatEndpoint, {
       method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json",
-      },
+      headers,
       body: JSON.stringify(anthropicPayload),
     });
 
@@ -246,25 +248,22 @@ export async function callChatAPI(config, messages, options = {}) {
     };
   }
 
-  // OpenAI格式（包括自定义API）
-  console.log("[callChatAPI] endpoint:", chatEndpoint, "model:", payload.model, "messages:", payload.messages?.length, "hasTools:", !!payload.tools);
+  // 直连模式：OpenAI / Custom
+  console.log("[callChatAPI] 直连模式:", chatEndpoint, "model:", payload.model);
   const response = await fetch(chatEndpoint, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
-    console.error("[callChatAPI] ERROR:", response.status, errorText);
+    console.error("[callChatAPI] 直连错误:", response.status, errorText);
     throw new Error(`API 请求失败：${response.status} - ${errorText}`);
   }
 
   const result = await response.json();
-  console.log("[callChatAPI] OK, choice role:", result.choices?.[0]?.message?.role, "has tool_calls:", !!result.choices?.[0]?.message?.tool_calls);
+  console.log("[callChatAPI] 直连响应成功");
   return result;
 }
 
@@ -282,14 +281,11 @@ export async function callResponsesAPI(config, prompt, input, options = {}) {
     responsesEndpoint,
     provider,
     model,
+    runtimeMode,
   } = config;
 
-  if (provider !== "openai" && provider !== "custom") {
-    throw new Error(`提供商 ${provider} 不支持 Responses API`);
-  }
-
   if (!responsesEndpoint) {
-    throw new Error(`未配置 Responses API 端点`);
+    throw new Error(`提供商 ${provider} 不支持 Responses API`);
   }
 
   const payload = {
@@ -299,12 +295,14 @@ export async function callResponsesAPI(config, prompt, input, options = {}) {
     ...options,
   };
 
+  // 构建请求头（统一通过 aiRuntime）
+  const headers = buildHeaders(provider, apiKey);
+
+  console.log(`[callResponsesAPI] ${runtimeMode} 模式: ${responsesEndpoint}`);
+
   const response = await fetch(responsesEndpoint, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify(payload),
   });
 
@@ -314,7 +312,7 @@ export async function callResponsesAPI(config, prompt, input, options = {}) {
   }
 
   const data = await response.json();
-  
+
   // 提取输出文本
   const textOutput = data.output_text || extractTextFromResponse(data);
   if (!textOutput) {
