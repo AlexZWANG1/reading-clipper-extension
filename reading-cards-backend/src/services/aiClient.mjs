@@ -13,7 +13,7 @@ const MODELS_CONFIG_PATH = path.join(__dirname, "../config/models.config.json");
 let modelsConfigCache = null;
 function loadModelsConfig() {
   if (modelsConfigCache) return modelsConfigCache;
-  
+
   try {
     const content = fs.readFileSync(MODELS_CONFIG_PATH, "utf-8");
     modelsConfigCache = JSON.parse(content);
@@ -216,7 +216,7 @@ export async function callChatAPI(config, messages, options = {}) {
       max_tokens: options.max_tokens || 4096,
       messages: payload.messages,
     };
-    
+
     const response = await fetch(chatEndpoint, {
       method: "POST",
       headers: {
@@ -314,7 +314,7 @@ export async function callResponsesAPI(config, prompt, input, options = {}) {
   }
 
   const data = await response.json();
-  
+
   // 提取输出文本
   const textOutput = data.output_text || extractTextFromResponse(data);
   if (!textOutput) {
@@ -351,12 +351,12 @@ export async function testAPIConnection(config) {
     const testMessages = [
       { role: "user", content: "Hello" },
     ];
-    
+
     await callChatAPI(config, testMessages, {
       max_tokens: 10,
       temperature: 0,
     });
-    
+
     return true;
   } catch (error) {
     console.error("API连接测试失败:", error);

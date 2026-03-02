@@ -22,7 +22,17 @@
       "Bash(grep:*)",
       "Bash(git add:*)",
       "Bash(wc -l /c/Users/Admin/Dropbox/项目开发/reading-clipper-extension/.claude/worktrees/clever-cohen/reading-cards-backend/src/services/*.mjs /c/Users/Admin/Dropbox/项目开发/reading-clipper-extension/.claude/worktrees/clever-cohen/web-app/src/pages/*.jsx)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git stash:*)",
+      "Bash(git check-ignore:*)",
+      "Bash(git worktree:*)",
+      "Bash(git branch:*)",
+      "Bash(git checkout:*)",
+      "Bash(start cmd /k \"cd reading-cards-backend && node src/server.mjs\")",
+      "Bash(start cmd /k \"cd web-app && npm run dev\")",
+      "Bash(npm install)",
+      "Bash(node src/server.mjs)",
+      "Bash(test:*)"
     ]
   }
 }
