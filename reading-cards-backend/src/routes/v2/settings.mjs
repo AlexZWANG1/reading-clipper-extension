@@ -58,7 +58,7 @@ router.get("/", requireAuth, async (req, res) => {
     // 如果没有设置，返回默认值
     const settings = data || {
       provider: "openai",
-      model: "gpt-5-mini",
+      model: "gpt-5.2",
       api_key_encrypted: null,
       api_endpoint: null,
     };
@@ -219,7 +219,7 @@ router.post("/test-api", requireAuth, async (req, res) => {
     // 使用请求中的值覆盖当前设置（如果提供）
     const testConfig = {
       provider: provider || currentSettings?.provider || "openai",
-      model: model || currentSettings?.model || "gpt-5-mini",
+      model: model || currentSettings?.model || "gpt-5.2",
       api_key_encrypted: api_key ? Buffer.from(api_key).toString("base64") : currentSettings?.api_key_encrypted,
       api_endpoint: api_endpoint || currentSettings?.api_endpoint || null,
     };

@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
     
     -- 模型配置
     provider TEXT DEFAULT 'openai' NOT NULL, -- 'openai', 'anthropic', 'custom'
-    model TEXT DEFAULT 'gpt-5-mini' NOT NULL, -- 模型名称
+    model TEXT DEFAULT 'gpt-5.2' NOT NULL, -- 模型名称
     api_key_encrypted TEXT, -- 用户自己的API Key（加密存储）
     api_endpoint TEXT, -- 自定义API端点（仅当provider='custom'时使用）
     
@@ -257,7 +257,7 @@ BEGIN
     -- 如果不存在则创建默认设置
     IF v_settings_id IS NULL THEN
         INSERT INTO user_settings (user_id, provider, model)
-        VALUES (p_user_id, 'openai', 'gpt-5-mini')
+        VALUES (p_user_id, 'openai', 'gpt-5.2')
         RETURNING id INTO v_settings_id;
     END IF;
     
