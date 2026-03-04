@@ -33,6 +33,7 @@ chatRouter.post("/", async (req, res) => {
       messages: sanitized,
       userId: req.user.id,
       supabase: req.supabase,
+      accessToken: req.accessToken,
     });
 
     res.json({

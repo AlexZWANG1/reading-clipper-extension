@@ -12,9 +12,28 @@ export const TOOL_DEFINITIONS = [
   {
     type: "function",
     function: {
+      name: "semantic_search",
+      description:
+        "Semantic search across the user's ingested documents using vector similarity. This searches through all document chunks (from materials) and returns the most relevant passages based on meaning, not just keywords. Use this when the user asks questions about their documents or wants to find information across their knowledge base.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "The search query or question" },
+          limit: { type: "number", description: "Max results to return (default 10, max 20)" },
+          min_score: { type: "number", description: "Minimum similarity score 0-1 (default 0.3)" },
+          topic_id: { type: "string", description: "Optional: limit search to a specific topic" },
+        },
+        required: ["query"],
+      },
+    },
+    side_effect: "read_only",
+  },
+  {
+    type: "function",
+    function: {
       name: "search_cards",
       description:
-        "Search the user's reading cards by keyword. Returns cards whose summary, raw_snippet, or note match the query.",
+        "Search the user's reading cards by keyword. Returns cards whose summary, raw_snippet, or note match the query. Use this for finding specific cards, not for searching document content.",
       parameters: {
         type: "object",
         properties: {

@@ -16,13 +16,51 @@ import { listSources } from "../services/supabase/sources.mjs";
  * Execute a single tool call.
  * @param {string} name   - tool name (must match tools.mjs)
  * @param {Object} args   - parsed arguments from the LLM
- * @param {Object} ctx    - { supabase, userId }
+ * @param {Object} ctx    - { supabase, userId, accessToken }
  * @returns {Promise<Object>} result payload
  */
 export async function executeTool(name, args, ctx) {
-  const { supabase, userId } = ctx;
+  const { supabase, userId, accessToken } = ctx;
 
   switch (name) {
+    // ── Semantic Search ──
+    case "semantic_search": {
+      const limit = Math.min(args.limit || 10, 20);
+      const min_score = args.min_score || 0.3;
+
+      try {
+        // Call the semantic search API endpoint
+        const response = await fetch(`${process.env.BACKEND_URL || 'http://localhost:3000'}/api/v2/search/semantic`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            query: args.query,
+            limit,
+            min_score,
+            topic_id: args.topic_id,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          return { error: error.error || 'Search failed', results: [] };
+        }
+
+        const data = await response.json();
+        return {
+          results: data.results || [],
+          total: data.total || 0,
+          query: args.query,
+        };
+      } catch (error) {
+        console.error('Semantic search error:', error);
+        return { error: error.message, results: [] };
+      }
+    }
+
     // ── Cards (read) ──
     case "search_cards": {
       const cards = await searchCards(supabase, userId, args.query, {

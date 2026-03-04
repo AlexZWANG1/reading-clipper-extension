@@ -1,139 +1,97 @@
-"""Embedding generation with Esperanto (multi-provider) and OpenAI fallback."""
+"""Local embeddings via Ollama (OpenAI-compatible API)."""
 
 import logging
-from typing import Sequence
+import httpx
 
 from .config import settings
 
 logger = logging.getLogger(__name__)
 
-# Real OpenAI API endpoint
-_OPENAI_DIRECT_URL = "https://api.openai.com/v1/embeddings"
-
 
 async def embed_texts(texts: list[str]) -> list[list[float]]:
     """
-    Generate embeddings for a list of texts.
+    Generate embeddings for a list of texts using local Ollama.
 
-    Tries Esperanto first, falls back to direct OpenAI API call.
-    If proxy returns 404, automatically retries with real OpenAI endpoint.
+    Uses OpenAI-compatible /v1/embeddings endpoint.
+    No fallback to external APIs - fails fast with clear error messages.
     """
     if not texts:
         return []
 
+    base_url = settings.embeddings_base_url.rstrip("/")
+    endpoint = f"{base_url}/embeddings"
+    api_key = settings.embeddings_api_key or "ollama"
+    model = settings.embeddings_model
+
+    logger.info(f"Embedding {len(texts)} texts via {endpoint} (model: {model})")
+
     try:
-        return await _embed_with_esperanto(texts)
-    except ImportError:
-        logger.warning("esperanto not installed, falling back to OpenAI direct")
-        return await _embed_with_openai(texts)
+        embeddings = await _call_embeddings_api(texts, endpoint, api_key, model)
+        logger.info(f"Successfully embedded {len(texts)} texts")
+        return embeddings
+    except httpx.HTTPStatusError as e:
+        error_body = e.response.text[:500] if e.response.text else "(no body)"
+        raise RuntimeError(
+            f"Embeddings API returned {e.response.status_code}: {error_body}. "
+            f"Endpoint: {endpoint}, Model: {model}. "
+            f"Make sure Ollama is running and the model is pulled."
+        ) from e
+    except httpx.RequestError as e:
+        raise RuntimeError(
+            f"Failed to connect to embeddings endpoint {endpoint}: {e}. "
+            f"Make sure Ollama is running at {base_url}."
+        ) from e
     except Exception as e:
-        logger.warning(f"esperanto failed ({e}), falling back to OpenAI direct")
-        return await _embed_with_openai(texts)
+        raise RuntimeError(
+            f"Unexpected error during embedding: {e}. "
+            f"Endpoint: {endpoint}, Model: {model}"
+        ) from e
 
 
-async def _embed_with_esperanto(texts: list[str]) -> list[list[float]]:
-    """Use Esperanto's multi-provider abstraction."""
-    from esperanto import AIFactory
+async def _call_embeddings_api(
+    texts: list[str], url: str, api_key: str, model: str
+) -> list[list[float]]:
+    """Call OpenAI-compatible embeddings endpoint."""
+    batch_size = 100  # Process in batches to avoid payload size limits
+    all_embeddings: list[list[float]] = []
 
-    embedder = AIFactory.create_embedding(
-        provider=settings.embedding_provider,
-        model_name=settings.embedding_model,
-    )
-
-    response = await embedder.aembed(texts)
-    return [d.embedding for d in response.data]
-
-
-async def _embed_with_openai(texts: list[str]) -> list[list[float]]:
-    """Fallback: direct OpenAI embeddings API via httpx.
-
-    Tries proxy URL first. If proxy returns 404, retries with real OpenAI API.
-    """
-    import httpx
-
-    proxy_key = settings.openai_api_key
-    real_key = settings.openai_real_api_key
-    if not proxy_key and not real_key:
-        raise ValueError("No OpenAI API key configured for embeddings")
-
-    base_url = settings.openai_base_url.rstrip("/") if settings.openai_base_url else ""
-    proxy_url = f"{base_url}/embeddings" if base_url else None
-
-    # Try proxy first, then fall back to real OpenAI
-    attempts = []
-    if proxy_url and proxy_key:
-        attempts.append((proxy_url, proxy_key, "proxy"))
-    if real_key:
-        attempts.append((_OPENAI_DIRECT_URL, real_key, "direct"))
-    elif proxy_key and not proxy_url:
-        attempts.append((_OPENAI_DIRECT_URL, proxy_key, "direct"))
-
-    if not attempts:
-        raise ValueError("No embedding endpoint configured")
-
-    last_error = None
-    for url, key, label in attempts:
-        try:
-            result = await _call_embeddings_api(texts, url, key)
-            logger.info(f"Embedding via {label} ({url}) succeeded")
-            return result
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 404 and label == "proxy":
-                logger.warning(f"Proxy 404 on embeddings, trying direct OpenAI API...")
-                last_error = e
-                continue
-            raise
-        except Exception as e:
-            if label == "proxy":
-                logger.warning(f"Proxy embedding failed ({e}), trying direct...")
-                last_error = e
-                continue
-            raise
-
-    raise last_error or ValueError("All embedding attempts failed")
-
-
-async def _call_embeddings_api(texts: list[str], url: str, api_key: str) -> list[list[float]]:
-    """Call OpenAI-compatible embeddings endpoint with retry on 429."""
-    import asyncio
-    import httpx
-
-    all_embeddings: list[list[float]] = [[] for _ in texts]
-    batch_size = 100
-    max_retries = 3
-
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=120) as client:
         for i in range(0, len(texts), batch_size):
             batch = texts[i : i + batch_size]
 
-            for attempt in range(max_retries):
-                resp = await client.post(
-                    url,
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": settings.embedding_model,
-                        "input": batch,
-                    },
+            resp = await client.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "input": batch,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            # Parse OpenAI-compatible response format
+            if "data" not in data:
+                raise ValueError(
+                    f"Invalid response format (missing 'data' field): {str(data)[:200]}"
                 )
-                if resp.status_code == 429:
-                    wait = min(2 ** attempt * 2, 10)
-                    logger.warning(f"Rate limited (429), retrying in {wait}s (attempt {attempt+1}/{max_retries})")
-                    await asyncio.sleep(wait)
-                    continue
-                resp.raise_for_status()
-                data = resp.json()
-                for item in data["data"]:
-                    all_embeddings[i + item["index"]] = item["embedding"]
-                break
-            else:
-                resp.raise_for_status()  # raise the last 429
+
+            batch_embeddings = []
+            for item in data["data"]:
+                if "embedding" not in item:
+                    raise ValueError(
+                        f"Invalid response format (missing 'embedding' field): {str(item)[:200]}"
+                    )
+                batch_embeddings.append(item["embedding"])
+
+            all_embeddings.extend(batch_embeddings)
 
     return all_embeddings
 
 
 def get_embedding_model_name() -> str:
     """Return the current embedding model identifier."""
-    return f"{settings.embedding_provider}/{settings.embedding_model}"
+    return f"ollama/{settings.embeddings_model}"

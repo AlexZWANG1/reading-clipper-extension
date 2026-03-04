@@ -8,15 +8,11 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_service_role_key: str = ""
 
-    # Embedding provider
-    embedding_provider: str = "openai"  # openai / ollama / voyage / google
-    embedding_model: str = "text-embedding-3-small"
-    embedding_dimensions: int = 1536
-
-    # OpenAI (for embedding when provider=openai)
-    openai_api_key: str = ""
-    openai_base_url: str = ""  # proxy endpoint if needed
-    openai_real_api_key: str = ""  # real key, used when proxy doesn't support embeddings
+    # Embedding configuration (local Ollama by default)
+    embeddings_base_url: str = "http://127.0.0.1:11434/v1"
+    embeddings_model: str = "nomic-embed-text"
+    embeddings_api_key: str = "ollama"  # dummy key for Ollama compatibility
+    embeddings_dimensions: int = 768  # nomic-embed-text dimension
 
     # Content extraction
     url_engine: str = "jina"  # jina / beautifulsoup / firecrawl

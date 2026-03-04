@@ -8,7 +8,7 @@ import { executeTool } from "./toolExecutor.mjs";
 
 const MAX_TOOL_ROUNDS = 6;
 
-const SYSTEM_PROMPT = `You are a research assistant for the "Reading Clipper" app. You help users manage their reading knowledge base: cards, topics, thinking boards, documents, and sources.
+const SYSTEM_PROMPT = `You are a research assistant for the "Reading Clipper" app. You help users manage their reading knowledge base: cards, topics, thinking boards, documents, sources, and ingested materials.
 
 Answer in the same language the user uses. Be concise and helpful. Always ground your answers in the user's actual data — call tools to look up data before answering.
 
@@ -20,7 +20,9 @@ Answer in the same language the user uses. Be concise and helpful. Always ground
 
 2. **Cards** — The core knowledge unit. Fields: summary, key_points[], raw_snippet, note, source_name, source_url, topic_title/topic_id. Each card has a globally unique ID.
 
-3. **Thinking Boards** — Visual reasoning canvases. Each board contains:
+3. **Materials** — Ingested documents (URLs, PDFs, text) that have been processed into searchable chunks with embeddings. Use semantic_search to find information across these materials.
+
+4. **Thinking Boards** — Visual reasoning canvases. Each board contains:
    - **Nodes** of three types, forming a tree via parent_id:
      - **question** — A research question (priority, status)
      - **hypothesis** — A testable claim (claim text, hypo_state, confidence)
@@ -31,10 +33,29 @@ Answer in the same language the user uses. Be concise and helpful. Always ground
    Typical board tree: question → hypothesis (child via parent_id) → evidence (child via parent_id, linked to card via card_id).
    Edges express the semantic relationship (supports/refutes) between nodes.
 
-4. **Documents** — Story-building documents with questions, hypotheses, and story units.
-5. **Sources** — Information sources the user tracks.
+5. **Documents** — Story-building documents with questions, hypotheses, and story units.
+6. **Sources** — Information sources the user tracks.
 
 ## Tool Usage Patterns
+
+### Searching for Information
+
+**When to use semantic_search:**
+- User asks questions about their documents or materials
+- User wants to find information across their knowledge base
+- User asks "what do my documents say about X?"
+- User wants to research a topic using their ingested content
+
+**When to use search_cards:**
+- User wants to find specific cards they've created
+- User asks about their card collection
+- User wants to search card summaries and notes
+
+**Example workflow:**
+User: "What do my documents say about AI safety?"
+1. Use semantic_search with query="AI safety" to find relevant document chunks
+2. Synthesize the information from the search results
+3. Present the findings to the user with source references
 
 ### Creating a Card
 When the user asks to "generate a card", "create a card", "save this as a card":
@@ -127,9 +148,10 @@ When the user asks to create a node but does NOT specify its parent or relations
  * @param {Array}  opts.messages  - conversation history [{role, content}, ...]
  * @param {string} opts.userId
  * @param {Object} opts.supabase
+ * @param {string} opts.accessToken - JWT token for API calls
  * @returns {Promise<{reply: string, messages: Array, pendingActions?: Array, pendingToolCalls?: Array}>}
  */
-export async function chat({ messages, userId, supabase }) {
+export async function chat({ messages, userId, supabase, accessToken }) {
   const aiConfig = await createAIClientConfig(userId, supabase);
 
   const fullMessages = messages[0]?.role === "system"
@@ -188,7 +210,7 @@ export async function chat({ messages, userId, supabase }) {
     }
 
     // All read_only — execute immediately
-    const toolResults = await executeAllTools(toolCalls, { supabase, userId });
+    const toolResults = await executeAllTools(toolCalls, { supabase, userId, accessToken });
     currentMessages.push(...toolResults);
   }
 

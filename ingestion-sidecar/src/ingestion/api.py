@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from .config import settings
 from .db import get_client, close_client
 from .pipeline import run_ingestion
-from .embedder import embed_texts
+from .embedder import embed_texts, get_embedding_model_name
 
 logging.basicConfig(
     level=logging.INFO,
@@ -113,7 +113,7 @@ async def embed(req: EmbedRequest, x_sidecar_key: str | None = Header(None)):
     _verify_key(x_sidecar_key)
 
     if not req.texts:
-        return EmbedResponse(embeddings=[], model=settings.embedding_model)
+        return EmbedResponse(embeddings=[], model=get_embedding_model_name())
 
     if len(req.texts) > 500:
         raise HTTPException(status_code=400, detail="Max 500 texts per request")
@@ -122,11 +122,9 @@ async def embed(req: EmbedRequest, x_sidecar_key: str | None = Header(None)):
         embeddings = await embed_texts(req.texts)
     except Exception as e:
         err_msg = str(e)
-        if "insufficient_quota" in err_msg or "429" in err_msg:
-            raise HTTPException(status_code=502, detail=f"Embedding API quota exceeded: {err_msg}")
         raise HTTPException(status_code=502, detail=f"Embedding failed: {err_msg}")
 
     return EmbedResponse(
         embeddings=embeddings,
-        model=f"{settings.embedding_provider}/{settings.embedding_model}",
+        model=get_embedding_model_name(),
     )
