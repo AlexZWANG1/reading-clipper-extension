@@ -45,11 +45,10 @@ const MODEL_OVERVIEW = [
         items: [
             {
                 func: '卡片生成（纯文字）',
-                model: 'gpt-5-mini',
-                tier: 'standard',
+                model: 'gpt-5.2',
+                tier: 'complex',
                 api: 'Responses API',
-                promptType: 'Stored Prompt',
-                promptId: 'pmpt_692adaa1...',
+                promptType: 'Inline (highlight_summarizer)',
                 note: '文字高亮 → 结构化笔记卡片',
             },
             {
@@ -71,95 +70,32 @@ const MODEL_OVERVIEW = [
         ],
     },
     {
-        group: '文档结构',
-        color: '#818CF8',
-        items: [
-            {
-                func: '文档故事线生成',
-                model: 'gpt-5.2',
-                tier: 'complex',
-                api: 'Responses API',
-                promptType: 'Stored Prompt',
-                promptId: 'pmpt_692aef79...',
-                note: '生成问题、假设、故事单元结构',
-            },
-            {
-                func: '文档 Q&H 助手',
-                model: 'gpt-5.2',
-                tier: 'complex',
-                api: 'Responses API',
-                promptType: 'Stored Prompt',
-                note: '文档级问题与假设辅助',
-            },
-            {
-                func: '故事单元精炼',
-                model: 'gpt-5.2',
-                tier: 'complex',
-                api: 'Responses API',
-                promptType: 'Stored Prompt',
-                note: '优化故事单元内容',
-            },
-            {
-                func: '文档标题生成',
-                model: 'gpt-5-nano',
-                tier: 'simple',
-                api: 'Chat Completions',
-                promptType: '硬编码 Inline',
-                note: '快速生成文档标题，低成本',
-            },
-            {
-                func: '故事单元标题建议',
-                model: 'gpt-5-nano',
-                tier: 'simple',
-                api: 'Chat Completions',
-                promptType: '硬编码 Inline',
-                note: '批量生成单元标题候选',
-            },
-        ],
-    },
-    {
         group: '搜索与假设',
         color: '#FBBF24',
         items: [
             {
                 func: 'AI 语义搜索',
-                model: 'gpt-5-mini',
-                tier: 'standard',
-                api: 'Chat Completions',
+                model: 'gpt-5.2',
+                tier: 'complex',
+                api: 'Responses API',
                 promptType: 'Inline (search_agent)',
                 note: '从卡片列表中找出最相关结果',
             },
             {
                 func: '假设建议',
-                model: 'gpt-5-mini',
-                tier: 'standard',
-                api: 'Chat Completions',
+                model: 'gpt-5.2',
+                tier: 'complex',
+                api: 'Responses API',
                 promptType: 'Inline (hypothesis_suggest)',
                 note: '基于主题和卡片生成候选假设',
             },
             {
-                func: '问题建议',
-                model: 'gpt-5-mini',
-                tier: 'standard',
-                api: 'Chat Completions',
-                promptType: '硬编码 Inline',
-                note: '为文档生成研究问题候选',
-            },
-            {
                 func: '假设验证',
-                model: 'gpt-5-mini',
-                tier: 'standard',
+                model: 'gpt-5.2',
+                tier: 'complex',
                 api: 'Responses API',
                 promptType: 'Inline (hypothesis_evaluator) + file_search',
                 note: 'Vector Store 检索证据，评估假设支持度',
-            },
-            {
-                func: '来源匹配',
-                model: 'gpt-5-mini',
-                tier: 'standard',
-                api: 'Chat Completions',
-                promptType: '硬编码 Inline',
-                note: '将卡片匹配到已有来源，temp=0.1',
             },
         ],
     },
@@ -197,8 +133,6 @@ const MODEL_OVERVIEW = [
 
 const TIER_STYLES = {
     complex: { label: 'gpt-5.2', bg: 'rgba(129,140,248,0.15)', color: '#818CF8', border: 'rgba(129,140,248,0.3)' },
-    standard: { label: 'gpt-5-mini', bg: 'rgba(52,211,153,0.12)', color: '#34D399', border: 'rgba(52,211,153,0.25)' },
-    simple: { label: 'gpt-5-nano', bg: 'rgba(251,191,36,0.12)', color: '#FBBF24', border: 'rgba(251,191,36,0.25)' },
     user: { label: '用户配置', bg: 'rgba(96,165,250,0.12)', color: '#60A5FA', border: 'rgba(96,165,250,0.25)' },
 };
 
@@ -242,9 +176,7 @@ function ModelOverviewCard() {
                             <div key={tier} className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-2)' }}>
                                 <span className="px-2 py-0.5 rounded-full font-mono" style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>{s.label}</span>
                                 <span>
-                                    {tier === 'complex' && '旗舰 · 复杂推理 / Vision'}
-                                    {tier === 'standard' && '标准 · 快速低成本'}
-                                    {tier === 'simple' && '轻量 · 简单指令'}
+                                    {tier === 'complex' && '旗舰模型 · 所有AI功能'}
                                     {tier === 'user' && '跟随用户 API 设置'}
                                 </span>
                             </div>

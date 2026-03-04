@@ -45,7 +45,7 @@ async function request(endpoint, options = {}) {
 
   if (!response.ok) {
     throw new ApiError(
-      data.message || data.error || '请求失败',
+      data.message || data.detail || data.error || '请求失败',
       response.status,
       data
     );

@@ -322,7 +322,7 @@ function AddCardSection({ onCardAdded }) {
           onClick={handleSubmit}
           disabled={!canSubmit}
           className="flex items-center gap-2 px-4 py-2.5 font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ background: 'var(--accent-600)', color: 'var(--text-0)' }}
+          style={{ background: 'var(--accent-600)', color: '#ffffff' }}
         >
           {loading ? (
             <><Loader2 className="w-4 h-4 animate-spin" />{loadingText || '处理中...'}</>

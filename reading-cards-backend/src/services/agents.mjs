@@ -6,6 +6,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import { buildEndpoint, getApiKey, getRuntimeMode } from "./aiRuntime.mjs";
 
 // 确保环境变量已加载（ES 模块 import 先于 server.mjs 的 dotenv.config() 执行）
 const __agents_file = fileURLToPath(import.meta.url);
@@ -80,59 +81,23 @@ function getPromptTemplate(promptId) {
 // 初始化时加载配置
 loadPromptsConfig();
 
-// 注意：环境变量在 server.mjs 中统一加载，这里直接读取即可
-// 请在 .env 文件中设置 OPENAI_API_KEY
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+// ========= API 配置（通过 aiRuntime 统一路由） =========
+const OPENAI_API_KEY = getApiKey("openai");
+const OPENAI_RESPONSES_URL = buildEndpoint("openai", "responses");
 
-// ========= 调试：启动时检查 OPENAI_API_KEY =========
-console.log("=== OPENAI_API_KEY 调试（agents.mjs） ===");
-console.log("是否存在:", !!OPENAI_API_KEY);
-console.log(
-  "前 15 个字符:",
-  OPENAI_API_KEY ? OPENAI_API_KEY.substring(0, 15) + "..." : "未设置"
-);
-console.log("是否包含占位符 'your_openai':", OPENAI_API_KEY ? OPENAI_API_KEY.includes("your_openai") : "N/A");
-console.log("来源:", process.env.OPENAI_API_KEY ? "环境变量" : "硬编码");
+// ========= 调试：启动时检查 API 配置 =========
+console.log("=== AI Runtime 调试（agents.mjs） ===");
+console.log("运行模式:", getRuntimeMode());
+console.log("API 端点:", OPENAI_RESPONSES_URL);
+console.log("API Key 前 15 字符:", OPENAI_API_KEY ? OPENAI_API_KEY.substring(0, 15) + "..." : "未设置");
 console.log("=========================================");
-// ============================================
-const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
 
-// Hypothesis Evaluator Prompt ID（V2，使用 file_search）
-const HYPOTHESIS_EVAL_PROMPT_ID = process.env.HYPOTHESIS_EVAL_PROMPT_ID || "pmpt_69354e1907e88195adeca241fa6de2f30b9261dea389a76f";
-
-// ========= 模型配置（根据 OpenAI 官方文档优化）=========
-// 根据任务复杂度选择合适的模型：
-// - gpt-5.2: 最新旗舰，复杂推理、多步骤任务、Vision
-// - gpt-5.2: 快速低成本推理（400K上下文，支持 file_search）
-// - gpt-5-nano: 高吞吐量、简单指令跟随
-const OPENAI_MODEL = "gpt-5.2"; // 默认用于 Stored Prompt（Agent1 文本、Search Agent）
-const OPENAI_MODEL_COMPLEX = "gpt-5.2"; // 用于复杂推理任务（Agent2、文档 Q/H、Story Unit Refiner）
-const OPENAI_MODEL_SIMPLE = "gpt-5-nano"; // 用于简单任务（标题生成、单元标题）
-const HIGHLIGHT_SUMMARIZER_PROMPT_ID = "pmpt_692adaa16b2081909364455f9306be420aa65b20d7fe063b";
-const AGENT2_PROMPT_ID = "pmpt_692aef7907808197b03ae162b8fdd8d90ef09436c71562ae";
+// ========= 模型配置 =========
+const OPENAI_MODEL = "gpt-5.2"; // 用于所有 AI 任务（统一使用旗舰模型）
 
 /**
- * 从 Responses API 的 output 数组中兜底提取文本
- */
-function extractTextFromResponse(data) {
-  const outputs = data.output || [];
-  const parts = [];
-  for (const item of outputs) {
-    if (!item || !Array.isArray(item.content)) continue;
-    for (const c of item.content) {
-      if (c.type === "output_text" && typeof c.text === "string") {
-        parts.push(c.text);
-      }
-    }
-  }
-  return parts.join("\n\n");
-}
-
-/**
- * 调用 OpenAI Responses API 上的 Reading Highlight Summarizer stored prompt
- * 
- * @param {Object} params
+ * 调用纯文本卡片生成（使用 Responses API + inline instructions）
+ *
  * @param {string} params.snippet - 原始划线文本
  * @param {string} [params.preSummary] - 用户提供的一句话总结
  * @param {string} [params.sourceName] - 来源名称
@@ -140,40 +105,67 @@ function extractTextFromResponse(data) {
  * @returns {Promise<string>} JSON 字符串（Agent1 的输出）
  */
 async function callHighlightSummarizer({ snippet, preSummary, sourceName, sourceUrl }) {
-  // ========= 调试：每次调用时检查 key =========
-  console.log("=== callHighlightSummarizer 调用检查 ===");
-  console.log("OPENAI_API_KEY 是否存在:", !!OPENAI_API_KEY);
-  if (OPENAI_API_KEY) {
-    console.log("OPENAI_API_KEY 前10个字符:", OPENAI_API_KEY.substring(0, 10) + "...");
-    console.log("OPENAI_API_KEY 是否看起来像占位符:",
-      OPENAI_API_KEY.includes("your_openai") ||
-      OPENAI_API_KEY.includes("your_ope") ||
-      OPENAI_API_KEY === "your_openai_api_key_here"
-    );
-  }
-  console.log("=======================================");
-  // ============================================
-
   if (!OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY is not set in environment variables");
   }
 
-  const inputText = [
-    `topic: -`,  // 目前没有 topic，先统一传 '-' 占位
-    `pre_summary: ${preSummary || "(none)"}`,
-    `source_name: ${sourceName || "(none)"}`,
-    `source_url: ${sourceUrl || "(none)"}`,
-    "",
-    "snippet:",
-    '"""',
-    snippet,
-    '"""'
-  ].join("\n");
+  // 从配置加载 prompt，兜底使用硬编码
+  let basePrompt = getPromptTemplate("highlight_summarizer");
+  if (!basePrompt) {
+    basePrompt = `You are a "Reading Highlight Summarizer".
+
+Goal:
+Given an original snippet (the text the user just highlighted), generate a clean, standardized note in JSON format.
+
+Output format:
+Return ONLY valid JSON with these fields:
+{
+  "title": "SHORT_CATCHY_TITLE",
+  "fact_or_view": "fact" or "view",
+  "summary": "ONE_OR_TWO_SENTENCES_SUMMARY",
+  "key_points": ["bullet point 1", "bullet point 2", "bullet point 3"],
+  "source_name": "SOURCE_NAME",
+  "source_url": "SOURCE_URL",
+  "raw_snippet": "original snippet here"
+}
+
+Detailed rules:
+1. title: Provide a short, catchy title (3-8 words) identifying the core concept.
+2. fact_or_view: Write either "fact" (objective reality or data) or "view" (opinions, hypotheses, and subjective analysis).
+3. summary: 1–2 sentences. Short, factual, focusing on what this snippet actually says or implies.
+4. key_points: 2–5 bullets is enough. Each bullet should be short and concrete.
+5. source_name: Use provided source_name if available, otherwise write null.
+6. source_url: Use provided source_url if available, otherwise write null.
+7. raw_snippet: The original snippet text.
+
+Language: Use the same language as the snippet.`;
+  }
+
+  // 构建用户输入
+  const userInput = `Topic: -
+Pre-summary: ${preSummary || "(none)"}
+Source Name: ${sourceName || "(none)"}
+Source URL: ${sourceUrl || "(none)"}
+
+Original snippet:
+"""
+${snippet}
+"""
+
+Please generate a standardized note in JSON format.`;
 
   const payload = {
     model: OPENAI_MODEL,
-    prompt: { id: HIGHLIGHT_SUMMARIZER_PROMPT_ID },
-    input: inputText
+    input: [
+      {
+        role: "user",
+        content: [
+          { type: "input_text", text: userInput }
+        ]
+      }
+    ],
+    instructions: basePrompt,
+    temperature: 0.3
   };
 
   // 添加超时和重试逻辑
@@ -184,16 +176,12 @@ async function callHighlightSummarizer({ snippet, preSummary, sourceName, source
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       if (attempt > 0) {
-        console.log(`⚠️ 第 ${attempt} 次重试 OpenAI API 调用...`);
-        // 等待后重试（递增延迟：1秒、2秒）
+        console.log(`⚠️ 第 ${attempt} 次重试 Responses API 调用...`);
         await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
       }
 
-      // 创建 AbortController 用于超时控制
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        controller.abort();
-      }, timeoutMs);
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
         resp = await fetch(OPENAI_RESPONSES_URL, {
@@ -207,8 +195,6 @@ async function callHighlightSummarizer({ snippet, preSummary, sourceName, source
         });
 
         clearTimeout(timeoutId);
-
-        // 如果成功，跳出重试循环
         break;
       } catch (fetchError) {
         clearTimeout(timeoutId);
@@ -218,14 +204,13 @@ async function callHighlightSummarizer({ snippet, preSummary, sourceName, source
       const errorCode = fetchError.code || fetchError.name || 'UNKNOWN';
       const errorMessage = fetchError.message || String(fetchError);
 
-      console.error(`❌ OpenAI API 网络请求失败（尝试 ${attempt + 1}/${maxRetries + 1}）:`);
+      console.error(`❌ Responses API 网络请求失败（尝试 ${attempt + 1}/${maxRetries + 1}）:`);
       console.error(`   错误代码: ${errorCode}`);
       console.error(`   错误信息: ${errorMessage}`);
 
-      // 如果是最后一次尝试，抛出详细错误
       if (attempt === maxRetries) {
         throw new Error(
-          `OpenAI API 网络请求失败（已重试 ${maxRetries} 次）\n` +
+          `Responses API 网络请求失败（已重试 ${maxRetries} 次）\n` +
           `错误代码: ${errorCode}\n` +
           `错误信息: ${errorMessage}\n` +
           `\n可能原因：\n` +
@@ -245,18 +230,71 @@ async function callHighlightSummarizer({ snippet, preSummary, sourceName, source
 
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");
-    throw new Error(`OpenAI API 请求失败：${resp.status} - ${text}`);
+    throw new Error(`Responses API 请求失败：${resp.status} - ${text}`);
   }
 
   const data = await resp.json();
 
-  // Responses API 的推荐用法：先看 output_text，再兜底 output[]
-  const textOutput = data.output_text || extractTextFromResponse(data);
-  if (!textOutput) {
-    throw new Error("OpenAI Responses API 返回空 output_text");
+  console.log("=== API 响应 keys ===", Object.keys(data));
+
+  const content = extractAIContent(data);
+  if (!content) {
+    console.error("❌ 无法提取 AI 内容，完整响应:", JSON.stringify(data).substring(0, 500));
+    throw new Error("API 返回空内容");
   }
 
-  return textOutput;
+  return content;
+}
+
+/**
+ * 统一提取 AI 响应文本（兼容 Responses API 和 Chat Completions 两种格式）
+ *
+ * Responses API: data.output_text 或 data.output[].content[].text
+ * Chat Completions: data.choices[0].message.content
+ */
+function extractAIContent(data) {
+  // 1. Responses API: output_text（最优先）
+  if (data.output_text) return data.output_text;
+
+  // 2. Responses API: output 数组
+  if (Array.isArray(data.output)) {
+    const parts = [];
+    for (const item of data.output) {
+      if (!item) continue;
+      // output_text 类型的 block
+      if (item.type === "message" && Array.isArray(item.content)) {
+        for (const c of item.content) {
+          if ((c.type === "output_text" || c.type === "text") && typeof c.text === "string") {
+            parts.push(c.text);
+          }
+        }
+      }
+      // 直接有 content 数组（旧格式兼容）
+      if (!item.type && Array.isArray(item.content)) {
+        for (const c of item.content) {
+          if (c.type === "text" && typeof c.text === "string") {
+            parts.push(c.text);
+          }
+        }
+      }
+    }
+    if (parts.length > 0) return parts.join("\n\n");
+  }
+
+  // 3. Chat Completions 格式（代理可能返回这种格式）
+  if (Array.isArray(data.choices) && data.choices.length > 0) {
+    const msg = data.choices[0]?.message?.content;
+    if (msg) return msg;
+    // 某些代理用 text 字段
+    const txt = data.choices[0]?.text;
+    if (txt) return txt;
+  }
+
+  // 4. 其他兜底
+  if (typeof data.content === "string") return data.content;
+  if (typeof data.text === "string") return data.text;
+
+  return null;
 }
 
 /**
@@ -391,8 +429,8 @@ function parseSnippetNoteMarkdown(markdownText) {
 }
 
 /**
- * 使用 Chat API 处理包含图片的卡片生成请求
- * 替代 stored prompt，因为 stored prompt 可能不支持多模态或 input 格式受限
+ * 使用 Responses API 处理包含图片的卡片生成请求
+ * 支持多模态输入（文本 + 图片）
  */
 async function callHighlightSummarizerWithImage({ snippetText, imageData, preSummary, sourceName, sourceUrl }) {
   if (!OPENAI_API_KEY) {
@@ -420,40 +458,41 @@ Please extract the following fields and return them in JSON format:
 - Source Name: ${sourceName || "(none)"}
 - Source URL: ${sourceUrl || "(none)"}`;
 
-  const systemPrompt = basePrompt.replace("{{USER_METADATA}}", userMetadata);
+  const instructions = basePrompt.replace("{{USER_METADATA}}", userMetadata);
 
-  const userContent = [];
+  // 构建 input content 数组（Responses API 格式）
+  const contentParts = [];
 
   // 添加文本内容
   if (snippetText && snippetText.trim()) {
-    userContent.push({ type: "text", text: snippetText });
+    contentParts.push({ type: "input_text", text: snippetText });
   } else {
     // 如果只有图片，添加提示词引导模型
-    userContent.push({ type: "text", text: "Please analyze this image and extract key information." });
+    contentParts.push({ type: "input_text", text: "Please analyze this image and extract key information." });
   }
 
   // 添加图片内容
   if (imageData) {
-    userContent.push({
-      type: "image_url",
-      image_url: {
-        url: imageData, // 应该是 data:image/png;base64,... 格式
-        detail: "high" // 显式指定高清晰度模式，对应用户对高质量模型的要求
-      }
+    contentParts.push({
+      type: "input_image",
+      image_url: imageData // 应该是 data:image/png;base64,... 格式
     });
   }
 
   const payload = {
-    model: OPENAI_MODEL_COMPLEX, // Vision 卡片生成需要旗舰模型（gpt-5.2 支持 Vision）
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userContent }
+    model: OPENAI_MODEL, // Vision 卡片生成使用 gpt-5.2
+    input: [
+      {
+        role: "user",
+        content: contentParts
+      }
     ],
-    response_format: { type: "json_object" },
+    instructions: instructions,
+    text: { format: { type: "json_object" } },
     temperature: 0.3
   };
 
-  // 添加超时和重试逻辑 (复用之前的逻辑结构)
+  // 添加超时和重试逻辑
   const maxRetries = 2;
   const timeoutMs = 60000; // 图片处理可能稍慢，给 60 秒
   let resp;
@@ -461,7 +500,7 @@ Please extract the following fields and return them in JSON format:
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       if (attempt > 0) {
-        console.log(`⚠️ 第 ${attempt} 次重试 Vision API 调用...`);
+        console.log(`⚠️ 第 ${attempt} 次重试 Vision Responses API 调用...`);
         await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
       }
 
@@ -469,7 +508,7 @@ Please extract the following fields and return them in JSON format:
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
-        resp = await fetch(OPENAI_CHAT_URL, {
+        resp = await fetch(OPENAI_RESPONSES_URL, {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${OPENAI_API_KEY}`,
@@ -485,18 +524,18 @@ Please extract the following fields and return them in JSON format:
         throw fetchError;
       }
     } catch (error) {
-      console.error(`❌ Vision API 请求失败（尝试 ${attempt + 1}）:`, error.message);
+      console.error(`❌ Vision Responses API 请求失败（尝试 ${attempt + 1}）:`, error.message);
       if (attempt === maxRetries) throw error;
     }
   }
 
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");
-    throw new Error(`OpenAI Chat API (Vision) request failed: ${resp.status} - ${text}`);
+    throw new Error(`Vision Responses API request failed: ${resp.status} - ${text}`);
   }
 
   const data = await resp.json();
-  const content = data.choices?.[0]?.message?.content;
+  const content = extractAIContent(data);
 
   if (!content) {
     throw new Error("OpenAI returned empty content");
@@ -507,12 +546,13 @@ Please extract the following fields and return them in JSON format:
 
 /**
  * Agent1：卡片级变量生成（summary / key_points / source_* / raw_snippet）
- * 
- * 调用 Reading Highlight Summarizer stored prompt
+ *
+ * 使用 Responses API + inline instructions（从 prompts.config.json 加载）
  * 兼容 JSON 和 Markdown 两种输出格式
- * 
+ *
  * @param {Object} params
  * @param {string} params.snippet - 原始划线文本
+ * @param {string} [params.imageData] - 图片数据（base64）
  * @param {string} [params.preSummary] - 用户提供的一句话总结
  * @param {string} [params.sourceName] - 来源名称
  * @param {string} [params.sourceUrl] - 来源 URL
@@ -542,7 +582,7 @@ export async function runAgent1({
       sourceUrl
     });
   } else {
-    // === 纯文本，使用原有的 Stored Prompt ===
+    // === 纯文本，使用 Responses API + inline instructions ===
     raw = await callHighlightSummarizer({
       snippet: text,
       preSummary,
@@ -633,10 +673,44 @@ export async function runAgent2({ topicTitle, cards, docQuestions, docHypotheses
     JSON.stringify(cards, null, 2)
   ];
 
+  const systemPrompt = `You are a Document Intelligence Assistant. Given a set of reading cards (highlights and notes from a document or topic), generate a structured document-level analysis.
+
+Your task is to:
+1. Generate 3-5 key doc_questions: important research questions or inquiry directions suggested by the cards.
+2. Generate 3-5 doc_hypotheses: working hypotheses or key claims that could be explored.
+3. Generate story_units: a logical narrative structure grouping the cards into coherent sections.
+
+Output ONLY valid JSON with this structure:
+{
+  "doc_questions": [
+    { "id": "Q1", "text": "question text" }
+  ],
+  "doc_hypotheses": [
+    { "id": "H1", "question_id": "Q1", "text": "hypothesis text" }
+  ],
+  "story_units": [
+    {
+      "unit_id": "U1",
+      "title": "unit title",
+      "core_point": "main point of this unit",
+      "card_ids": ["card_id_1"],
+      "notes_for_writer": []
+    }
+  ]
+}
+
+Use the same language as the input cards.`;
+
   const payload = {
-    model: OPENAI_MODEL_COMPLEX, // Agent2 是复杂推理任务，使用 gpt-5.1
-    prompt: { id: AGENT2_PROMPT_ID },
-    input: inputLines.join("\n")
+    model: OPENAI_MODEL,
+    input: [
+      {
+        role: "user",
+        content: [{ type: "input_text", text: inputLines.join("\n") }]
+      }
+    ],
+    instructions: systemPrompt,
+    text: { format: { type: "json_object" } }
   };
 
   const resp = await fetch(OPENAI_RESPONSES_URL, {
@@ -654,7 +728,7 @@ export async function runAgent2({ topicTitle, cards, docQuestions, docHypotheses
   }
 
   const data = await resp.json();
-  const textOutput = data.output_text || extractTextFromResponse(data);
+  const textOutput = extractAIContent(data);
   if (!textOutput) {
     throw new Error("Agent2 返回空 output_text");
   }
@@ -741,12 +815,15 @@ ${JSON.stringify(compactCards, null, 2)}
 
   const payload = {
     model: OPENAI_MODEL, // Search Agent 使用 gpt-5.2（成本优化的推理）
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userMessage }
+    input: [
+      {
+        role: "user",
+        content: [{ type: "input_text", text: userMessage }]
+      }
     ],
-    temperature: 0.3, // 降低随机性，提高一致性
-    response_format: { type: "json_object" } // 强制 JSON 输出
+    instructions: systemPrompt,
+    text: { format: { type: "json_object" } },
+    temperature: 0.3 // 降低随机性，提高一致性
   };
 
   // ========= 调试日志 =========
@@ -772,7 +849,7 @@ ${JSON.stringify(compactCards, null, 2)}
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
-        resp = await fetch(OPENAI_CHAT_URL, {
+        resp = await fetch(OPENAI_RESPONSES_URL, {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${OPENAI_API_KEY}`,
@@ -810,7 +887,7 @@ ${JSON.stringify(compactCards, null, 2)}
   const data = await resp.json();
 
   // Chat API 返回格式：{ choices: [{ message: { content: "..." } }] }
-  const textOutput = data.choices?.[0]?.message?.content;
+  const textOutput = extractAIContent(data);
 
   if (!textOutput) {
     throw new Error("Search Agent 返回空内容");
@@ -901,14 +978,13 @@ ${combinedContent}
 
   try {
     const payload = {
-      model: OPENAI_MODEL_SIMPLE, // 生成标题是简单任务，使用 gpt-5-nano（高吞吐量）
-      messages: [
+      model: OPENAI_MODEL,
+      input: [
         {
           role: "user",
-          content: prompt
+          content: [{ type: "input_text", text: prompt }]
         }
       ]
-      // gpt-5-nano 只支持 model 和 messages 参数，不支持其他任何参数
     };
 
     const controller = new AbortController();
@@ -916,7 +992,7 @@ ${combinedContent}
 
     let resp;
     try {
-      resp = await fetch(OPENAI_CHAT_URL, {
+      resp = await fetch(OPENAI_RESPONSES_URL, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${OPENAI_API_KEY}`,
@@ -941,7 +1017,7 @@ ${combinedContent}
     }
 
     const data = await resp.json();
-    const title = data.choices?.[0]?.message?.content?.trim();
+    const title = extractAIContent(data)?.trim();
 
     if (!title) {
       throw new Error("OpenAI 返回空标题");
@@ -1025,13 +1101,18 @@ export async function suggestQuestions({ topicTitle, cardSummaries }) {
 
   try {
     const payload = {
-      model: OPENAI_MODEL, // 建议问题需要一定推理能力，使用 gpt-5.2
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.7,
-      response_format: { type: "json_object" }
+      model: OPENAI_MODEL,
+      input: [
+        {
+          role: "user",
+          content: [{ type: "input_text", text: prompt }]
+        }
+      ],
+      text: { format: { type: "json_object" } },
+      temperature: 0.7
     };
 
-    const resp = await fetch(OPENAI_CHAT_URL, {
+    const resp = await fetch(OPENAI_RESPONSES_URL, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${OPENAI_API_KEY}`,
@@ -1045,7 +1126,7 @@ export async function suggestQuestions({ topicTitle, cardSummaries }) {
     }
 
     const data = await resp.json();
-    const content = data.choices?.[0]?.message?.content;
+    const content = extractAIContent(data);
     const result = JSON.parse(content);
 
     return Array.isArray(result.questions) ? result.questions : [];
@@ -1104,13 +1185,18 @@ ${context}
 
   try {
     const payload = {
-      model: OPENAI_MODEL, // 建议问题需要一定推理能力，使用 gpt-5.2
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.7,
-      response_format: { type: "json_object" }
+      model: OPENAI_MODEL,
+      input: [
+        {
+          role: "user",
+          content: [{ type: "input_text", text: prompt }]
+        }
+      ],
+      text: { format: { type: "json_object" } },
+      temperature: 0.7
     };
 
-    const resp = await fetch(OPENAI_CHAT_URL, {
+    const resp = await fetch(OPENAI_RESPONSES_URL, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${OPENAI_API_KEY}`,
@@ -1124,7 +1210,7 @@ ${context}
     }
 
     const data = await resp.json();
-    const content = data.choices?.[0]?.message?.content;
+    const content = extractAIContent(data);
     const result = JSON.parse(content);
 
     return Array.isArray(result.hypotheses) ? result.hypotheses : [];
@@ -1169,13 +1255,17 @@ export async function suggestUnitTitles({ corePoint, cardSummaries }) {
 
   try {
     const payload = {
-      model: OPENAI_MODEL_SIMPLE, // 建议单元标题是简单任务，使用 gpt-5-nano（高吞吐量）
-      messages: [{ role: "user", content: prompt }],
-      // gpt-5-nano 不支持 temperature 参数，只支持基本参数
-      response_format: { type: "json_object" }
+      model: OPENAI_MODEL,
+      input: [
+        {
+          role: "user",
+          content: [{ type: "input_text", text: prompt }]
+        }
+      ],
+      text: { format: { type: "json_object" } }
     };
 
-    const resp = await fetch(OPENAI_CHAT_URL, {
+    const resp = await fetch(OPENAI_RESPONSES_URL, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${OPENAI_API_KEY}`,
@@ -1189,7 +1279,7 @@ export async function suggestUnitTitles({ corePoint, cardSummaries }) {
     }
 
     const data = await resp.json();
-    const content = data.choices?.[0]?.message?.content;
+    const content = extractAIContent(data);
     const result = JSON.parse(content);
 
     return Array.isArray(result.titles) ? result.titles : [];
@@ -1200,10 +1290,6 @@ export async function suggestUnitTitles({ corePoint, cardSummaries }) {
 }
 
 // ========= 新增：文档级 Q/H Assistant =========
-// stored prompt ID: pmpt_693403a72648819381047b969a1e493b020b8d07d3b58032
-
-const DOC_QH_ASSISTANT_PROMPT_ID = "pmpt_693403a72648819381047b969a1e493b020b8d07d3b58032";
-
 /**
  * 文档级问题 & 假设 AI 微调
  * 
@@ -1241,10 +1327,47 @@ export async function runDocQHAssistant({
     JSON.stringify(cards, null, 2)
   ];
 
+  const docQHSystemPrompt = `You are a Document Intelligence Assistant specializing in refining research questions and hypotheses.
+
+Given:
+- A topic title
+- Current doc_questions (list of research questions)
+- Current doc_hypotheses (list of working hypotheses)
+- A set of reading cards
+- A mode: "questions" (only update questions), "hypotheses" (only update hypotheses), or "both"
+
+Based on the cards and current state, generate an improved set of doc_questions and/or doc_hypotheses.
+
+Rules:
+1. Keep existing good questions/hypotheses, improve or add new ones based on card content.
+2. Questions should be clear, researchable inquiry directions.
+3. Hypotheses should be testable claims related to the questions.
+4. If mode is "questions", only update doc_questions (return existing doc_hypotheses unchanged).
+5. If mode is "hypotheses", only update doc_hypotheses (return existing doc_questions unchanged).
+6. If mode is "both", update both.
+
+Output ONLY valid JSON:
+{
+  "doc_questions": [
+    { "id": "Q1", "text": "..." }
+  ],
+  "doc_hypotheses": [
+    { "id": "H1", "question_id": "Q1", "text": "..." }
+  ]
+}
+
+Use the same language as the input.`;
+
   const payload = {
-    model: OPENAI_MODEL_COMPLEX, // 文档 Q/H Assistant 是复杂推理任务，使用 gpt-5.1
-    prompt: { id: DOC_QH_ASSISTANT_PROMPT_ID },
-    input: inputLines.join("\n")
+    model: OPENAI_MODEL,
+    input: [
+      {
+        role: "user",
+        content: [{ type: "input_text", text: inputLines.join("\n") }]
+      }
+    ],
+    instructions: docQHSystemPrompt,
+    text: { format: { type: "json_object" } }
   };
 
   console.log("=== runDocQHAssistant 调用 ===");
@@ -1268,7 +1391,7 @@ export async function runDocQHAssistant({
   }
 
   const data = await resp.json();
-  const textOutput = data.output_text || extractTextFromResponse(data);
+  const textOutput = extractAIContent(data);
   if (!textOutput) {
     throw new Error("Q/H Assistant 返回空 output_text");
   }
@@ -1292,10 +1415,6 @@ export async function runDocQHAssistant({
 }
 
 // ========= 新增：Story Unit Refiner =========
-// stored prompt ID: pmpt_693403c16c48819689860992e10908c20e8f621eb6e784c2
-
-const STORY_UNIT_REFINER_PROMPT_ID = "pmpt_693403c16c48819689860992e10908c20e8f621eb6e784c2";
-
 /**
  * 单个 Story Unit 的 AI 改写
  * 
@@ -1334,10 +1453,28 @@ export async function runStoryUnitRefiner({
     JSON.stringify(cards, null, 2)
   ];
 
+  const storyRefinerPrompt = `You are a Document Story Unit Refiner. Given a topic, its research questions, hypotheses, a target story unit, and associated cards, refine and improve the story unit.
+
+Output ONLY valid JSON:
+{
+  "unit_id": "same as input unit_id",
+  "title": "refined title (concise, meaningful)",
+  "core_point": "main point of this unit in 1-2 sentences",
+  "notes_for_writer": ["note 1", "note 2"]
+}
+
+Use the same language as the input.`;
+
   const payload = {
-    model: OPENAI_MODEL_COMPLEX, // Story Unit Refiner 是复杂推理任务，使用 gpt-5.1
-    prompt: { id: STORY_UNIT_REFINER_PROMPT_ID },
-    input: inputLines.join("\n")
+    model: OPENAI_MODEL,
+    input: [
+      {
+        role: "user",
+        content: [{ type: "input_text", text: inputLines.join("\n") }]
+      }
+    ],
+    instructions: storyRefinerPrompt,
+    text: { format: { type: "json_object" } }
   };
 
   console.log("=== runStoryUnitRefiner 调用 ===");
@@ -1361,7 +1498,7 @@ export async function runStoryUnitRefiner({
   }
 
   const data = await resp.json();
-  const textOutput = data.output_text || extractTextFromResponse(data);
+  const textOutput = extractAIContent(data);
   if (!textOutput) {
     throw new Error("Story Unit Refiner 返回空 output_text");
   }
@@ -1410,10 +1547,6 @@ export async function runHypothesisEvaluatorV2({
     throw new Error("OPENAI_API_KEY is not set");
   }
 
-  if (!HYPOTHESIS_EVAL_PROMPT_ID) {
-    throw new Error("HYPOTHESIS_EVAL_PROMPT_ID is not set");
-  }
-
   if (!vectorStoreId) {
     throw new Error("vectorStoreId is required");
   }
@@ -1440,12 +1573,22 @@ export async function runHypothesisEvaluatorV2({
     inputLines.push("If file_search returns other cards, ignore them completely. Only include evidence from the allowed cards.");
   }
 
-  // 构建 payload，确保格式正确
-  // gpt-5.2 支持 file_search，无需降级到旧模型
+  // 从配置加载 system prompt
+  const hypothesisEvalPrompt = getPromptTemplate("hypothesis_evaluator");
+  if (!hypothesisEvalPrompt) {
+    throw new Error("hypothesis_evaluator prompt 未找到，请检查 prompts.config.json");
+  }
+
+  // 构建 payload（Responses API inline 格式 + file_search 工具）
   const payload = {
-    model: OPENAI_MODEL, // gpt-5.2 支持 file_search
-    prompt: { id: HYPOTHESIS_EVAL_PROMPT_ID },
-    input: inputLines.join("\n"),
+    model: OPENAI_MODEL,
+    input: [
+      {
+        role: "user",
+        content: [{ type: "input_text", text: inputLines.join("\n") }]
+      }
+    ],
+    instructions: hypothesisEvalPrompt,
     tools: [
       {
         type: "file_search",
@@ -1455,9 +1598,6 @@ export async function runHypothesisEvaluatorV2({
   };
 
   // 验证 payload
-  if (!payload.prompt || !payload.prompt.id) {
-    throw new Error("HYPOTHESIS_EVAL_PROMPT_ID 未设置");
-  }
   if (!payload.tools || !Array.isArray(payload.tools) || payload.tools.length === 0) {
     throw new Error("tools 配置无效");
   }
@@ -1539,39 +1679,14 @@ export async function runHypothesisEvaluatorV2({
   console.log("Has output:", !!data.output);
   console.log("=================");
 
-  // ========== 提取模型文本输出 ==========
-  let textOutput = data.output_text;
-
-  // 新版 Responses API：output 是一个数组，message.content 里有 output_text
-  if (!textOutput && Array.isArray(data.output)) {
-    const textParts = [];
-
-    for (const item of data.output) {
-      // 我们只关心 type === "message" 的条目
-      if (item.type === "message" && Array.isArray(item.content)) {
-        for (const block of item.content) {
-          if (block.type === "output_text" && typeof block.text === "string") {
-            textParts.push(block.text);
-          }
-        }
-      }
-    }
-
-    if (textParts.length > 0) {
-      textOutput = textParts.join("\n\n");
-    }
-  }
-
-  // 兜底：某些版本可能直接在 output 上挂字符串
-  if (!textOutput && typeof data.output === "string") {
-    textOutput = data.output;
-  }
+  // ========== 提取模型文本输出（兼容 Responses API + Chat Completions） ==========
+  const textOutput = extractAIContent(data);
 
   if (!textOutput) {
-    console.error("❌ 无法提取 output_text");
+    console.error("❌ 无法提取 AI 内容");
     console.error("Full Response:", JSON.stringify(data, null, 2));
     throw new Error(
-      "Hypothesis Evaluator V2 返回空的 output_text。响应数据: " +
+      "Hypothesis Evaluator V2 返回空内容。响应数据: " +
       JSON.stringify(data).substring(0, 500)
     );
   }
@@ -1896,12 +2011,8 @@ export async function runFullDocumentCardGenerator({
   const systemPrompt = getFullDocumentSystemPrompt();
 
   const payload = {
-    model: OPENAI_MODEL_COMPLEX, // 使用 gpt-5.1 处理复杂文档分析任务
+    model: OPENAI_MODEL,
     input: [
-      {
-        role: "system",
-        content: systemPrompt
-      },
       {
         role: "user",
         content: [
@@ -1915,15 +2026,15 @@ export async function runFullDocumentCardGenerator({
           }
         ]
       }
-    ]
+    ],
+    instructions: systemPrompt
   };
 
   console.log("=== 请求 payload（部分）===");
   console.log("model:", payload.model);
   console.log("input[0].role:", payload.input[0].role);
-  console.log("input[1].role:", payload.input[1].role);
-  console.log("input[1].content[0].type:", payload.input[1].content[0].type);
-  console.log("input[1].content[0].file_id:", payload.input[1].content[0].file_id);
+  console.log("input[0].content[0].type:", payload.input[0].content[0].type);
+  console.log("input[0].content[0].file_id:", payload.input[0].content[0].file_id);
   console.log("============================");
 
   // 调用 Responses API
@@ -1975,7 +2086,7 @@ export async function runFullDocumentCardGenerator({
   console.log("output 存在:", !!data.output);
   console.log("====================");
 
-  const textOutput = data.output_text || extractTextFromResponse(data);
+  const textOutput = extractAIContent(data);
 
   if (!textOutput) {
     console.error("❌ API 返回数据:", JSON.stringify(data, null, 2));
@@ -2052,20 +2163,23 @@ ${sourcesText}
 请返回最匹配的 source_id (JSON格式):`;
 
   const payload = {
-    model: OPENAI_MODEL, // gpt-5.2 支持 JSON mode
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userMessage }
+    model: OPENAI_MODEL,
+    input: [
+      {
+        role: "user",
+        content: [{ type: "input_text", text: userMessage }]
+      }
     ],
-    temperature: 0.1, // 低随机性
-    response_format: { type: "json_object" }
+    instructions: systemPrompt,
+    text: { format: { type: "json_object" } },
+    temperature: 0.1 // 低随机性
   };
 
   // 添加重试逻辑
   const maxRetries = 1;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const resp = await fetch(OPENAI_CHAT_URL, {
+      const resp = await fetch(OPENAI_RESPONSES_URL, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${OPENAI_API_KEY}`,
@@ -2080,7 +2194,7 @@ ${sourcesText}
       }
 
       const data = await resp.json();
-      const content = data.choices?.[0]?.message?.content;
+      const content = extractAIContent(data);
 
       if (!content) return null;
 

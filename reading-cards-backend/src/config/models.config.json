@@ -6,13 +6,6 @@
       "models": [
         {
           "id": "gpt-5.2",
-          "name": "GPT-5 Mini",
-          "description": "快速、低成本推理模型，适合大多数任务（400K上下文）",
-          "supports_vision": true,
-          "supports_file_search": true
-        },
-        {
-          "id": "gpt-5.2",
           "name": "GPT-5.2",
           "description": "最新旗舰模型，复杂推理和多步骤任务",
           "supports_vision": true,

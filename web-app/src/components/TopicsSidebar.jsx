@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Plus, ChevronRight, ChevronDown } from 'lucide-react';
+import { Plus, ChevronRight, ChevronDown, X, Check } from 'lucide-react';
+import { useTopicsStore, useUIStore } from '../lib/store';
 
 // Topic 颜色系统（与 CardsPage 保持一致）
 const TOPIC_COLORS = [
@@ -34,6 +35,12 @@ function TopicsSidebar({
   const [expandedTopics, setExpandedTopics] = useState(new Set());
   const [isResizing, setIsResizing] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [isCreatingTopic, setIsCreatingTopic] = useState(false);
+  const [newTopicTitle, setNewTopicTitle] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const { createTopic, fetchTopics } = useTopicsStore();
+  const { showToast } = useUIStore();
 
   // 默认展开所有有卡片的 Topic
   useEffect(() => {
@@ -92,6 +99,35 @@ function TopicsSidebar({
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   };
 
+  // 创建新 Topic
+  const handleCreateTopic = async () => {
+    const title = newTopicTitle.trim();
+    if (!title) {
+      showToast('请输入 Topic 名称', 'error');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await createTopic({ title });
+      showToast('Topic 创建成功', 'success');
+      setNewTopicTitle('');
+      setIsCreatingTopic(false);
+      await fetchTopics();
+    } catch (error) {
+      console.error('创建 Topic 失败:', error);
+      showToast(error.message || '创建 Topic 失败', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // 取消创建 Topic
+  const handleCancelCreate = () => {
+    setNewTopicTitle('');
+    setIsCreatingTopic(false);
+  };
+
   return (
     <div
       className={`relative flex flex-col h-full shrink-0 ${className}`}
@@ -108,13 +144,64 @@ function TopicsSidebar({
             Topics
           </h2>
           <button
-            className="p-1.5 rounded-lg transition-colors hover:bg-opacity-80"
+            onClick={() => setIsCreatingTopic(true)}
+            disabled={isCreatingTopic}
+            className="p-1.5 rounded-lg transition-colors hover:bg-opacity-80 disabled:opacity-50"
             style={{ background: 'var(--accent-500)', color: 'white' }}
             title="新建 Topic"
           >
             <Plus className="w-4 h-4" />
           </button>
         </div>
+
+        {/* 创建新 Topic 的输入框 */}
+        {isCreatingTopic && (
+          <div className="mb-3 p-3 rounded-lg" style={{ background: 'var(--bg-0)', border: '1px solid var(--stroke-0)' }}>
+            <input
+              type="text"
+              value={newTopicTitle}
+              onChange={(e) => setNewTopicTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleCreateTopic();
+                } else if (e.key === 'Escape') {
+                  handleCancelCreate();
+                }
+              }}
+              placeholder="输入 Topic 名称..."
+              autoFocus
+              disabled={isSubmitting}
+              className="w-full px-3 py-2 rounded-lg text-sm mb-2 focus:outline-none focus:ring-2"
+              style={{
+                background: 'var(--surface-0)',
+                border: '1px solid var(--stroke-0)',
+                color: 'var(--text-0)',
+                '--tw-ring-color': 'var(--accent-500)'
+              }}
+            />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCreateTopic}
+                disabled={isSubmitting || !newTopicTitle.trim()}
+                className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded text-sm transition-colors disabled:opacity-50"
+                style={{ background: 'var(--accent-500)', color: 'white' }}
+              >
+                <Check className="w-3.5 h-3.5" />
+                {isSubmitting ? '创建中...' : '创建'}
+              </button>
+              <button
+                onClick={handleCancelCreate}
+                disabled={isSubmitting}
+                className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded text-sm transition-colors disabled:opacity-50"
+                style={{ background: 'var(--bg-0)', color: 'var(--text-1)', border: '1px solid var(--stroke-0)' }}
+              >
+                <X className="w-3.5 h-3.5" />
+                取消
+              </button>
+            </div>
+          </div>
+        )}
+
         <input
           type="text"
           placeholder="搜索 Topic..."

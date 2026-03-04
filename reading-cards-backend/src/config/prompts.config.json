@@ -105,19 +105,6 @@
         "evaluations",
         "used_card_ids"
       ]
-    },
-    "document_storyline": {
-      "id": "document_storyline",
-      "name": "文档生成（故事线）",
-      "description": "基于一组卡片生成文档级结构（问题、假设、故事单元）",
-      "type": "stored",
-      "editable": false,
-      "prompt_id": "pmpt_692aef7907808197b03ae162b8fdd8d90ef09436c71562ae",
-      "output_fields": [
-        "doc_questions",
-        "doc_hypotheses",
-        "story_units"
-      ]
     }
   },
   "metadata": {
