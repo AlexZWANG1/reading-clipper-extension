@@ -11,12 +11,14 @@ import {
   Download,
   Sparkles,
   MessageCircle,
+  FileText,
 } from 'lucide-react';
 import { useAuthStore, useUIStore } from '../lib/store';
 
 const navItems = [
   { to: '/', icon: Folder, label: 'Topics', end: true },
   { to: '/cards', icon: CreditCard, label: '全部卡片' },
+  { to: '/materials', icon: FileText, label: '材料库' },
   { to: '/sources', icon: Globe, label: '信息源' },
   { to: '/chat', icon: MessageCircle, label: 'AI 对话' },
 ];

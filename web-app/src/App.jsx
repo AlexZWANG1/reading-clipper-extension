@@ -11,6 +11,7 @@ import SourcesPage from './pages/SourcesPage';
 import AISettingsPage from './pages/AISettingsPage';
 import DownloadPage from './pages/DownloadPage';
 import ChatPage from './pages/ChatPage';
+import MaterialsPage from './pages/MaterialsPage';
 
 // Lazy load ThinkingBoardPage (heavy: React Flow + dagre)
 const ThinkingBoardPage = lazy(() => import('./pages/ThinkingBoardPage'));
@@ -106,6 +107,7 @@ function App() {
         >
           <Route index element={<TopicsPage />} />
           <Route path="cards" element={<CardsPage />} />
+          <Route path="materials" element={<MaterialsPage />} />
           <Route path="topics" element={<TopicsPage />} />
           <Route path="topics/:topicId" element={<Suspense fallback={<div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" /></div>}><ThinkingBoardPage /></Suspense>} />
           <Route path="sources" element={<SourcesPage />} />

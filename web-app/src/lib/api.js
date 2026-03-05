@@ -570,6 +570,23 @@ export const chatApi = {
     }),
 };
 
+export const materialsApi = {
+  list: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/v2/materials${query ? `?${query}` : ''}`);
+  },
+  get: (id) => request(`/v2/materials/${id}`),
+  ingest: (data) =>
+    request('/v2/materials/ingest', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  delete: (id) =>
+    request(`/v2/materials/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
 export { ApiError, API_BASE, getAccessToken };
 
 
