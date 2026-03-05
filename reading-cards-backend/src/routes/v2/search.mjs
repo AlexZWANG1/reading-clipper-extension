@@ -20,7 +20,7 @@ const SIDECAR_API_KEY = process.env.SIDECAR_API_KEY || 'rc-sidecar-2026';
  */
 router.post('/semantic', requireAuth, async (req, res) => {
   try {
-    const { query, limit = 10, min_score = 0.3, topic_id } = req.body;
+    const { query, limit = 10, min_score = 0.3, topic_id, material_id } = req.body;
     const userId = req.user.id;
 
     if (!query) {
@@ -54,6 +54,7 @@ router.post('/semantic', requireAuth, async (req, res) => {
       min_similarity: min_score,
       p_user_id: userId,
       p_topic_id: topic_id || null,
+      p_material_id: material_id || null,
     });
 
     if (error) {

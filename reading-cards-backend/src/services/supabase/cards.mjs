@@ -41,6 +41,8 @@ export async function addCard(supabase, userId, cardData) {
       source_name: cardData.source_name || null,
       source_url: cardData.source_url || null,
       image_url: cardData.image_url || null,
+      material_id: cardData.material_id || null,
+      locator: cardData.locator || null,
       deleted: false,
     })
     .select(
@@ -105,6 +107,16 @@ export async function listCards(supabase, userId, filters = {}) {
   // 按 topic_id 筛选
   if (filters.topic_id) {
     query = query.eq("topic_id", filters.topic_id);
+  }
+
+  // 按 material_id 筛选
+  if (filters.material_id) {
+    query = query.eq("material_id", filters.material_id);
+  }
+
+  // 限制数量
+  if (filters.limit) {
+    query = query.limit(filters.limit);
   }
 
   const { data, error } = await query;

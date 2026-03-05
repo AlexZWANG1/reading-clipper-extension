@@ -97,6 +97,8 @@ export const cardsApi = {
     const query = new URLSearchParams();
     if (params.topic_title) query.set('topic_title', params.topic_title);
     if (params.topic_id) query.set('topic_id', params.topic_id);
+    if (params.material_id) query.set('material_id', params.material_id);
+    if (params.limit) query.set('limit', params.limit);
     if (params.include_deleted) query.set('include_deleted', 'true');
     return request(`/v2/cards?${query}`);
   },
@@ -576,6 +578,7 @@ export const materialsApi = {
     return request(`/v2/materials${query ? `?${query}` : ''}`);
   },
   get: (id) => request(`/v2/materials/${id}`),
+  getChunks: (id) => request(`/v2/materials/${id}/chunks`),
   ingest: (data) =>
     request('/v2/materials/ingest', {
       method: 'POST',
@@ -584,6 +587,37 @@ export const materialsApi = {
   delete: (id) =>
     request(`/v2/materials/${id}`, {
       method: 'DELETE',
+    }),
+};
+
+export const highlightsApi = {
+  list: (materialId) => request(`/v2/highlights?material_id=${materialId}`),
+  create: (data) =>
+    request('/v2/highlights', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id, data) =>
+    request(`/v2/highlights/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  delete: (id) =>
+    request(`/v2/highlights/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+export const searchApi = {
+  semantic: (data) =>
+    request('/v2/search/semantic', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  cards: (data) =>
+    request('/v2/search/cards', {
+      method: 'POST',
+      body: JSON.stringify(data),
     }),
 };
 

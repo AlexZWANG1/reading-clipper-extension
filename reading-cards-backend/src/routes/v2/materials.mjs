@@ -172,6 +172,46 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /v2/materials/:id/chunks
+ * Get all chunks for a material (for Reader anchoring)
+ */
+router.get('/:id/chunks', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    // Verify ownership
+    const { data: material } = await supabase
+      .from('materials')
+      .select('id')
+      .eq('id', id)
+      .eq('user_id', userId)
+      .single();
+
+    if (!material) {
+      return res.status(404).json({ error: 'Material not found' });
+    }
+
+    const { data, error } = await supabase
+      .from('chunks')
+      .select('id, content, chunk_index, locator, quote, heading_trail')
+      .eq('material_id', id)
+      .eq('user_id', userId)
+      .order('chunk_index', { ascending: true });
+
+    if (error) {
+      console.error('Get chunks error:', error);
+      return res.status(500).json({ error: 'Failed to get chunks' });
+    }
+
+    res.json({ chunks: data || [] });
+  } catch (error) {
+    console.error('Get chunks error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * DELETE /v2/materials/:id
  * Delete material and all its chunks
  */

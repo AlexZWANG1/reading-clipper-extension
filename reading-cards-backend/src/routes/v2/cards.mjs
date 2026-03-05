@@ -64,6 +64,10 @@ router.post("/capture", async (req, res) => {
       sourceUrl,
       topicTitle,
       topic_title,
+      material_id,
+      raw_snippet,
+      locator,
+      note,
     } = req.body || {};
 
     // 校验必填字段：必须有文本或图片
@@ -79,6 +83,22 @@ router.post("/capture", async (req, res) => {
 
     // 兼容 topicTitle (camelCase) 和 topic_title (snake_case)
     const finalTopicTitle = topic_title || topicTitle || null;
+
+    // 如果是来自阅读器的直接建卡（有 raw_snippet，跳过 AI 处理）
+    if (raw_snippet && !snippet && !imageData) {
+      const card = await addCard(req.supabase, req.user.id, {
+        summary: null,
+        key_points: [],
+        source_name: sourceName || null,
+        source_url: sourceUrl || null,
+        raw_snippet: raw_snippet.trim(),
+        note: note || null,
+        topic_title: finalTopicTitle,
+        material_id: material_id || null,
+        locator: locator || null,
+      });
+      return res.json({ ok: true, card });
+    }
 
     // 1) 调 Agent1（支持文本和图片）
     const agentResult = await runAgent1({
@@ -102,6 +122,8 @@ router.post("/capture", async (req, res) => {
         agentResult.raw_snippet || (snippet && snippet.trim()) || "[图片卡片]",
       topic_title: finalTopicTitle,
       image_url: agentResult.image_url || imageData || null,
+      material_id: material_id || null,
+      locator: locator || null,
     });
 
     console.log("=== 保存的卡片 ===");
@@ -127,12 +149,14 @@ router.post("/capture", async (req, res) => {
  */
 router.get("/", async (req, res) => {
   try {
-    const { topic_title, topic_id, include_deleted } = req.query;
+    const { topic_title, topic_id, include_deleted, material_id, limit } = req.query;
 
     const includeDeleted = include_deleted === "true";
     const cards = await listCards(req.supabase, req.user.id, {
       topic_title: topic_title || undefined,
       topic_id: topic_id || undefined,
+      material_id: material_id || undefined,
+      limit: limit ? parseInt(limit) : undefined,
       includeDeleted,
     });
 
