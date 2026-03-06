@@ -14,6 +14,9 @@ const supabase = createClient(
 const SIDECAR_URL = process.env.SIDECAR_URL || 'http://127.0.0.1:8100';
 const SIDECAR_API_KEY = process.env.SIDECAR_API_KEY || 'rc-sidecar-2026';
 
+// Content Fetch Service config
+const CONTENT_FETCH_URL = process.env.CONTENT_FETCH_URL || 'http://127.0.0.1:8200';
+
 /**
  * POST /v2/materials/ingest
  * Trigger content ingestion (extract → chunk → embed → store)
@@ -38,18 +41,65 @@ router.post('/ingest', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'text required for source_type=text' });
     }
 
-    // 1. Create material record
+    // NEW: Call content-fetch service for URL extraction
+    let extractionResult = null;
+    if (source_type === 'url') {
+      try {
+        console.log(`[Materials] Calling content-fetch service for: ${url}`);
+        const response = await fetch(`${CONTENT_FETCH_URL}/extract/url`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url,
+            options: {
+              saveRawHtml: false,
+              usePuppeteer: 'auto',
+              timeout: 30000,
+            },
+          }),
+        });
+
+        if (response.ok) {
+          extractionResult = await response.json();
+          console.log(`[Materials] Extraction successful - Method: ${extractionResult.extraction_method}, Status: ${extractionResult.extraction_status}`);
+        } else {
+          console.warn(`[Materials] Content-fetch service returned ${response.status}`);
+        }
+      } catch (err) {
+        console.error('[Materials] Content-fetch service failed:', err);
+        // Continue anyway, let sidecar handle it
+      }
+    }
+
+    // 1. Create material record with rich metadata
+    const materialData = {
+      user_id: userId,
+      title: extractionResult?.title || title || (source_type === 'url' ? url : 'Untitled'),
+      source_type,
+      url,
+      file_path,
+      topic_id,
+      ingestion_status: 'pending',
+    };
+
+    // Add extraction fields if available
+    if (extractionResult) {
+      materialData.article_html = extractionResult.article_html;
+      materialData.text_content = extractionResult.text_content;
+      materialData.full_text = extractionResult.text_content; // backward compatibility
+      materialData.byline = extractionResult.byline;
+      materialData.site_name = extractionResult.site_name;
+      materialData.published_time = extractionResult.published_time;
+      materialData.lead_image_url = extractionResult.lead_image_url;
+      materialData.excerpt = extractionResult.excerpt;
+      materialData.extraction_method = extractionResult.extraction_method;
+      materialData.extraction_status = extractionResult.extraction_status;
+      materialData.extraction_error = extractionResult.extraction_error;
+    }
+
     const { data: material, error: materialError } = await supabase
       .from('materials')
-      .insert({
-        user_id: userId,
-        title: title || (source_type === 'url' ? url : 'Untitled'),
-        source_type,
-        url,
-        file_path,
-        topic_id,
-        ingestion_status: 'pending',
-      })
+      .insert(materialData)
       .select()
       .single();
 
@@ -58,14 +108,14 @@ router.post('/ingest', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to create material' });
     }
 
-    // 2. Trigger Python sidecar (async)
+    // 2. Trigger Python sidecar (async) with extracted text_content
     const sidecarPayload = {
       user_id: userId,
       material_id: material.id,
       source_type,
       url,
       file_path,
-      text,
+      text: extractionResult?.text_content || text, // Use extracted text for chunking
       topic_id,
     };
 

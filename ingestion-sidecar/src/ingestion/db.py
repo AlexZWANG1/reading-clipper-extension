@@ -90,6 +90,20 @@ async def update_material_status(
     if resp.status_code >= 400:
         logger.error(f"update_material_status failed: {resp.status_code} {resp.text}")
 
+        # If content_hash conflict (409), retry without content_hash
+        if resp.status_code == 409 and "content_hash" in body:
+            logger.warning(f"Retrying update without content_hash (already exists)")
+            body_without_hash = {k: v for k, v in body.items() if k != "content_hash"}
+            resp = await client.patch(
+                f"{_rest_url('materials')}?id=eq.{material_id}",
+                headers=_headers(),
+                json=body_without_hash,
+            )
+            if resp.status_code >= 400:
+                logger.error(f"Retry also failed: {resp.status_code} {resp.text}")
+            else:
+                logger.info(f"Update succeeded without content_hash")
+
 
 async def check_duplicate(user_id: str, content_hash: str) -> str | None:
     """Check if a material with same content_hash exists for this user."""

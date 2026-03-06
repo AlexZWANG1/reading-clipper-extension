@@ -1,0 +1,33 @@
+{
+  "name": "content-fetch-service",
+  "version": "1.0.0",
+  "description": "Content extraction microservice for Reading Clipper",
+  "type": "module",
+  "main": "src/server.mjs",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "dev": "node --watch src/server.mjs"
+  },
+  "keywords": ["content-extraction", "readability", "web-scraping"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "jsdom": "^24.0.0",
+    "@mozilla/readability": "^0.5.0",
+    "puppeteer": "^22.0.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "isomorphic-dompurify": "^2.9.0",
+    "metascraper": "^5.45.0",
+    "metascraper-author": "^5.45.0",
+    "metascraper-date": "^5.45.0",
+    "metascraper-description": "^5.45.0",
+    "metascraper-image": "^5.45.0",
+    "metascraper-title": "^5.45.0",
+    "metascraper-url": "^5.45.0",
+    "sharp": "^0.33.0"
+  }
+}

@@ -1,0 +1,56 @@
+Reading Clipper 2.0 - Quick Start Guide
+=====================================
+
+STEP 1: Create Desktop Shortcut
+-------------------------------------------------
+Double-click: create-shortcut.bat
+This will create "Reading Clipper" shortcut on your desktop
+
+
+STEP 2: Open Control Panel
+-------------------------------------------------
+Double-click "Reading Clipper" on your desktop
+OR
+Double-click control-panel.bat
+
+
+STEP 3: Use Control Panel
+-------------------------------------------------
+[1] Start All Services - Auto-start 4 services, opens browser in 5s
+[2] Stop All Services - One-click stop
+[3] Restart All Services - Stop + Start
+[4] Open App - Opens http://localhost:5173
+[5] View Logs - View service logs
+[6] Refresh Status - Refresh service status
+[0] Exit
+
+
+Services Status
+-------------------------------------------------
+[OK] Content Fetch    Port 8200
+[OK] Python Sidecar   Port 8100
+[OK] Backend          Port 3001
+[OK] Web App          Port 5173
+
+
+Log Files
+-------------------------------------------------
+logs\content-fetch.log
+logs\sidecar.log
+logs\backend.log
+logs\web-app.log
+
+
+Daily Workflow
+-------------------------------------------------
+1. Double-click desktop shortcut
+2. Press 1 to start
+3. Wait for browser to open
+4. Press 2 to stop when done
+
+
+Troubleshooting
+-------------------------------------------------
+Service failed to start -> Press 5 to view logs
+Port occupied -> Press 2 to stop -> Press 1 to restart
+Browser won't open -> Manually visit http://localhost:5173
