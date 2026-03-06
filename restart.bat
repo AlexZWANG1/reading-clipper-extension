@@ -1,45 +1,46 @@
 @echo off
+chcp 65001 >nul
 echo ========================================
-echo 正在停止旧服务...
+echo Stopping old services...
 echo ========================================
 
-REM 杀掉所有 Node.js 进程
+REM Kill all Node.js processes
 taskkill /F /IM node.exe >nul 2>&1
 if %errorlevel% equ 0 (
-    echo [OK] Node.js 进程已停止
+    echo [OK] Node.js stopped
 ) else (
-    echo [INFO] 没有运行中的 Node.js 进程
+    echo [INFO] No Node.js running
 )
 
-REM 杀掉所有 Python 进程
+REM Kill all Python processes
 taskkill /F /IM python.exe >nul 2>&1
 if %errorlevel% equ 0 (
-    echo [OK] Python 进程已停止
+    echo [OK] Python stopped
 ) else (
-    echo [INFO] 没有运行中的 Python 进程
+    echo [INFO] No Python running
 )
 
-REM 等待端口释放
+REM Wait for port release
 timeout /t 2 /nobreak >nul
 
 echo.
 echo ========================================
-echo 正在启动新服务...
+echo Starting new services...
 echo ========================================
 
-REM 启动后端（会自动启动 sidecar）
-start "Reading Clipper Backend" cmd /k "cd /d %~dp0reading-cards-backend && npm start"
+REM Start backend (auto-starts sidecar)
+start "Backend+Sidecar" cmd /k "cd /d %~dp0reading-cards-backend && npm start"
 
-REM 等待后端启动
+REM Wait for backend init
 timeout /t 3 /nobreak >nul
 
-REM 启动前端
-start "Reading Clipper Frontend" cmd /k "cd /d %~dp0web-app && npm run dev"
+REM Start frontend
+start "Frontend" cmd /k "cd /d %~dp0web-app && npm run dev"
 
 echo.
 echo ========================================
-echo 服务启动完成！
+echo Services started!
 echo ========================================
-echo 后端 + Sidecar: http://localhost:3000
-echo 前端: http://localhost:5173
+echo Backend + Sidecar: http://localhost:3000
+echo Frontend: http://localhost:5173
 echo ========================================
