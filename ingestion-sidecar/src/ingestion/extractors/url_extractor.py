@@ -1,4 +1,4 @@
-"""URL content extraction using content-core (with fallback to httpx + basic HTML parsing)."""
+"""URL content extraction using Jina Reader API (with fallback to httpx)."""
 
 import hashlib
 import logging
@@ -18,34 +18,46 @@ async def extract_url(url: str, engine: str = "jina") -> dict:
             "metadata": dict,     # Extra metadata
         }
     """
-    try:
-        return await _extract_with_content_core(url, engine)
-    except ImportError:
-        logger.warning("content-core not installed, falling back to httpx")
+    if engine == "jina":
+        try:
+            return await _extract_with_jina(url)
+        except Exception as e:
+            logger.warning(f"Jina Reader failed ({e}), falling back to httpx")
+            return await _extract_with_httpx(url)
+    else:
         return await _extract_with_httpx(url)
-    except Exception as e:
-        logger.warning(f"content-core failed ({e}), falling back to httpx")
-        return await _extract_with_httpx(url)
 
 
-async def _extract_with_content_core(url: str, engine: str) -> dict:
-    """Use content-core library."""
-    from content_core import extract
+async def _extract_with_jina(url: str) -> dict:
+    """Use Jina Reader API (free, no auth required)."""
+    import httpx
 
-    result = extract(url)
+    jina_url = f"https://r.jina.ai/{url}"
 
-    text = result.content if hasattr(result, "content") else str(result)
-    title = result.title if hasattr(result, "title") else ""
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(jina_url, headers={"Accept": "text/plain"})
+        resp.raise_for_status()
+        text = resp.text
+
+    # Jina returns markdown-formatted text, extract title from first line if it's a heading
+    lines = text.split("\n", 2)
+    title = ""
+    if lines and lines[0].startswith("# "):
+        title = lines[0][2:].strip()
+        text = "\n".join(lines[1:]) if len(lines) > 1 else text
+
+    if not title:
+        title = _title_from_url(url)
 
     content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
 
     return {
         "text": text,
-        "title": title or _title_from_url(url),
+        "title": title,
         "content_hash": content_hash,
         "metadata": {
             "source_url": url,
-            "extractor": f"content-core/{engine}",
+            "extractor": "jina-reader",
         },
     }
 
