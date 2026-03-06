@@ -1,7 +1,7 @@
 // ========= 卡片存储服务（Supabase 版本）=========
 // 使用 Supabase/PostgreSQL 存储，支持多用户
 
-import { supabaseAdmin } from "../../config/supabase.mjs";
+const VALID_FACT_OR_VIEW = new Set(["fact", "view"]);
 
 /**
  * 添加新卡片
@@ -29,22 +29,28 @@ export async function addCard(supabase, userId, cardData) {
     }
   }
 
+  const insertData = {
+    user_id: userId,
+    topic_id: topicId,
+    summary: cardData.summary || "",
+    key_points: cardData.key_points || [],
+    raw_snippet: cardData.raw_snippet || "",
+    note: cardData.note || "",
+    source_name: cardData.source_name || null,
+    source_url: cardData.source_url || null,
+    image_url: cardData.image_url || null,
+    title: sanitizeTitle(cardData.title),
+    fact_or_view: normalizeFactOrView(cardData.fact_or_view),
+    material_id: cardData.material_id || null,
+    deleted: false,
+  };
+  if (cardData.locator !== undefined) {
+    insertData.locator = cardData.locator;
+  }
+
   const { data, error } = await supabase
     .from("cards")
-    .insert({
-      user_id: userId,
-      topic_id: topicId,
-      summary: cardData.summary || "",
-      key_points: cardData.key_points || [],
-      raw_snippet: cardData.raw_snippet || "",
-      note: cardData.note || "",
-      source_name: cardData.source_name || null,
-      source_url: cardData.source_url || null,
-      image_url: cardData.image_url || null,
-      material_id: cardData.material_id || null,
-      locator: cardData.locator || null,
-      deleted: false,
-    })
+    .insert(insertData)
     .select(
       `
       *,
@@ -178,6 +184,10 @@ export async function updateCard(supabase, userId, cardId, updates) {
   if (updates.source_name !== undefined) updateData.source_name = updates.source_name;
   if (updates.source_url !== undefined) updateData.source_url = updates.source_url;
   if (updates.image_url !== undefined) updateData.image_url = updates.image_url;
+  if (updates.title !== undefined) updateData.title = sanitizeTitle(updates.title);
+  if (updates.fact_or_view !== undefined) {
+    updateData.fact_or_view = normalizeFactOrView(updates.fact_or_view);
+  }
   if (updates.deleted !== undefined) updateData.deleted = updates.deleted;
 
   // 处理 topic_title 更新
@@ -336,6 +346,8 @@ function transformCard(dbCard) {
     source_name: dbCard.source_name,
     source_url: dbCard.source_url,
     raw_snippet: dbCard.raw_snippet,
+    title: dbCard.title ?? null,
+    fact_or_view: dbCard.fact_or_view ?? null,
     topic_title: dbCard.topic?.title || null,
     topic_id: dbCard.topic_id,
     note: dbCard.note || "",
@@ -344,6 +356,20 @@ function transformCard(dbCard) {
     updated_at: dbCard.updated_at,
     deleted: dbCard.deleted,
   };
+}
+
+function sanitizeTitle(title) {
+  if (title === undefined) return undefined;
+  if (title === null) return null;
+  const normalized = String(title).trim();
+  return normalized || null;
+}
+
+function normalizeFactOrView(value) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const normalized = String(value).trim().toLowerCase();
+  return VALID_FACT_OR_VIEW.has(normalized) ? normalized : null;
 }
 
 

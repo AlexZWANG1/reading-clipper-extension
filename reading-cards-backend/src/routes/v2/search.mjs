@@ -14,6 +14,66 @@ const supabase = createClient(
 const SIDECAR_URL = process.env.SIDECAR_URL || 'http://127.0.0.1:8100';
 const SIDECAR_API_KEY = process.env.SIDECAR_API_KEY || 'rc-sidecar-2026';
 
+async function searchChunksHybridWithFallback({
+  queryEmbedding,
+  query,
+  limit,
+  minScore,
+  userId,
+  topicId,
+  materialId,
+}) {
+  const baseParams = {
+    query_embedding: queryEmbedding,
+    query_text: query,
+    match_count: limit,
+    min_similarity: minScore,
+    p_user_id: userId,
+    p_topic_id: topicId || null,
+  };
+
+  const params = materialId
+    ? { ...baseParams, p_material_id: materialId }
+    : baseParams;
+
+  const rpcResult = await supabase.rpc('search_chunks_hybrid', params);
+  if (!rpcResult.error) {
+    return rpcResult;
+  }
+
+  // Avoid hard failure when DB has overloaded RPC signatures.
+  if (rpcResult.error.code !== 'PGRST203') {
+    return rpcResult;
+  }
+
+  console.warn('search_chunks_hybrid conflict detected, using fallback query');
+  let fallbackQuery = supabase
+    .from('chunks')
+    .select('id, material_id, content, heading_trail, locator, quote')
+    .eq('user_id', userId)
+    .ilike('content', `%${query}%`)
+    .limit(limit);
+
+  if (topicId) {
+    fallbackQuery = fallbackQuery.eq('topic_id', topicId);
+  }
+  if (materialId) {
+    fallbackQuery = fallbackQuery.eq('material_id', materialId);
+  }
+
+  const { data, error } = await fallbackQuery;
+  if (error) {
+    return { data: null, error };
+  }
+
+  const normalized = (data || []).map((chunk) => ({
+    ...chunk,
+    similarity: null,
+    match_type: 'fts_fallback',
+  }));
+  return { data: normalized, error: null };
+}
+
 /**
  * POST /v2/search/semantic
  * Semantic search across user's document chunks using vector similarity
@@ -46,15 +106,15 @@ router.post('/semantic', requireAuth, async (req, res) => {
     const { embeddings } = await embedResponse.json();
     const queryEmbedding = embeddings[0];
 
-    // 2. Search chunks via Postgres RPC
-    const { data, error } = await supabase.rpc('search_chunks_hybrid', {
-      query_embedding: queryEmbedding,
-      query_text: query,
-      match_count: limit,
-      min_similarity: min_score,
-      p_user_id: userId,
-      p_topic_id: topic_id || null,
-      p_material_id: material_id || null,
+    // 2. Search chunks via Postgres RPC (with fallback for function overload conflicts)
+    const { data, error } = await searchChunksHybridWithFallback({
+      queryEmbedding,
+      query,
+      limit,
+      minScore: min_score,
+      userId,
+      topicId: topic_id,
+      materialId: material_id,
     });
 
     if (error) {

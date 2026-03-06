@@ -5,9 +5,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { requireAuth } from "../../middleware/auth.mjs";
-import { createSupabaseClient } from "../../config/supabase.mjs";
 import { 
-  createAIClientConfig, 
   testAPIConnection,
   getAvailableModels,
   getAvailableProviders 
@@ -37,7 +35,7 @@ const router = express.Router();
 router.get("/", requireAuth, async (req, res) => {
   try {
     const user = req.user;
-    const supabase = createSupabaseClient(req.session.access_token);
+    const supabase = req.supabase;
 
     const { data, error } = await supabase
       .from("user_settings")
@@ -99,7 +97,7 @@ router.patch("/", requireAuth, async (req, res) => {
   try {
     const user = req.user;
     const { provider, model, api_key, api_endpoint } = req.body || {};
-    const supabase = createSupabaseClient(req.session.access_token);
+    const supabase = req.supabase;
 
     // 验证provider
     const validProviders = ["openai", "anthropic", "custom"];
@@ -207,7 +205,7 @@ router.post("/test-api", requireAuth, async (req, res) => {
   try {
     const user = req.user;
     const { provider, model, api_key, api_endpoint } = req.body || {};
-    const supabase = createSupabaseClient(req.session.access_token);
+    const supabase = req.supabase;
 
     // 获取用户当前设置
     const { data: currentSettings } = await supabase

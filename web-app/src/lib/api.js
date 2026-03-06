@@ -297,7 +297,7 @@ export const hypothesesApi = {
    * @param {string[]} [params.questions] - 研究问题
    */
   suggest: (params = {}) =>
-    request('/hypotheses/suggest', {
+    request('/v2/hypotheses/suggest', {
       method: 'POST',
       body: JSON.stringify(params),
     }),
@@ -310,7 +310,7 @@ export const hypothesesApi = {
    * @param {string[]} [params.questions] - 研究问题
    */
   evaluate: (params) =>
-    request('/hypotheses/evaluate', {
+    request('/v2/hypotheses/evaluate', {
       method: 'POST',
       body: JSON.stringify(params),
     }),
@@ -622,6 +622,5 @@ export const searchApi = {
 };
 
 export { ApiError, API_BASE, getAccessToken };
-
 
 
