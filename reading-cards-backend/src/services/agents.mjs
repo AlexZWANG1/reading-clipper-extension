@@ -1865,6 +1865,8 @@ function parseMultipleSnippetNotes(markdownText) {
 
     const lines = block.split(/\r?\n/);
 
+    let title = "";
+    let fact_or_view = "fact";
     let topic = null;
     let summary = "";
     const keyPoints = [];
@@ -1876,6 +1878,23 @@ function parseMultipleSnippetNotes(markdownText) {
 
     for (const line of lines) {
       const trimmed = line.trim();
+
+      if (trimmed.match(/^-\s*title\s*:/i)) {
+        title = trimmed.replace(/^-\s*title\s*:/i, "").trim();
+        inKeyPoints = false;
+        inRawSnippet = false;
+        continue;
+      }
+
+      if (trimmed.match(/^-\s*fact_or_view\s*:/i)) {
+        fact_or_view = trimmed
+          .replace(/^-\s*fact_or_view\s*:/i, "")
+          .trim()
+          .toLowerCase();
+        inKeyPoints = false;
+        inRawSnippet = false;
+        continue;
+      }
 
       if (trimmed.match(/^-\s*topic\s*:/i)) {
         const topicValue = trimmed.replace(/^-\s*topic\s*:/i, "").trim();
@@ -1950,6 +1969,8 @@ function parseMultipleSnippetNotes(markdownText) {
 
     if (summary || raw_snippet) {
       cards.push({
+        title,
+        fact_or_view: fact_or_view === "view" ? "view" : "fact",
         topic,
         summary,
         key_points: keyPoints,
@@ -2104,6 +2125,9 @@ export async function runFullDocumentCardGenerator({
 
   // 映射到 Card 字段格式
   return cards.map(cardData => ({
+    title: cardData.title || "",
+    fact_or_view: cardData.fact_or_view === "view" ? "view" : "fact",
+    topic: cardData.topic || null,
     summary: cardData.summary || "",
     key_points: Array.isArray(cardData.key_points) ? cardData.key_points : [],
     source_name: cardData.source_name || sourceName || null,
@@ -2215,5 +2239,3 @@ ${sourcesText}
   }
   return null;
 }
-
-

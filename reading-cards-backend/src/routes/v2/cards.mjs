@@ -45,6 +45,40 @@ const upload = multer({
   },
 });
 
+function normalizeOptionalText(value) {
+  if (typeof value !== "string") return value ?? null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+async function resolveMaterialContext(supabase, userId, materialId) {
+  if (!materialId) return null;
+
+  const { data, error } = await supabase
+    .from("materials")
+    .select(
+      `
+      title,
+      site_name,
+      url,
+      topic:topics(title)
+    `
+    )
+    .eq("id", materialId)
+    .eq("user_id", userId)
+    .single();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return {
+    source_name: normalizeOptionalText(data.site_name) || normalizeOptionalText(data.title),
+    source_url: normalizeOptionalText(data.url),
+    topic_title: normalizeOptionalText(data.topic?.title),
+  };
+}
+
 router.post("/capture", async (req, res) => {
   try {
     const {
@@ -65,21 +99,34 @@ router.post("/capture", async (req, res) => {
 
     const hasSnippet =
       snippet && typeof snippet === "string" && snippet.trim();
-    const finalTopicTitle = topic_title || topicTitle || null;
+    const finalTopicTitle = normalizeOptionalText(topic_title) || normalizeOptionalText(topicTitle);
+    const materialContext = await resolveMaterialContext(
+      req.supabase,
+      req.user.id,
+      material_id
+    );
+    const resolvedTopicTitle = finalTopicTitle || materialContext?.topic_title || null;
+    const resolvedSourceName =
+      normalizeOptionalText(sourceName) || materialContext?.source_name || null;
+    const resolvedSourceUrl =
+      normalizeOptionalText(sourceUrl) || materialContext?.source_url || null;
+    const resolvedNote = normalizeOptionalText(note) || null;
+    const resolvedChunkId = locator?.chunk_id || null;
 
     // Reader fast path: save raw snippet directly without AI.
     if (raw_snippet && !hasSnippet && !imageData) {
       const card = await addCard(req.supabase, req.user.id, {
         summary: null,
         key_points: [],
-        source_name: sourceName || null,
-        source_url: sourceUrl || null,
+        source_name: resolvedSourceName,
+        source_url: resolvedSourceUrl,
         raw_snippet: raw_snippet.trim(),
-        note: note || null,
-        topic_title: finalTopicTitle,
+        note: resolvedNote,
+        topic_title: resolvedTopicTitle,
         title: title || null,
         fact_or_view: fact_or_view || null,
         material_id: material_id || null,
+        chunk_id: resolvedChunkId,
         locator,
       });
       return res.json({ ok: true, card });
@@ -96,22 +143,24 @@ router.post("/capture", async (req, res) => {
       snippet: (snippet || "").trim(),
       imageData: imageData || null,
       preSummary,
-      sourceName,
-      sourceUrl,
+      sourceName: resolvedSourceName,
+      sourceUrl: resolvedSourceUrl,
     });
 
     const card = await addCard(req.supabase, req.user.id, {
       summary: agentResult.summary,
       key_points: agentResult.key_points || [],
-      source_name: agentResult.source_name || null,
-      source_url: agentResult.source_url || null,
+      source_name: agentResult.source_name || resolvedSourceName || null,
+      source_url: agentResult.source_url || resolvedSourceUrl || null,
       raw_snippet:
         agentResult.raw_snippet || (snippet && snippet.trim()) || "[image card]",
-      topic_title: finalTopicTitle,
+      note: resolvedNote,
+      topic_title: resolvedTopicTitle,
       image_url: agentResult.image_url || imageData || null,
       title: agentResult.title || title || null,
       fact_or_view: agentResult.fact_or_view || fact_or_view || null,
       material_id: material_id || null,
+      chunk_id: resolvedChunkId,
       locator,
     });
 
@@ -391,7 +440,7 @@ router.post("/generate-from-document", async (req, res) => {
         source_name: cardData.source_name || null,
         source_url: cardData.source_url || null,
         raw_snippet: cardData.raw_snippet || "",
-        topic_title: topic_title || null,
+        topic_title: cardData.topic || topic_title || null,
         title: cardData.title || null,
         fact_or_view: cardData.fact_or_view || null,
       });

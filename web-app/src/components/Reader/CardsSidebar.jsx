@@ -64,6 +64,8 @@ export default function CardsSidebar({ materialId, onCardClick, refreshSignal })
 }
 
 function CardItem({ card, onClick }) {
+  const title = card.title || '未命名卡片';
+
   return (
     <button
       onClick={onClick}
@@ -71,6 +73,9 @@ function CardItem({ card, onClick }) {
     >
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold text-indigo-700 line-clamp-2 mb-1.5">
+            {title}
+          </p>
           {card.summary && (
             <p className="text-sm text-gray-800 line-clamp-2 leading-snug">
               {card.summary}

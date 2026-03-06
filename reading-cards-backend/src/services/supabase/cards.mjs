@@ -2,6 +2,9 @@
 // 使用 Supabase/PostgreSQL 存储，支持多用户
 
 const VALID_FACT_OR_VIEW = new Set(["fact", "view"]);
+const DEFAULT_FACT_OR_VIEW = "fact";
+const FALLBACK_TITLE_MAX_LEN = 64;
+const FALLBACK_SUMMARY_MAX_LEN = 240;
 
 /**
  * 添加新卡片
@@ -29,19 +32,34 @@ export async function addCard(supabase, userId, cardData) {
     }
   }
 
+  const sanitizedRawSnippet =
+    typeof cardData.raw_snippet === "string" ? cardData.raw_snippet.trim() : "";
+  const resolvedSummary = buildSummary(cardData.summary, sanitizedRawSnippet);
+  const resolvedTitle = buildTitle({
+    title: cardData.title,
+    summary: resolvedSummary,
+    raw_snippet: sanitizedRawSnippet,
+    source_name: cardData.source_name,
+  });
+  const resolvedFactOrView =
+    normalizeFactOrView(cardData.fact_or_view) ?? DEFAULT_FACT_OR_VIEW;
+  const resolvedChunkId =
+    cardData.chunk_id || cardData.locator?.chunk_id || null;
+
   const insertData = {
     user_id: userId,
     topic_id: topicId,
-    summary: cardData.summary || "",
+    summary: resolvedSummary,
     key_points: cardData.key_points || [],
-    raw_snippet: cardData.raw_snippet || "",
+    raw_snippet: sanitizedRawSnippet,
     note: cardData.note || "",
     source_name: cardData.source_name || null,
     source_url: cardData.source_url || null,
     image_url: cardData.image_url || null,
-    title: sanitizeTitle(cardData.title),
-    fact_or_view: normalizeFactOrView(cardData.fact_or_view),
+    title: resolvedTitle,
+    fact_or_view: resolvedFactOrView,
     material_id: cardData.material_id || null,
+    chunk_id: resolvedChunkId,
     deleted: false,
   };
   if (cardData.locator !== undefined) {
@@ -339,17 +357,29 @@ export async function getCardsByIds(supabase, cardIds) {
 function transformCard(dbCard) {
   if (!dbCard) return null;
 
+  const transformedSummary = buildSummary(dbCard.summary, dbCard.raw_snippet);
+  const transformedTitle =
+    sanitizeTitle(dbCard.title) ??
+    buildTitle({
+      summary: transformedSummary,
+      raw_snippet: dbCard.raw_snippet,
+      source_name: dbCard.source_name,
+    });
+
   return {
     id: dbCard.id,
-    summary: dbCard.summary,
+    summary: transformedSummary,
     key_points: dbCard.key_points || [],
     source_name: dbCard.source_name,
     source_url: dbCard.source_url,
     raw_snippet: dbCard.raw_snippet,
-    title: dbCard.title ?? null,
-    fact_or_view: dbCard.fact_or_view ?? null,
+    title: transformedTitle,
+    fact_or_view: normalizeFactOrView(dbCard.fact_or_view) ?? DEFAULT_FACT_OR_VIEW,
     topic_title: dbCard.topic?.title || null,
     topic_id: dbCard.topic_id,
+    material_id: dbCard.material_id ?? null,
+    chunk_id: dbCard.chunk_id ?? dbCard.locator?.chunk_id ?? null,
+    locator: dbCard.locator ?? null,
     note: dbCard.note || "",
     image_url: dbCard.image_url,
     created_at: dbCard.created_at,
@@ -370,6 +400,42 @@ function normalizeFactOrView(value) {
   if (value === null) return null;
   const normalized = String(value).trim().toLowerCase();
   return VALID_FACT_OR_VIEW.has(normalized) ? normalized : null;
+}
+
+function normalizeText(value) {
+  if (value === undefined || value === null) return "";
+  return String(value).replace(/\s+/g, " ").trim();
+}
+
+function truncateText(text, maxLen) {
+  if (!text) return "";
+  if (text.length <= maxLen) return text;
+  return `${text.slice(0, maxLen - 1).trim()}…`;
+}
+
+function buildSummary(summary, rawSnippet) {
+  const normalizedSummary = normalizeText(summary);
+  if (normalizedSummary) {
+    return truncateText(normalizedSummary, FALLBACK_SUMMARY_MAX_LEN);
+  }
+  const normalizedSnippet = normalizeText(rawSnippet);
+  if (!normalizedSnippet) return "";
+  return truncateText(normalizedSnippet, FALLBACK_SUMMARY_MAX_LEN);
+}
+
+function buildTitle({ title, summary, raw_snippet, source_name }) {
+  const explicitTitle = sanitizeTitle(title);
+  if (explicitTitle) {
+    return truncateText(explicitTitle, FALLBACK_TITLE_MAX_LEN);
+  }
+
+  const fallbackCandidate =
+    normalizeText(summary) ||
+    normalizeText(raw_snippet) ||
+    normalizeText(source_name);
+
+  if (!fallbackCandidate) return null;
+  return truncateText(fallbackCandidate, FALLBACK_TITLE_MAX_LEN);
 }
 
 

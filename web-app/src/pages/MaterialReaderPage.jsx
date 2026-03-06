@@ -36,6 +36,8 @@ export default function MaterialReaderPage() {
   const [pendingSelection, setPendingSelection] = useState(null);
   const [cardNote, setCardNote] = useState('');
   const [cardSuccess, setCardSuccess] = useState(false);
+  const [cardHighlights, setCardHighlights] = useState([]);
+  const [activeCardHighlightId, setActiveCardHighlightId] = useState(null);
 
   useEffect(() => {
     if (id) loadMaterial();
@@ -82,6 +84,41 @@ export default function MaterialReaderPage() {
     }
   }, [id]);
 
+  const buildCardHighlightFromCard = useCallback((card, fallbackSelection = null) => {
+    if (!card && !fallbackSelection) return [];
+
+    const locator = (() => {
+      const raw = card?.locator;
+      if (!raw) return {};
+      if (typeof raw === 'object') return raw;
+      if (typeof raw === 'string') {
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return {};
+        }
+      }
+      return {};
+    })();
+    const quoteSelector = locator?.quote_selector || {};
+    const exact =
+      quoteSelector.exact ||
+      card?.raw_snippet ||
+      fallbackSelection?.exact ||
+      '';
+
+    if (!exact || !exact.trim()) return [];
+
+    return [{
+      id: card?.id ? `card-${card.id}` : `selection-highlight`,
+      exact: exact.trim(),
+      prefix: quoteSelector.prefix || fallbackSelection?.prefix || '',
+      suffix: quoteSelector.suffix || fallbackSelection?.suffix || '',
+      chunk_id: locator?.chunk_id || card?.chunk_id || fallbackSelection?.chunk_id || null,
+      color: 'indigo',
+    }];
+  }, []);
+
   // 打开建卡弹窗
   const handleCreateCardClick = useCallback((selectionData) => {
     setPendingSelection(selectionData);
@@ -94,10 +131,12 @@ export default function MaterialReaderPage() {
   const handleConfirmCard = async () => {
     if (!pendingSelection) return;
     try {
-      await cardsApi.capture({
-        raw_snippet: pendingSelection.exact,
+      const captureResult = await cardsApi.capture({
+        snippet: pendingSelection.exact,
         note: cardNote || undefined,
         material_id: id,
+        sourceName: material?.site_name || material?.title || undefined,
+        sourceUrl: material?.url || undefined,
         locator: {
           chunk_id: pendingSelection.chunk_id,
           chunk_relative_start: pendingSelection.chunk_relative_start,
@@ -109,6 +148,34 @@ export default function MaterialReaderPage() {
           },
         },
       });
+
+      const createdCard = captureResult?.card || null;
+      if (createdCard) {
+        const createdHighlights = buildCardHighlightFromCard(createdCard, pendingSelection);
+        setCardHighlights(createdHighlights);
+        setActiveCardHighlightId(createdHighlights[0]?.id || null);
+
+        // 建卡成功后自动落一条高亮，保持 Reader 可见状态与 card 关联一致
+        try {
+          const createdHighlight = await highlightsApi.create({
+            material_id: id,
+            card_id: createdCard.id,
+            exact: pendingSelection.exact,
+            prefix: pendingSelection.prefix,
+            suffix: pendingSelection.suffix,
+            chunk_id: pendingSelection.chunk_id,
+            chunk_relative_start: pendingSelection.chunk_relative_start,
+            chunk_relative_end: pendingSelection.chunk_relative_end,
+            color: 'yellow',
+          });
+          if (createdHighlight) {
+            setHighlights(prev => [...prev, createdHighlight]);
+          }
+        } catch (highlightErr) {
+          console.warn('Create linked highlight failed:', highlightErr);
+        }
+      }
+
       setCardSuccess(true);
       setCardRefresh(n => n + 1);
       setTimeout(() => {
@@ -147,9 +214,6 @@ export default function MaterialReaderPage() {
     setFocusQuery('');
     setShowFocusInput(false);
   };
-
-  // 提取卡片 locators 给 ReaderContent 高亮
-  const cardHighlights = [];  // will be populated from cards via sidebar click context
 
   const sourceTypeIcon = {
     url: Globe,
@@ -285,9 +349,11 @@ export default function MaterialReaderPage() {
           )}
 
           <ReaderContent
-            text={material.full_text}
+            material={material}
             chunks={chunks}
+            highlights={highlights}
             cardHighlights={cardHighlights}
+            activeCardHighlightId={activeCardHighlightId}
             focusChunkIds={focusChunkIds}
             onSelection={setSelection}
           />
@@ -307,8 +373,9 @@ export default function MaterialReaderPage() {
             materialId={id}
             refreshSignal={cardRefresh}
             onCardClick={(card) => {
-              // 未来：滚动到卡片来源位置
-              console.log('Card clicked:', card.id);
+              const targets = buildCardHighlightFromCard(card);
+              setCardHighlights(targets);
+              setActiveCardHighlightId(targets[0]?.id || null);
             }}
           />
         </div>
@@ -368,3 +435,4 @@ export default function MaterialReaderPage() {
     </div>
   );
 }
+
