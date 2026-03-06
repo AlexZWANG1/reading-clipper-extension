@@ -6,5 +6,3 @@ pgvector>=0.3
 python-dotenv>=1.0
 pydantic-settings>=2.0
 docling>=2.50
-content-core
-esperanto
