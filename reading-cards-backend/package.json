@@ -5,8 +5,9 @@
   "type": "module",
   "main": "src/server.mjs",
   "scripts": {
-    "dev": "node src/server.mjs",
-    "start": "node src/server.mjs",
+    "dev": "concurrently -n \"backend,sidecar\" -c \"blue,green\" \"node src/server.mjs\" \"cd ../ingestion-sidecar && python -m src.ingestion.api\"",
+    "start": "concurrently -n \"backend,sidecar\" -c \"blue,green\" \"node src/server.mjs\" \"cd ../ingestion-sidecar && python -m src.ingestion.api\"",
+    "backend-only": "node src/server.mjs",
     "build": "echo 'No build step required for this backend service'"
   },
   "keywords": [
@@ -27,5 +28,8 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

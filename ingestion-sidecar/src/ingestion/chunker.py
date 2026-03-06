@@ -115,6 +115,26 @@ def _chunk_simple(
         if not para:
             continue
 
+        # CRITICAL FIX: Force-split oversized single paragraphs
+        # This prevents "entire article becomes one chunk" bug when URL extraction
+        # produces poorly-structured text without proper \n\n separators
+        if len(para) > max_chunk_chars:
+            # Emit current chunk first if exists
+            if current_chunk:
+                chunks.append(_build_simple_chunk(current_chunk, len(chunks), current_start))
+                current_start += len(current_chunk)
+                current_chunk = ""
+
+            # Split oversized paragraph into smaller chunks
+            para_offset = 0
+            while para_offset < len(para):
+                chunk_text = para[para_offset:para_offset + max_chunk_chars]
+                chunks.append(_build_simple_chunk(chunk_text, len(chunks), current_start + para_offset))
+                para_offset += max_chunk_chars - overlap_chars
+
+            current_start += len(para)
+            continue
+
         if len(current_chunk) + len(para) + 2 > max_chunk_chars and current_chunk:
             # Emit current chunk
             chunks.append(_build_simple_chunk(current_chunk, len(chunks), current_start))
