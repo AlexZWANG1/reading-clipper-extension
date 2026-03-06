@@ -41,7 +41,9 @@ def _chunk_with_docling(doc) -> list[dict]:
     """Use Docling HierarchicalChunker for structure-aware chunks."""
     from docling.chunking import HierarchicalChunker
 
-    chunker = HierarchicalChunker()
+    # Set max_tokens to 2000 (well below nomic-embed-text's 8192 limit)
+    # This prevents "input length exceeds context length" errors
+    chunker = HierarchicalChunker(max_tokens=2000)
     doc_chunks = list(chunker.chunk(doc))
 
     results = []
