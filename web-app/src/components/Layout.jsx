@@ -12,15 +12,32 @@ import {
   Sparkles,
   MessageCircle,
   FileText,
+  Layout as LayoutIcon,
+  Scale,
 } from 'lucide-react';
 import { useAuthStore, useUIStore } from '../lib/store';
 
-const navItems = [
-  { to: '/', icon: Folder, label: 'Topics', end: true },
-  { to: '/cards', icon: CreditCard, label: '全部卡片' },
-  { to: '/materials', icon: FileText, label: '材料库' },
-  { to: '/sources', icon: Globe, label: '信息源' },
-  { to: '/chat', icon: MessageCircle, label: 'AI 对话' },
+// 四组导航结构
+const navGroups = [
+  {
+    title: 'Reader',
+    items: [
+      { to: '/materials', icon: FileText, label: '来源库' },
+      { to: '/sources', icon: Globe, label: '信息源' },
+    ],
+  },
+  {
+    title: 'Workbench',
+    items: [
+      { to: '/', icon: LayoutIcon, label: '工作台', end: true },
+    ],
+  },
+  {
+    title: 'Copilot',
+    items: [
+      { to: '/chat', icon: MessageCircle, label: 'AI 对话' },
+    ],
+  },
 ];
 
 const userItems = [
@@ -56,8 +73,8 @@ function Layout() {
           <Menu className="w-5 h-5" />
         </button>
         <div className="flex-1 flex items-center justify-center">
-          <BookOpen className="w-5 h-5 mr-2" style={{ color: 'var(--accent-400)' }} />
-          <span className="font-semibold" style={{ color: 'var(--text-0)' }}>Reading Clipper</span>
+          <Scale className="w-5 h-5 mr-2" style={{ color: 'var(--accent-400)' }} />
+          <span className="font-semibold" style={{ color: 'var(--text-0)' }}>Verity</span>
         </div>
         <div className="w-9" />
       </header>
@@ -80,8 +97,8 @@ function Layout() {
       >
         {/* Logo */}
         <div className="h-16 flex-none flex items-center px-5" style={{ borderBottom: '1px solid var(--stroke-1)' }}>
-          <BookOpen className="w-7 h-7 mr-2.5" style={{ color: 'var(--accent-400)' }} />
-          <span className="text-lg font-bold" style={{ color: 'var(--text-0)' }}>Reading Clipper</span>
+          <Scale className="w-7 h-7 mr-2.5" style={{ color: 'var(--accent-400)' }} />
+          <span className="text-lg font-bold" style={{ color: 'var(--text-0)' }}>Verity</span>
           <button
             onClick={toggleSidebar}
             className="lg:hidden ml-auto p-1.5 transition-colors"
@@ -93,28 +110,38 @@ function Layout() {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-          {navItems.map(({ to, icon: Icon, label, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              onClick={() => window.innerWidth < 1024 && toggleSidebar()}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all`
-              }
-              style={({ isActive }) => ({
-                background: isActive ? 'rgba(99,102,241,0.12)' : 'transparent',
-                color: isActive ? 'var(--accent-300)' : 'var(--text-1)',
-              })}
-            >
-              <Icon className="w-5 h-5" />
-              {label}
-            </NavLink>
+          {navGroups.map((group, groupIndex) => (
+            <div key={group.title}>
+              {groupIndex > 0 && (
+                <div className="pt-3 mt-3" style={{ borderTop: '1px solid var(--stroke-1)' }} />
+              )}
+              <p className="px-3 py-1 text-xs font-medium" style={{ color: 'var(--text-2)' }}>
+                {group.title}
+              </p>
+              {group.items.map(({ to, icon: Icon, label, end }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  onClick={() => window.innerWidth < 1024 && toggleSidebar()}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all`
+                  }
+                  style={({ isActive }) => ({
+                    background: isActive ? 'rgba(99,102,241,0.12)' : 'transparent',
+                    color: isActive ? 'var(--accent-300)' : 'var(--text-1)',
+                  })}
+                >
+                  <Icon className="w-5 h-5" />
+                  {label}
+                </NavLink>
+              ))}
+            </div>
           ))}
 
           {/* Divider */}
           <div className="pt-3 mt-3" style={{ borderTop: '1px solid var(--stroke-1)' }}>
-            <p className="px-3 py-1 text-xs font-medium" style={{ color: 'var(--text-2)' }}>个人</p>
+            <p className="px-3 py-1 text-xs font-medium" style={{ color: 'var(--text-2)' }}>Settings</p>
           </div>
 
           {userItems.map(({ to, icon: Icon, label }) => (

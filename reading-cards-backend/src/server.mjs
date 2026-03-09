@@ -82,9 +82,9 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.get("/", (req, res) => {
   res.send(`
     <div style="font-family: sans-serif; text-align: center; margin-top: 50px;">
-      <h1>Reading Clipper Backend</h1>
-      <p>Service is running.</p>
-      <p>Visit <a href="http://localhost:5173">Web App</a> to manage your cards.</p>
+      <h1>Verity Backend</h1>
+      <p>证据驱动论证工作台 - 服务运行中</p>
+      <p>Visit <a href="http://localhost:5173">Web App</a> to start your research.</p>
     </div>
   `);
 });

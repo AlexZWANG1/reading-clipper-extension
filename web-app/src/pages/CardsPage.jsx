@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Search,
   Filter,
@@ -13,8 +13,14 @@ import {
   ChevronDown,
   CheckSquare,
   Square,
+  LayoutGrid,
+  FileText,
+  Network,
+  Save,
+  Loader2,
 } from 'lucide-react';
 import { useCardsStore, useTopicsStore, useSourcesStore, useUIStore } from '../lib/store';
+import { documentsApi } from '../lib/api';
 import AddCardSection from '../components/AddCardSection';
 import HypothesisSection from '../components/HypothesisSection';
 import TopicsSidebar from '../components/TopicsSidebar';
@@ -377,6 +383,7 @@ function CardItem({ card, onEdit, onDelete, isSelected, onToggleSelect }) {
 function CardsPage() {
   const { topicId } = useParams();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { cards, loading, fetchCards, deleteCard, updateCard, searchCards } = useCardsStore();
   const { topics, fetchTopics } = useTopicsStore();
   const { sources, fetchSources } = useSourcesStore(); // Add SourcesStore
@@ -396,6 +403,15 @@ function CardsPage() {
 
   // 假设验证用的卡片选择
   const [selectedCardIds, setSelectedCardIds] = useState(new Set());
+
+  // Tab 状态：cards | board | memo
+  const [activeTab, setActiveTab] = useState('cards');
+
+  // 研究备忘状态
+  const [memoContent, setMemoContent] = useState('');
+  const [memoDocument, setMemoDocument] = useState(null);
+  const [memoLoading, setMemoLoading] = useState(false);
+  const [memoSaving, setMemoSaving] = useState(false);
 
   // 切换卡片选中状态
   const toggleCardSelection = (cardId) => {
@@ -433,6 +449,40 @@ function CardsPage() {
     else if (selectedTopic) params.topic_id = selectedTopic;
     fetchCards(params);
   }, [fetchCards, topicId, selectedTopic]);
+
+  // 加载研究备忘
+  useEffect(() => {
+    if (!selectedTopic) {
+      setMemoContent('');
+      setMemoDocument(null);
+      return;
+    }
+
+    const loadMemo = async () => {
+      setMemoLoading(true);
+      try {
+        const result = await documentsApi.list({ topic_id: selectedTopic });
+        if (result.ok && result.documents && result.documents.length > 0) {
+          const doc = result.documents[0];
+          setMemoDocument(doc);
+          // story_units 是 JSONB 数组，提取文本内容
+          const content = doc.story_units?.map(unit => unit.content || unit.text || '').join('\n\n') || '';
+          setMemoContent(content);
+        } else {
+          // 没有文档，清空
+          setMemoDocument(null);
+          setMemoContent('');
+        }
+      } catch (error) {
+        console.error('加载研究备忘失败:', error);
+        showToast('加载研究备忘失败', 'error');
+      } finally {
+        setMemoLoading(false);
+      }
+    };
+
+    loadMemo();
+  }, [selectedTopic, showToast]);
 
   // 前端筛选逻辑（参考旧前端 updateFilteredView）
   const filteredCards = useMemo(() => {
@@ -475,6 +525,51 @@ function CardsPage() {
       showToast('卡片更新成功', 'success');
     } catch (error) {
       showToast('更新失败', 'error');
+    }
+  };
+
+  // 保存研究备忘
+  const handleSaveMemo = async () => {
+    if (!selectedTopic) return;
+
+    setMemoSaving(true);
+    try {
+      const currentTopic = topics.find(t => t.id === selectedTopic);
+      if (!currentTopic) {
+        showToast('Topic 不存在', 'error');
+        return;
+      }
+
+      // 将文本内容转换为 story_units 格式
+      const storyUnits = memoContent.split('\n\n').filter(text => text.trim()).map((text, index) => ({
+        id: `unit-${index}`,
+        type: 'text',
+        content: text.trim(),
+      }));
+
+      if (memoDocument) {
+        // 更新现有文档
+        await documentsApi.update(memoDocument.id, {
+          story_units: storyUnits,
+        });
+        showToast('研究备忘已保存', 'success');
+      } else {
+        // 创建新文档
+        const result = await documentsApi.create({
+          topic_id: selectedTopic,
+          title: `${currentTopic.title} - 研究备忘`,
+          story_units: storyUnits,
+        });
+        if (result.ok && result.document) {
+          setMemoDocument(result.document);
+          showToast('研究备忘已创建', 'success');
+        }
+      }
+    } catch (error) {
+      console.error('保存研究备忘失败:', error);
+      showToast('保存失败', 'error');
+    } finally {
+      setMemoSaving(false);
     }
   };
 
@@ -536,19 +631,60 @@ function CardsPage() {
             </p>
           </div>
 
-          {/* Add card */}
-          <AddCardSection />
+          {/* Tab 切换栏 - 仅在选中 Topic 时显示 */}
+          {selectedTopic && (
+            <div className="flex items-center gap-1 border-b" style={{ borderColor: 'var(--stroke-0)' }}>
+              <button
+                onClick={() => setActiveTab('cards')}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 ${
+                  activeTab === 'cards' ? 'border-indigo-500' : 'border-transparent'
+                }`}
+                style={{ color: activeTab === 'cards' ? 'var(--accent-400)' : 'var(--text-1)' }}
+              >
+                <LayoutGrid className="w-4 h-4" />
+                证据卡
+              </button>
+              <button
+                onClick={() => {
+                  if (selectedTopic) {
+                    navigate(`/topics/${selectedTopic}`);
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 border-transparent"
+                style={{ color: 'var(--text-1)' }}
+              >
+                <Network className="w-4 h-4" />
+                论证板
+              </button>
+              <button
+                onClick={() => setActiveTab('memo')}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 ${
+                  activeTab === 'memo' ? 'border-indigo-500' : 'border-transparent'
+                }`}
+                style={{ color: activeTab === 'memo' ? 'var(--accent-400)' : 'var(--text-1)' }}
+              >
+                <FileText className="w-4 h-4" />
+                研究备忘
+              </button>
+            </div>
+          )}
 
-          {/* Hypothesis section */}
-          <HypothesisSection
-            topics={topics}
-            selectedCardIds={selectedCardIds}
-            cards={filteredCards}
-            onClearSelection={clearSelection}
-          />
+          {/* Tab 内容区 */}
+          {activeTab === 'cards' && (
+            <>
+              {/* Add card */}
+              <AddCardSection />
 
-          {/* Search & filters */}
-          <div className="flex flex-col xl:flex-row gap-3">
+              {/* Hypothesis section */}
+              <HypothesisSection
+                topics={topics}
+                selectedCardIds={selectedCardIds}
+                cards={filteredCards}
+                onClearSelection={clearSelection}
+              />
+
+              {/* Search & filters */}
+              <div className="flex flex-col xl:flex-row gap-3">
             <form onSubmit={handleSearch} className="flex-1 relative min-w-[200px]">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: 'var(--text-2)' }} />
               <input
@@ -651,6 +787,68 @@ function CardsPage() {
                     ? '尝试调整筛选条件'
                     : '安装浏览器扩展，开始收集知识吧！'}
               </p>
+            </div>
+          )}
+            </>
+          )}
+
+          {/* 研究备忘 Tab */}
+          {activeTab === 'memo' && selectedTopic && (
+            <div className="space-y-4">
+              {memoLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent-400)' }} />
+                </div>
+              ) : (
+                <div className="rounded-xl p-6" style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)' }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold" style={{ color: 'var(--text-0)' }}>
+                        研究备忘
+                      </h3>
+                      <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>
+                        围绕 "{currentTopic?.title}" 的研究记录和思考
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleSaveMemo}
+                      disabled={memoSaving}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
+                      style={{ background: 'var(--accent-500)', color: 'white' }}
+                    >
+                      {memoSaving ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          保存中...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-4 h-4" />
+                          保存备忘
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <textarea
+                    value={memoContent}
+                    onChange={(e) => setMemoContent(e.target.value)}
+                    placeholder="在这里记录你的研究思路、关键发现、待验证问题...&#10;&#10;提示：使用空行分隔不同段落"
+                    rows={20}
+                    className="w-full px-4 py-3 rounded-lg text-sm resize-none focus:outline-none focus:ring-2"
+                    style={{
+                      background: 'var(--bg-0)',
+                      border: '1px solid var(--stroke-0)',
+                      color: 'var(--text-0)',
+                      '--tw-ring-color': 'var(--accent-500)'
+                    }}
+                  />
+                  {memoDocument && (
+                    <p className="text-xs mt-2" style={{ color: 'var(--text-2)' }}>
+                      最后保存：{new Date(memoDocument.updated_at || memoDocument.created_at).toLocaleString('zh-CN')}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

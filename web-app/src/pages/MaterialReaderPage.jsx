@@ -5,6 +5,7 @@ import {
   FileText, Globe, FileType, X, CheckCircle,
 } from 'lucide-react';
 import { materialsApi, highlightsApi, cardsApi, searchApi } from '../lib/api';
+import { useTopicsStore } from '../lib/store';
 import ReaderContent from '../components/Reader/ReaderContent';
 import SelectionPopover from '../components/Reader/SelectionPopover';
 import CardsSidebar from '../components/Reader/CardsSidebar';
@@ -12,6 +13,7 @@ import CardsSidebar from '../components/Reader/CardsSidebar';
 export default function MaterialReaderPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { topics, fetchTopics } = useTopicsStore();
 
   const [material, setMaterial] = useState(null);
   const [chunks, setChunks] = useState([]);
@@ -35,13 +37,15 @@ export default function MaterialReaderPage() {
   const [creatingCard, setCreatingCard] = useState(false);
   const [pendingSelection, setPendingSelection] = useState(null);
   const [cardNote, setCardNote] = useState('');
+  const [selectedTopicId, setSelectedTopicId] = useState(''); // 新增：选中的 Topic ID
   const [cardSuccess, setCardSuccess] = useState(false);
   const [cardHighlights, setCardHighlights] = useState([]);
   const [activeCardHighlightId, setActiveCardHighlightId] = useState(null);
 
   useEffect(() => {
     if (id) loadMaterial();
-  }, [id]);
+    fetchTopics(); // 加载 topics 列表
+  }, [id, fetchTopics]);
 
   const loadMaterial = async () => {
     try {
@@ -134,6 +138,7 @@ export default function MaterialReaderPage() {
       const captureResult = await cardsApi.capture({
         snippet: pendingSelection.exact,
         note: cardNote || undefined,
+        topic_id: selectedTopicId || material?.topic_id || undefined, // 使用选中的 Topic ID
         material_id: id,
         sourceName: material?.site_name || material?.title || undefined,
         sourceUrl: material?.url || undefined,
@@ -393,7 +398,7 @@ export default function MaterialReaderPage() {
             ) : (
               <>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-base font-semibold text-gray-900">创建卡片</h3>
+                  <h3 className="text-base font-semibold text-gray-900">创建证据卡</h3>
                   <button onClick={() => setCreatingCard(false)} className="p-1 hover:bg-gray-100 rounded">
                     <X className="w-4 h-4 text-gray-400" />
                   </button>
@@ -403,6 +408,30 @@ export default function MaterialReaderPage() {
                   <p className="text-sm text-amber-900 leading-relaxed line-clamp-4">
                     "{pendingSelection?.exact}"
                   </p>
+                </div>
+
+                {/* Topic 选择器 */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    归属研究议题
+                  </label>
+                  <select
+                    value={selectedTopicId}
+                    onChange={e => setSelectedTopicId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  >
+                    <option value="">选择 Topic...</option>
+                    {topics.map(topic => (
+                      <option key={topic.id} value={topic.id}>
+                        {topic.title}
+                      </option>
+                    ))}
+                  </select>
+                  {material?.topic_id && !selectedTopicId && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      默认使用来源的 Topic
+                    </p>
+                  )}
                 </div>
 
                 <textarea

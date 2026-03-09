@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, ChevronRight, ChevronDown, X, Check } from 'lucide-react';
+import { Plus, ChevronRight, ChevronDown, X, Check, MoreVertical, Edit3, Trash2 } from 'lucide-react';
 import { useTopicsStore, useUIStore } from '../lib/store';
 
 // Topic 颜色系统（与 CardsPage 保持一致）
@@ -38,8 +38,11 @@ function TopicsSidebar({
   const [isCreatingTopic, setIsCreatingTopic] = useState(false);
   const [newTopicTitle, setNewTopicTitle] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingTopicId, setEditingTopicId] = useState(null);
+  const [editingTopicTitle, setEditingTopicTitle] = useState('');
+  const [showMenuForTopic, setShowMenuForTopic] = useState(null);
 
-  const { createTopic, fetchTopics } = useTopicsStore();
+  const { createTopic, fetchTopics, updateTopic, deleteTopic } = useTopicsStore();
   const { showToast } = useUIStore();
 
   // 默认展开所有有卡片的 Topic
@@ -55,6 +58,19 @@ function TopicsSidebar({
       setInitialized(true);
     }
   }, [topics, cards, initialized]);
+
+  // 点击外部关闭菜单
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (showMenuForTopic) {
+        setShowMenuForTopic(null);
+      }
+    };
+    if (showMenuForTopic) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMenuForTopic]);
 
   // 切换 Topic 展开/折叠
   const toggleTopic = (topicId) => {
@@ -126,6 +142,59 @@ function TopicsSidebar({
   const handleCancelCreate = () => {
     setNewTopicTitle('');
     setIsCreatingTopic(false);
+  };
+
+  // 开始编辑 Topic
+  const handleStartEdit = (topic) => {
+    setEditingTopicId(topic.id);
+    setEditingTopicTitle(topic.title);
+    setShowMenuForTopic(null);
+  };
+
+  // 保存编辑
+  const handleSaveEdit = async () => {
+    const title = editingTopicTitle.trim();
+    if (!title) {
+      showToast('请输入 Topic 名称', 'error');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await updateTopic(editingTopicId, { title });
+      showToast('Topic 更新成功', 'success');
+      setEditingTopicId(null);
+      setEditingTopicTitle('');
+      await fetchTopics();
+    } catch (error) {
+      console.error('更新 Topic 失败:', error);
+      showToast(error.message || '更新 Topic 失败', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // 取消编辑
+  const handleCancelEdit = () => {
+    setEditingTopicId(null);
+    setEditingTopicTitle('');
+  };
+
+  // 删除 Topic
+  const handleDeleteTopic = async (topicId, topicTitle) => {
+    if (!window.confirm(`确定要删除 Topic "${topicTitle}" 吗？\n\n注意：关联的卡片不会被删除，但会失去 Topic 关联。`)) {
+      return;
+    }
+
+    setShowMenuForTopic(null);
+    try {
+      await deleteTopic(topicId);
+      showToast('Topic 已删除', 'success');
+      await fetchTopics();
+    } catch (error) {
+      console.error('删除 Topic 失败:', error);
+      showToast(error.message || '删除 Topic 失败', 'error');
+    }
   };
 
   return (
@@ -230,88 +299,208 @@ function TopicsSidebar({
             const topicCards = getCardsByTopic(topic.id);
 
             return (
-              <div key={topic.id} className="mb-1">
-                {/* Topic 项 */}
-                <button
-                  onClick={() => onTopicSelect(topic.id)}
-                  className="w-full flex items-center gap-2 p-2 rounded-lg transition-all hover:bg-opacity-80"
-                  style={{
-                    background: isSelected ? color.bg : 'transparent',
-                    border: isSelected ? `1px solid ${color.border}` : '1px solid transparent'
-                  }}
-                >
-                  {/* 展开/折叠图标 */}
-                  {topicCards.length > 0 && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleTopic(topic.id);
+              <div key={topic.id} className="mb-1 relative">
+                {/* 编辑模式 */}
+                {editingTopicId === topic.id ? (
+                  <div className="p-2 rounded-lg" style={{ background: 'var(--bg-0)', border: '1px solid var(--stroke-0)' }}>
+                    <input
+                      type="text"
+                      value={editingTopicTitle}
+                      onChange={(e) => setEditingTopicTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleSaveEdit();
+                        } else if (e.key === 'Escape') {
+                          handleCancelEdit();
+                        }
                       }}
-                      className="shrink-0 p-0.5 hover:bg-opacity-50 rounded"
-                    >
-                      {isExpanded ? (
-                        <ChevronDown className="w-4 h-4" style={{ color: 'var(--text-2)' }} />
-                      ) : (
-                        <ChevronRight className="w-4 h-4" style={{ color: 'var(--text-2)' }} />
-                      )}
-                    </button>
-                  )}
-
-                  {/* 彩色圆点 */}
-                  <div
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ background: color.text }}
-                  />
-
-                  {/* Topic 信息 */}
-                  <div className="flex-1 text-left min-w-0">
-                    <p
-                      className="text-sm font-medium truncate"
-                      style={{ color: isSelected ? color.text : 'var(--text-0)' }}
-                    >
-                      {topic.title}
-                    </p>
-                  </div>
-
-                  {/* 卡片数量 */}
-                  <span
-                    className="text-xs px-1.5 py-0.5 rounded"
-                    style={{
-                      background: 'var(--bg-0)',
-                      color: 'var(--text-2)'
-                    }}
-                  >
-                    {topic.card_count || topicCards.length}
-                  </span>
-                </button>
-
-                {/* 卡片时间轴（展开时显示）*/}
-                {isExpanded && topicCards.length > 0 && (
-                  <div className="ml-6 mt-1 space-y-1">
-                    {topicCards.map(card => (
+                      autoFocus
+                      disabled={isSubmitting}
+                      className="w-full px-2 py-1 rounded text-sm mb-2 focus:outline-none focus:ring-2"
+                      style={{
+                        background: 'var(--surface-0)',
+                        border: '1px solid var(--stroke-0)',
+                        color: 'var(--text-0)',
+                        '--tw-ring-color': 'var(--accent-500)'
+                      }}
+                    />
+                    <div className="flex items-center gap-2">
                       <button
-                        key={card.id}
-                        onClick={() => onCardSelect?.(card.id)}
-                        className="w-full text-left p-2 rounded text-xs transition-colors hover:bg-opacity-80"
+                        onClick={handleSaveEdit}
+                        disabled={isSubmitting || !editingTopicTitle.trim()}
+                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-xs transition-colors disabled:opacity-50"
+                        style={{ background: 'var(--accent-500)', color: 'white' }}
+                      >
+                        <Check className="w-3 h-3" />
+                        {isSubmitting ? '保存中...' : '保存'}
+                      </button>
+                      <button
+                        onClick={handleCancelEdit}
+                        disabled={isSubmitting}
+                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-xs transition-colors disabled:opacity-50"
+                        style={{ background: 'var(--bg-0)', color: 'var(--text-1)', border: '1px solid var(--stroke-0)' }}
+                      >
+                        <X className="w-3 h-3" />
+                        取消
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Topic 项 */}
+                    <div className="relative group">
+                      <button
+                        onClick={() => onTopicSelect(topic.id)}
+                        className="w-full flex items-center gap-2 p-2 rounded-lg transition-all hover:bg-opacity-80"
                         style={{
-                          background: 'var(--bg-0)',
-                          color: 'var(--text-1)'
+                          background: isSelected ? color.bg : 'transparent',
+                          border: isSelected ? `1px solid ${color.border}` : '1px solid transparent'
                         }}
                       >
-                        <p className="truncate font-medium mb-1">
-                          {card.title || '未命名卡片'}
-                        </p>
-                        <p style={{ color: 'var(--text-2)' }}>
-                          {new Date(card.created_at).toLocaleString('zh-CN', {
-                            month: 'numeric',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </p>
+                        {/* 展开/折叠图标 */}
+                        {topicCards.length > 0 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleTopic(topic.id);
+                            }}
+                            className="shrink-0 p-0.5 hover:bg-opacity-50 rounded"
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="w-4 h-4" style={{ color: 'var(--text-2)' }} />
+                            ) : (
+                              <ChevronRight className="w-4 h-4" style={{ color: 'var(--text-2)' }} />
+                            )}
+                          </button>
+                        )}
+
+                        {/* 彩色圆点 */}
+                        <div
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ background: color.text }}
+                        />
+
+                        {/* Topic 信息 */}
+                        <div className="flex-1 text-left min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p
+                              className="text-sm font-medium truncate"
+                              style={{ color: isSelected ? color.text : 'var(--text-0)' }}
+                            >
+                              {topic.title}
+                            </p>
+                            {/* 状态标签 */}
+                            {topic.status && topic.status !== 'active' && (
+                              <span
+                                className="text-xs px-1.5 py-0.5 rounded shrink-0"
+                                style={{
+                                  background: topic.status === 'investigating' ? 'rgba(251,191,36,0.15)' :
+                                             topic.status === 'resolved' ? 'rgba(52,211,153,0.15)' :
+                                             'rgba(148,163,184,0.15)',
+                                  color: topic.status === 'investigating' ? '#F59E0B' :
+                                         topic.status === 'resolved' ? '#10B981' :
+                                         '#64748B'
+                                }}
+                              >
+                                {topic.status === 'investigating' ? '研究中' :
+                                 topic.status === 'resolved' ? '已解决' :
+                                 topic.status === 'archived' ? '已归档' : topic.status}
+                              </span>
+                            )}
+                            {/* 优先级标签 */}
+                            {topic.priority === 'critical' && (
+                              <span
+                                className="text-xs px-1.5 py-0.5 rounded shrink-0"
+                                style={{
+                                  background: 'rgba(239,68,68,0.15)',
+                                  color: '#EF4444'
+                                }}
+                              >
+                                紧急
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 卡片数量 */}
+                        <span
+                          className="text-xs px-1.5 py-0.5 rounded"
+                          style={{
+                            background: 'var(--bg-0)',
+                            color: 'var(--text-2)'
+                          }}
+                        >
+                          {topic.card_count || topicCards.length}
+                        </span>
                       </button>
-                    ))}
-                  </div>
+
+                      {/* 操作菜单按钮 */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowMenuForTopic(showMenuForTopic === topic.id ? null : topic.id);
+                        }}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                        style={{ background: 'var(--surface-0)' }}
+                      >
+                        <MoreVertical className="w-4 h-4" style={{ color: 'var(--text-2)' }} />
+                      </button>
+
+                      {/* 操作菜单 */}
+                      {showMenuForTopic === topic.id && (
+                        <div
+                          className="absolute right-0 top-full mt-1 z-10 rounded-lg shadow-lg py-1 min-w-[120px]"
+                          style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)' }}
+                        >
+                          <button
+                            onClick={() => handleStartEdit(topic)}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-opacity-80"
+                            style={{ color: 'var(--text-1)' }}
+                          >
+                            <Edit3 className="w-4 h-4" />
+                            编辑
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTopic(topic.id, topic.title)}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-opacity-80"
+                            style={{ color: '#EF4444' }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            删除
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 卡片时间轴（展开时显示）*/}
+                    {isExpanded && topicCards.length > 0 && (
+                      <div className="ml-6 mt-1 space-y-1">
+                        {topicCards.map(card => (
+                          <button
+                            key={card.id}
+                            onClick={() => onCardSelect?.(card.id)}
+                            className="w-full text-left p-2 rounded text-xs transition-colors hover:bg-opacity-80"
+                            style={{
+                              background: 'var(--bg-0)',
+                              color: 'var(--text-1)'
+                            }}
+                          >
+                            <p className="truncate font-medium mb-1">
+                              {card.title || '未命名卡片'}
+                            </p>
+                            <p style={{ color: 'var(--text-2)' }}>
+                              {new Date(card.created_at).toLocaleString('zh-CN', {
+                                month: 'numeric',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             );

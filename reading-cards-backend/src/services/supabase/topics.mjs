@@ -40,14 +40,21 @@ export async function listTopicTitles(supabase, userId) {
  * @returns {Object} 创建后的 topic 对象
  */
 export async function createTopic(supabase, userId, topicData) {
+  const insertData = {
+    user_id: userId,
+    title: topicData.title,
+    description: topicData.description || null,
+    color: topicData.color || "#6366f1",
+  };
+
+  // 新增研究字段（可选）
+  if (topicData.status !== undefined) insertData.status = topicData.status;
+  if (topicData.research_context !== undefined) insertData.research_context = topicData.research_context;
+  if (topicData.priority !== undefined) insertData.priority = topicData.priority;
+
   const { data, error } = await supabase
     .from("topics")
-    .insert({
-      user_id: userId,
-      title: topicData.title,
-      description: topicData.description || null,
-      color: topicData.color || "#6366f1",
-    })
+    .insert(insertData)
     .select()
     .single();
 
@@ -126,6 +133,11 @@ export async function updateTopic(supabase, topicId, updates) {
   if (updates.title !== undefined) updateData.title = updates.title;
   if (updates.description !== undefined) updateData.description = updates.description;
   if (updates.color !== undefined) updateData.color = updates.color;
+
+  // 新增研究字段支持
+  if (updates.status !== undefined) updateData.status = updates.status;
+  if (updates.research_context !== undefined) updateData.research_context = updates.research_context;
+  if (updates.priority !== undefined) updateData.priority = updates.priority;
 
   const { data, error } = await supabase
     .from("topics")

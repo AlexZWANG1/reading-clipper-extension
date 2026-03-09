@@ -106,8 +106,7 @@ function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<TopicsPage />} />
-          <Route path="cards" element={<CardsPage />} />
+          <Route index element={<CardsPage />} />
           <Route path="materials" element={<MaterialsPage />} />
           <Route path="materials/:id" element={<MaterialReaderPage />} />
           <Route path="topics" element={<TopicsPage />} />
