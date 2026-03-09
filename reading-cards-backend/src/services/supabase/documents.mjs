@@ -8,22 +8,51 @@
  * @returns {Object} 创建后的完整文档对象
  */
 export async function addDocument(supabase, userId, docData) {
-  // 如果提供了 topic_title，先获取或创建对应的 topic
   let topicId = null;
-  if (docData.topic_title) {
-    const { data: topic } = await supabase.rpc("get_or_create_topic", {
+  let topicTitle = null;
+
+  if (docData.topic_id) {
+    const { data: topicById, error: topicByIdError } = await supabase
+      .from("topics")
+      .select("id, title")
+      .eq("id", docData.topic_id)
+      .eq("user_id", userId)
+      .single();
+
+    if (topicByIdError && topicByIdError.code !== "PGRST116") {
+      console.error("lookup document topic_id failed:", topicByIdError);
+      throw new Error(`lookup document topic_id failed: ${topicByIdError.message}`);
+    }
+
+    if (topicById) {
+      topicId = topicById.id;
+      topicTitle = topicById.title || null;
+    }
+  }
+
+  if (!topicId && docData.topic_title) {
+    const { data: topic, error: topicError } = await supabase.rpc("get_or_create_topic", {
       p_user_id: userId,
       p_title: docData.topic_title,
     });
+
+    if (topicError) {
+      console.error("get_or_create_topic failed:", topicError);
+      throw new Error(`get_or_create_topic failed: ${topicError.message}`);
+    }
+
     topicId = topic;
+    topicTitle = docData.topic_title;
   }
+
+  const resolvedTitle = docData.title || topicTitle || docData.topic_title || "Untitled document";
 
   const { data, error } = await supabase
     .from("documents")
     .insert({
       user_id: userId,
       topic_id: topicId,
-      title: docData.topic_title || docData.title || "未命名文档",
+      title: resolvedTitle,
       doc_questions: docData.doc_questions || [],
       doc_hypotheses: docData.doc_hypotheses || [],
       story_units: docData.story_units || [],
@@ -37,8 +66,8 @@ export async function addDocument(supabase, userId, docData) {
     .single();
 
   if (error) {
-    console.error("添加文档失败:", error);
-    throw new Error(`添加文档失败: ${error.message}`);
+    console.error("add document failed:", error);
+    throw new Error(`add document failed: ${error.message}`);
   }
 
   return transformDocument(data);
@@ -142,13 +171,30 @@ export async function updateDocument(supabase, userId, docId, updates) {
   if (updates.story_units !== undefined)
     updateData.story_units = updates.story_units;
 
-  // 处理 topic_title 更新
-  if (updates.topic_title !== undefined) {
+  if (updates.topic_id !== undefined) {
+    if (updates.topic_id) {
+      const { data: topicById, error: topicByIdError } = await supabase
+        .from("topics")
+        .select("id")
+        .eq("id", updates.topic_id)
+        .eq("user_id", userId)
+        .single();
+      if (topicByIdError && topicByIdError.code !== "PGRST116") {
+        throw new Error(`update document topic_id failed: ${topicByIdError.message}`);
+      }
+      updateData.topic_id = topicById?.id || null;
+    } else {
+      updateData.topic_id = null;
+    }
+  } else if (updates.topic_title !== undefined) {
     if (updates.topic_title) {
-      const { data: topicId } = await supabase.rpc("get_or_create_topic", {
+      const { data: topicId, error: topicError } = await supabase.rpc("get_or_create_topic", {
         p_user_id: userId,
         p_title: updates.topic_title,
       });
+      if (topicError) {
+        throw new Error(`update document topic_title failed: ${topicError.message}`);
+      }
       updateData.topic_id = topicId;
       updateData.title = updates.topic_title;
     } else {
@@ -172,8 +218,8 @@ export async function updateDocument(supabase, userId, docId, updates) {
     if (error.code === "PGRST116") {
       return null;
     }
-    console.error("更新文档失败:", error);
-    throw new Error(`更新文档失败: ${error.message}`);
+    console.error("update document failed:", error);
+    throw new Error(`update document failed: ${error.message}`);
   }
 
   return transformDocument(data);
@@ -213,7 +259,9 @@ function transformDocument(dbDoc) {
   if (!dbDoc) return null;
 
   return {
+    id: dbDoc.id,
     doc_id: dbDoc.id,
+    title: dbDoc.title || dbDoc.topic?.title || null,
     topic_title: dbDoc.topic?.title || dbDoc.title,
     topic_id: dbDoc.topic_id,
     doc_questions: dbDoc.doc_questions || [],

@@ -14,9 +14,23 @@ const FALLBACK_SUMMARY_MAX_LEN = 240;
  * @returns {Object} 创建后的完整卡片对象
  */
 export async function addCard(supabase, userId, cardData) {
-  // 如果提供了 topic_title，先获取或创建对应的 topic
   let topicId = null;
-  if (cardData.topic_title) {
+  if (cardData.topic_id) {
+    const { data: topicById, error: topicByIdError } = await supabase
+      .from("topics")
+      .select("id")
+      .eq("id", cardData.topic_id)
+      .eq("user_id", userId)
+      .single();
+
+    if (topicByIdError && topicByIdError.code !== "PGRST116") {
+      console.error("查找 topic_id 失败:", topicByIdError);
+    } else if (topicById) {
+      topicId = topicById.id;
+    }
+  }
+
+  if (!topicId && cardData.topic_title) {
     const { data: topic, error: topicError } = await supabase.rpc(
       "get_or_create_topic",
       {
@@ -308,6 +322,10 @@ export async function searchCards(supabase, userId, query, filters = {}) {
     } else {
       return [];
     }
+  }
+
+  if (filters.topic_id) {
+    dbQuery = dbQuery.eq("topic_id", filters.topic_id);
   }
 
   const { data, error } = await dbQuery;

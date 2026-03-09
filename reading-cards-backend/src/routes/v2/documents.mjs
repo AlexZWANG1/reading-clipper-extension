@@ -51,38 +51,47 @@ router.get("/", async (req, res) => {
  */
 router.post("/", async (req, res) => {
   try {
-    const { topic_title, preload_cards = true } = req.body || {};
+    const {
+      topic_title,
+      topic_id,
+      title,
+      doc_questions = [],
+      doc_hypotheses = [],
+      story_units = [],
+      preload_cards = true,
+    } = req.body || {};
 
-    if (!topic_title) {
+    if (!topic_title && !topic_id) {
       return res.status(400).json({
         ok: false,
-        error: "topic_title is required",
+        error: "topic_title_or_topic_id is required",
       });
     }
 
-    // 创建空文档
     const doc = await addDocument(req.supabase, req.user.id, {
-      topic_title,
-      doc_questions: [],
-      doc_hypotheses: [],
-      story_units: [],
+      topic_title: topic_title || undefined,
+      topic_id: topic_id || undefined,
+      title: title || undefined,
+      doc_questions,
+      doc_hypotheses,
+      story_units,
     });
 
-    // 如果需要预加载卡片
     let cards = [];
     if (preload_cards) {
       cards = await listCards(req.supabase, req.user.id, {
-        topic_title,
+        topic_title: topic_title || undefined,
+        topic_id: topic_id || undefined,
         includeDeleted: false,
       });
     }
 
     res.json({ ok: true, document: doc, cards });
   } catch (error) {
-    console.error("创建文档失败：", error);
+    console.error("create document failed:", error);
     res.status(500).json({
       ok: false,
-      error: error.message || "服务器内部错误",
+      error: error.message || "internal_server_error",
     });
   }
 });

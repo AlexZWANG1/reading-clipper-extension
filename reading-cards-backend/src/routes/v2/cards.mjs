@@ -89,6 +89,7 @@ router.post("/capture", async (req, res) => {
       sourceUrl,
       topicTitle,
       topic_title,
+      topic_id,
       material_id,
       raw_snippet,
       locator,
@@ -122,6 +123,7 @@ router.post("/capture", async (req, res) => {
         source_url: resolvedSourceUrl,
         raw_snippet: raw_snippet.trim(),
         note: resolvedNote,
+        topic_id: topic_id || null,
         topic_title: resolvedTopicTitle,
         title: title || null,
         fact_or_view: fact_or_view || null,
@@ -155,6 +157,7 @@ router.post("/capture", async (req, res) => {
       raw_snippet:
         agentResult.raw_snippet || (snippet && snippet.trim()) || "[image card]",
       note: resolvedNote,
+      topic_id: topic_id || null,
       topic_title: resolvedTopicTitle,
       image_url: agentResult.image_url || imageData || null,
       title: agentResult.title || title || null,
@@ -200,7 +203,7 @@ router.get("/", async (req, res) => {
 
 router.post("/search", async (req, res) => {
   try {
-    const { query, topic_title, use_ai } = req.body || {};
+    const { query, topic_title, topic_id, use_ai } = req.body || {};
 
     if (!query || !query.trim()) {
       return res.status(400).json({
@@ -211,6 +214,7 @@ router.post("/search", async (req, res) => {
 
     const all = await listCards(req.supabase, req.user.id, {
       topic_title: topic_title || undefined,
+      topic_id: topic_id || undefined,
       includeDeleted: false,
     });
 
@@ -235,6 +239,7 @@ router.post("/search", async (req, res) => {
 
     const cards = await searchCards(req.supabase, req.user.id, query, {
       topic_title: topic_title || undefined,
+      topic_id: topic_id || undefined,
     });
 
     res.json({

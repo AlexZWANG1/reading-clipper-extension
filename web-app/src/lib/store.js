@@ -213,8 +213,10 @@ export const useDocumentsStore = create((set, get) => ({
   updateDocument: async (id, updates) => {
     const { document } = await documentsApi.update(id, updates);
     set((state) => ({
-      documents: state.documents.map((d) => (d.doc_id === id ? document : d)),
-      currentDocument: state.currentDocument?.doc_id === id ? document : state.currentDocument,
+      documents: state.documents.map((d) => ((d.doc_id || d.id) === id ? document : d)),
+      currentDocument: (state.currentDocument?.doc_id || state.currentDocument?.id) === id
+        ? document
+        : state.currentDocument,
     }));
     return document;
   },
@@ -223,8 +225,11 @@ export const useDocumentsStore = create((set, get) => ({
   deleteDocument: async (id) => {
     await documentsApi.delete(id);
     set((state) => ({
-      documents: state.documents.filter((d) => d.doc_id !== id),
-      currentDocument: state.currentDocument?.doc_id === id ? null : state.currentDocument,
+      documents: state.documents.filter((d) => (d.doc_id || d.id) !== id),
+      currentDocument:
+        (state.currentDocument?.doc_id || state.currentDocument?.id) === id
+          ? null
+          : state.currentDocument,
     }));
   },
 
@@ -295,6 +300,5 @@ export const useUIStore = create((set) => ({
 
   hideToast: () => set({ toast: null }),
 }));
-
 
 

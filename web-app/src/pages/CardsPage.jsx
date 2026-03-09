@@ -549,14 +549,19 @@ function CardsPage() {
 
       if (memoDocument) {
         // 更新现有文档
-        await documentsApi.update(memoDocument.id, {
+        const memoId = memoDocument.doc_id || memoDocument.id;
+        const result = await documentsApi.update(memoId, {
           story_units: storyUnits,
         });
+        if (result?.document) {
+          setMemoDocument(result.document);
+        }
         showToast('研究备忘已保存', 'success');
       } else {
         // 创建新文档
         const result = await documentsApi.create({
           topic_id: selectedTopic,
+          topic_title: currentTopic.title,
           title: `${currentTopic.title} - 研究备忘`,
           story_units: storyUnits,
         });
