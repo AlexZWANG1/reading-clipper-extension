@@ -8,6 +8,8 @@ import RegisterPage from './pages/RegisterPage';
 import CardsPage from './pages/CardsPage';
 import TopicsPage from './pages/TopicsPage';
 import SourcesPage from './pages/SourcesPage';
+import RssPage from './pages/RssPage';
+import RssSubscriptionDetailPage from './pages/RssSubscriptionDetailPage';
 import AISettingsPage from './pages/AISettingsPage';
 import DownloadPage from './pages/DownloadPage';
 import ChatPage from './pages/ChatPage';
@@ -111,6 +113,8 @@ function App() {
           <Route index element={<CardsPage />} />
           <Route path="materials" element={<MaterialsPage />} />
           <Route path="materials/:id" element={<MaterialReaderPage />} />
+          <Route path="rss" element={<RssPage />} />
+          <Route path="rss/subscriptions/:id" element={<RssSubscriptionDetailPage />} />
           <Route path="topics" element={<TopicsPage />} />
           <Route path="topics/:topicId" element={<Suspense fallback={<div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-[3px] border-blue-500 border-t-transparent rounded-full animate-spin" /></div>}><ThinkingBoardPage /></Suspense>} />
           <Route path="sources" element={<SourcesPage />} />
@@ -132,5 +136,4 @@ function App() {
 }
 
 export default App;
-
 

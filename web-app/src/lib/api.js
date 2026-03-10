@@ -658,6 +658,111 @@ export const tasksApi = {
     request(`/v2/tasks/proposals/${id}/reject`, { method: 'POST' }),
 };
 
-export { ApiError, API_BASE, getAccessToken };
+// ========= RSS API =========
+export const rssApi = {
+  discover: (data) =>
+    request('/v2/rss/discover', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
+  listSubscriptions: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/v2/rss/subscriptions${query ? `?${query}` : ''}`);
+  },
+
+  getSubscription: (id) => request(`/v2/rss/subscriptions/${id}`),
+
+  createSubscription: (data) =>
+    request('/v2/rss/subscriptions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateSubscription: (id, data) =>
+    request(`/v2/rss/subscriptions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  deleteSubscription: (id) =>
+    request(`/v2/rss/subscriptions/${id}`, {
+      method: 'DELETE',
+    }),
+
+  syncSubscription: (id, data = {}) =>
+    request(`/v2/rss/subscriptions/${id}/sync`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  listItems: (subscriptionId, params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/v2/rss/subscriptions/${subscriptionId}/items${query ? `?${query}` : ''}`);
+  },
+
+  updateItem: (itemId, data) =>
+    request(`/v2/rss/items/${itemId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  importItemToMaterials: (itemId, data = {}) =>
+    request(`/v2/rss/items/${itemId}/import-to-materials`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  importOpml: async ({ file, opmlText }) => {
+    const token = getAccessToken();
+    let body = null;
+    let headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+    if (file) {
+      body = new FormData();
+      body.append('file', file);
+    } else {
+      headers = {
+        ...headers,
+        'Content-Type': 'application/json',
+      };
+      body = JSON.stringify({ opml_text: opmlText });
+    }
+
+    const response = await fetch(`${API_BASE}/v2/rss/import-opml`, {
+      method: 'POST',
+      headers,
+      body,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new ApiError(
+        data.message || data.error || 'OPML import failed',
+        response.status,
+        data
+      );
+    }
+    return data;
+  },
+
+  exportOpml: async (params = {}) => {
+    const token = getAccessToken();
+    const query = new URLSearchParams(params).toString();
+    const response = await fetch(`${API_BASE}/v2/rss/export-opml${query ? `?${query}` : ''}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new ApiError(
+        data.message || data.error || 'OPML export failed',
+        response.status,
+        data
+      );
+    }
+    const blob = await response.blob();
+    return blob;
+  },
+};
+
+export { ApiError, API_BASE, getAccessToken };
 

@@ -1,7 +1,7 @@
 // ========= 全局状态管理 =========
 
 import { create } from 'zustand';
-import { authApi, cardsApi, topicsApi, documentsApi, sourcesApi, tasksApi } from './api';
+import { authApi, cardsApi, topicsApi, documentsApi, sourcesApi, tasksApi, rssApi } from './api';
 
 // ========= 认证状态 =========
 export const useAuthStore = create((set, get) => ({
@@ -370,6 +370,111 @@ export const useTasksStore = create((set, get) => ({
   },
 
   clear: () => set({ tasks: [], currentTask: null, runs: [], proposals: [], loading: false, error: null }),
+}));
+
+// ========= RSS Store =========
+export const useRssStore = create((set, get) => ({
+  subscriptions: [],
+  currentSubscription: null,
+  items: [],
+  loading: false,
+  error: null,
+
+  fetchSubscriptions: async (params = {}) => {
+    set({ loading: true, error: null });
+    try {
+      const result = await rssApi.listSubscriptions(params);
+      set({ subscriptions: result.subscriptions || [], loading: false });
+      return result;
+    } catch (error) {
+      set({ loading: false, error: error.message });
+      throw error;
+    }
+  },
+
+  fetchSubscription: async (id) => {
+    set({ loading: true, error: null });
+    try {
+      const result = await rssApi.getSubscription(id);
+      set({ currentSubscription: result.subscription || null, loading: false });
+      return result;
+    } catch (error) {
+      set({ loading: false, error: error.message });
+      throw error;
+    }
+  },
+
+  createSubscription: async (data) => {
+    const result = await rssApi.createSubscription(data);
+    await get().fetchSubscriptions();
+    return result;
+  },
+
+  updateSubscription: async (id, data) => {
+    const result = await rssApi.updateSubscription(id, data);
+    await get().fetchSubscriptions();
+    if (get().currentSubscription?.id === id) {
+      set({ currentSubscription: result.subscription });
+    }
+    return result;
+  },
+
+  deleteSubscription: async (id) => {
+    const result = await rssApi.deleteSubscription(id);
+    set((state) => ({
+      subscriptions: state.subscriptions.filter((s) => s.id !== id),
+      currentSubscription: state.currentSubscription?.id === id ? null : state.currentSubscription,
+    }));
+    return result;
+  },
+
+  syncSubscription: async (id, data = {}) => {
+    const result = await rssApi.syncSubscription(id, data);
+    await get().fetchSubscriptions();
+    return result;
+  },
+
+  fetchItems: async (subscriptionId, params = {}) => {
+    set({ loading: true, error: null });
+    try {
+      const result = await rssApi.listItems(subscriptionId, params);
+      set({
+        items: result.items || [],
+        currentSubscription: result.subscription || get().currentSubscription,
+        loading: false,
+      });
+      return result;
+    } catch (error) {
+      set({ loading: false, error: error.message });
+      throw error;
+    }
+  },
+
+  updateItem: async (itemId, data) => {
+    const result = await rssApi.updateItem(itemId, data);
+    set((state) => ({
+      items: state.items.map((item) => (item.id === itemId ? result.item : item)),
+    }));
+    return result;
+  },
+
+  importItemToMaterials: async (itemId, data = {}) => {
+    const result = await rssApi.importItemToMaterials(itemId, data);
+    if (result.item) {
+      set((state) => ({
+        items: state.items.map((item) => (item.id === itemId ? result.item : item)),
+      }));
+    }
+    return result;
+  },
+
+  clear: () => set({
+    subscriptions: [],
+    currentSubscription: null,
+    items: [],
+    loading: false,
+    error: null,
+  }),
 }));
 
 // ========= UI 状态 =========

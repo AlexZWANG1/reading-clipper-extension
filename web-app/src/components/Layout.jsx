@@ -15,6 +15,7 @@ import {
   Layout as LayoutIcon,
   Scale,
   ListChecks,
+  Rss,
 } from 'lucide-react';
 import { useAuthStore, useUIStore } from '../lib/store';
 
@@ -24,6 +25,7 @@ const navGroups = [
     title: 'Reader',
     items: [
       { to: '/materials', icon: FileText, label: '来源库' },
+      { to: '/rss', icon: Rss, label: 'RSS 订阅' },
       { to: '/sources', icon: Globe, label: '信息源' },
     ],
   },

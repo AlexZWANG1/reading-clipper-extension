@@ -46,6 +46,8 @@ import materialsRouterV2 from "./routes/v2/materials.mjs";
 import searchRouterV2 from "./routes/v2/search.mjs";
 import highlightsRouterV2 from "./routes/v2/highlights.mjs";
 import tasksRouterV2 from "./routes/v2/tasks.mjs";
+import rssRouterV2 from "./routes/v2/rss.mjs";
+import { startRssScheduler } from "./services/rss/scheduler.mjs";
 
 // ========= Express 应用配置 =========
 const app = express();
@@ -108,6 +110,7 @@ app.use("/api/v2/materials", materialsRouterV2);
 app.use("/api/v2/search", searchRouterV2);
 app.use("/api/v2/highlights", highlightsRouterV2);
 app.use("/api/v2/tasks", tasksRouterV2);
+app.use("/api/v2/rss", rssRouterV2);
 
 // ========= 错误处理 =========
 app.use((err, req, res, next) => {
@@ -123,6 +126,7 @@ app.use((err, req, res, next) => {
 (async () => {
   const { checkSupabaseConfig } = await import("./config/supabase.mjs");
   await checkSupabaseConfig();
+  startRssScheduler();
 
   app.listen(PORT, () => {
     console.log("");
