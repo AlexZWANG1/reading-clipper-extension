@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
+import { Scale, Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
 import { useAuthStore, useUIStore } from '../lib/store';
 
 function LoginPage() {
@@ -32,63 +32,77 @@ function LoginPage() {
     }
   };
 
-  const inputStyle = { background: 'var(--surface-0)', border: '1px solid var(--stroke-0)', color: 'var(--text-0)' };
-
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-base)' }}>
-      {/* Decorative background */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-1/2 -right-1/2 w-full h-full rounded-full blur-3xl" style={{ background: 'rgba(99,102,241,0.08)' }} />
-        <div className="absolute -bottom-1/2 -left-1/2 w-full h-full rounded-full blur-3xl" style={{ background: 'rgba(99,102,241,0.05)' }} />
-      </div>
-
-      <div className="flex-1 flex items-center justify-center p-4 relative z-10">
+      <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           {/* Logo */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl shadow-lg mb-4" style={{ background: 'var(--accent-600)' }}>
-              <BookOpen className="w-8 h-8 text-white" />
+            <div
+              className="inline-flex items-center justify-center w-16 h-16 rounded-2xl shadow-lg mb-4"
+              style={{ background: 'var(--interactive-primary)' }}
+            >
+              <Scale className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-0)' }}>Reading Clipper</h1>
-            <p className="mt-1" style={{ color: 'var(--text-2)' }}>知识卡片管理平台</p>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+              Verity
+            </h1>
+            <p className="mt-1" style={{ color: 'var(--text-tertiary)' }}>
+              求真 · 研究验证工具
+            </p>
           </div>
 
           {/* Login form */}
-          <div className="rounded-2xl shadow-xl p-8" style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)' }}>
-            <h2 className="text-xl font-semibold mb-6" style={{ color: 'var(--text-0)' }}>欢迎回来</h2>
+          <div
+            className="card rounded-2xl shadow-xl p-8"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border-primary)' }}
+          >
+            <h2 className="text-xl font-semibold mb-6" style={{ color: 'var(--text-primary)' }}>
+              欢迎回来
+            </h2>
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-1)' }}>
+                <label
+                  className="block text-sm font-medium mb-1.5"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
                   邮箱地址
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: 'var(--text-2)' }} />
+                  <Mail
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  />
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="your@email.com"
-                    className="w-full pl-11 pr-4 py-3 rounded-xl input-focus"
-                    style={inputStyle}
+                    className="input w-full pl-11 pr-4 py-3 rounded-xl"
                     disabled={loading}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-1)' }}>
+                <label
+                  className="block text-sm font-medium mb-1.5"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
                   密码
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: 'var(--text-2)' }} />
+                  <Lock
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  />
                   <input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-11 pr-4 py-3 rounded-xl input-focus"
-                    style={inputStyle}
+                    className="input w-full pl-11 pr-4 py-3 rounded-xl"
                     disabled={loading}
                   />
                 </div>
@@ -97,8 +111,7 @@ function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full font-medium py-3 px-4 rounded-xl transition-colors btn-press flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ background: 'var(--accent-600)', color: 'white' }}
+                className="btn btn-primary w-full py-3 px-4 rounded-xl flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -112,18 +125,18 @@ function LoginPage() {
             </form>
 
             <div className="mt-6 text-center">
-              <span style={{ color: 'var(--text-2)' }}>还没有账号？</span>
+              <span style={{ color: 'var(--text-tertiary)' }}>还没有账号？</span>
               <Link
                 to="/register"
-                className="font-medium ml-1"
-                style={{ color: 'var(--accent-400)' }}
+                className="font-medium ml-1 hover:underline"
+                style={{ color: 'var(--accent-blue)' }}
               >
                 立即注册
               </Link>
             </div>
           </div>
 
-          <p className="text-center text-sm mt-6" style={{ color: 'var(--text-2)' }}>
+          <p className="text-center text-sm mt-6" style={{ color: 'var(--text-tertiary)' }}>
             登录即表示您同意我们的服务条款和隐私政策
           </p>
         </div>
@@ -133,10 +146,3 @@ function LoginPage() {
 }
 
 export default LoginPage;
-
-
-
-
-
-
-

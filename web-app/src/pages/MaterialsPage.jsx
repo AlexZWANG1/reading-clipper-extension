@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search,
@@ -7,7 +7,6 @@ import {
   Clock,
   Trash2,
   MoreVertical,
-  BookOpen,
   FileType,
   Plus,
   X,
@@ -17,20 +16,22 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { materialsApi } from '../lib/api';
-import TopicsSidebar from '../components/TopicsSidebar';
+import { useUIStore } from '../lib/store';
+import { extractHostname } from '../lib/ui-utils';
 
 export default function MaterialsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const topicId = searchParams.get('topic');
+  const { showToast } = useUIStore();
 
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // 上传弹窗状态
+  // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [uploadType, setUploadType] = useState('url'); // 'url' | 'file' | 'text'
+  const [uploadType, setUploadType] = useState('url');
   const [uploadUrl, setUploadUrl] = useState('');
   const [uploadText, setUploadText] = useState('');
   const [uploadFile, setUploadFile] = useState(null);
@@ -38,16 +39,11 @@ export default function MaterialsPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
-  useEffect(() => {
-    loadMaterials();
-  }, [topicId]);
-
-  const loadMaterials = async () => {
+  const loadMaterials = useCallback(async () => {
     try {
       setLoading(true);
       const params = {};
       if (topicId) params.topic_id = topicId;
-
       const response = await materialsApi.list(params);
       setMaterials(response.materials || []);
     } catch (error) {
@@ -55,7 +51,11 @@ export default function MaterialsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [topicId]);
+
+  useEffect(() => {
+    loadMaterials();
+  }, [loadMaterials]);
 
   const filteredMaterials = materials.filter(m =>
     !searchQuery ||
@@ -65,36 +65,34 @@ export default function MaterialsPage() {
 
   const handleDelete = async (id) => {
     if (!confirm('确定要删除这个材料吗？关联的卡片不会被删除。')) return;
-
     try {
       await materialsApi.delete(id);
       setMaterials(materials.filter(m => m.id !== id));
+      showToast('材料已删除', 'success');
     } catch (error) {
       console.error('Failed to delete material:', error);
-      alert('删除失败');
+      showToast('删除失败', 'error');
     }
   };
 
   const handleUpload = async () => {
     if (uploading) return;
 
-    // 验证输入
     if (uploadType === 'url' && !uploadUrl.trim()) {
-      alert('请输入 URL');
+      showToast('请输入 URL', 'error');
       return;
     }
     if (uploadType === 'text' && !uploadText.trim()) {
-      alert('请输入文本内容');
+      showToast('请输入文本内容', 'error');
       return;
     }
     if (uploadType === 'file' && !uploadFile) {
-      alert('请选择文件');
+      showToast('请选择文件', 'error');
       return;
     }
 
     try {
       setUploading(true);
-
       let payload = {
         topic_id: topicId || undefined,
         title: uploadTitle.trim() || undefined,
@@ -107,7 +105,6 @@ export default function MaterialsPage() {
         payload.source_type = 'text';
         payload.text = uploadText.trim();
       } else if (uploadType === 'file') {
-        // 文件上传需要先读取内容
         const text = await uploadFile.text();
         payload.source_type = 'file';
         payload.text = text;
@@ -115,17 +112,16 @@ export default function MaterialsPage() {
       }
 
       await materialsApi.ingest(payload);
-
       setUploadSuccess(true);
       setTimeout(() => {
         setShowUploadModal(false);
         setUploadSuccess(false);
         resetUploadForm();
-        loadMaterials(); // 刷新列表
-      }, 1500);
+        loadMaterials();
+      }, 1200);
     } catch (error) {
       console.error('Upload failed:', error);
-      alert('上传失败：' + (error.message || '未知错误'));
+      showToast('上传失败：' + (error.message || '未知错误'), 'error');
     } finally {
       setUploading(false);
     }
@@ -139,200 +135,198 @@ export default function MaterialsPage() {
     setUploadTitle('');
   };
 
+  const STATUS_LABELS = {
+    pending: '等待中',
+    processing: '处理中',
+    completed: '已完成',
+    failed: '失败',
+  };
+
+  const STATUS_COLORS = {
+    pending: { bg: 'rgba(245,158,11,0.08)', color: 'var(--warning)' },
+    processing: { bg: 'rgba(37,99,235,0.08)', color: 'var(--accent-blue)' },
+    completed: { bg: 'rgba(16,185,129,0.08)', color: 'var(--success)' },
+    failed: { bg: 'rgba(220,38,38,0.08)', color: 'var(--error)' },
+  };
+
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* 左侧边栏 */}
-      <TopicsSidebar />
-
-      {/* 主内容区 */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* 顶部搜索栏 */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4">
-          <div className="flex items-center gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="搜索材料..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-            <button
-              onClick={() => setShowUploadModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              添加材料
-            </button>
-          </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>来源库</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-tertiary)' }}>
+            {filteredMaterials.length} 个材料
+          </p>
         </div>
-
-        {/* 材料列表 */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          {loading ? (
-            <div className="text-center py-12 text-gray-500">加载中...</div>
-          ) : filteredMaterials.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p>暂无材料</p>
-              <p className="text-sm mt-2">使用浏览器插件保存整页内容</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {filteredMaterials.map((material) => (
-                <MaterialItem
-                  key={material.id}
-                  material={material}
-                  onDelete={handleDelete}
-                  onClick={() => navigate(`/materials/${material.id}`)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+        <button
+          onClick={() => setShowUploadModal(true)}
+          className="btn btn-primary flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          添加材料
+        </button>
       </div>
 
-      {/* 上传弹窗 */}
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: 'var(--text-tertiary)' }} />
+        <input
+          type="text"
+          placeholder="搜索材料..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="input w-full pl-11"
+        />
+      </div>
+
+      {/* Materials list */}
+      {loading ? (
+        <div className="space-y-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-24 skeleton rounded-lg" />
+          ))}
+        </div>
+      ) : filteredMaterials.length === 0 ? (
+        <div className="card text-center py-16">
+          <FileText className="w-12 h-12 mx-auto mb-4" style={{ color: 'var(--text-tertiary)' }} />
+          <p className="font-medium" style={{ color: 'var(--text-secondary)' }}>暂无材料</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-tertiary)' }}>使用浏览器插件保存整页内容</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filteredMaterials.map((material) => (
+            <MaterialItem
+              key={material.id}
+              material={material}
+              statusLabels={STATUS_LABELS}
+              statusColors={STATUS_COLORS}
+              onDelete={handleDelete}
+              onClick={() => navigate(`/materials/${material.id}`)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Upload modal */}
       {showUploadModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in" style={{ background: 'rgba(0,0,0,0.4)' }}>
+          <div
+            className="rounded-xl shadow-lg w-full max-w-lg mx-4 p-6 animate-slide-up"
+            style={{ background: '#fff', border: '1px solid var(--border-primary)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             {uploadSuccess ? (
               <div className="flex flex-col items-center py-8 gap-3">
-                <CheckCircle className="w-12 h-12 text-green-500" />
-                <p className="text-lg font-medium text-gray-800">材料已添加</p>
-                <p className="text-sm text-gray-500">正在后台处理...</p>
+                <CheckCircle className="w-10 h-10" style={{ color: 'var(--success)' }} />
+                <p className="font-medium" style={{ color: 'var(--text-primary)' }}>材料已添加</p>
+                <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>正在后台处理...</p>
               </div>
             ) : (
               <>
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900">添加材料</h3>
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>添加材料</h3>
                   <button
-                    onClick={() => {
-                      setShowUploadModal(false);
-                      resetUploadForm();
-                    }}
-                    className="p-1 hover:bg-gray-100 rounded"
+                    onClick={() => { setShowUploadModal(false); resetUploadForm(); }}
+                    className="p-1.5 rounded-lg transition-colors cursor-pointer"
+                    style={{ color: 'var(--text-tertiary)' }}
                   >
-                    <X className="w-5 h-5 text-gray-400" />
+                    <X className="w-5 h-5" />
                   </button>
                 </div>
 
-                {/* 类型选择 */}
-                <div className="flex gap-2 mb-6">
-                  <button
-                    onClick={() => setUploadType('url')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-colors ${
-                      uploadType === 'url'
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                    }`}
-                  >
-                    <LinkIcon className="w-4 h-4" />
-                    URL
-                  </button>
-                  <button
-                    onClick={() => setUploadType('file')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-colors ${
-                      uploadType === 'file'
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                    }`}
-                  >
-                    <Upload className="w-4 h-4" />
-                    文件
-                  </button>
-                  <button
-                    onClick={() => setUploadType('text')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-colors ${
-                      uploadType === 'text'
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                    }`}
-                  >
-                    <FileText className="w-4 h-4" />
-                    文本
-                  </button>
+                {/* Type selector */}
+                <div className="flex gap-2 mb-5">
+                  {[
+                    { key: 'url', icon: LinkIcon, label: 'URL' },
+                    { key: 'file', icon: Upload, label: '文件' },
+                    { key: 'text', icon: FileText, label: '文本' },
+                  ].map(({ key, icon: Icon, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => setUploadType(key)}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+                      style={{
+                        border: uploadType === key ? '2px solid var(--interactive-primary)' : '2px solid var(--border-primary)',
+                        background: uploadType === key ? 'var(--bg-muted)' : 'transparent',
+                        color: uploadType === key ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      }}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {label}
+                    </button>
+                  ))}
                 </div>
 
-                {/* 标题输入（可选） */}
+                {/* Title */}
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    标题（可选）
-                  </label>
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>标题（可选）</label>
                   <input
                     type="text"
                     placeholder="留空则自动提取"
                     value={uploadTitle}
                     onChange={(e) => setUploadTitle(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    className="input w-full"
                   />
                 </div>
 
-                {/* URL 输入 */}
+                {/* URL input */}
                 {uploadType === 'url' && (
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      网页地址
-                    </label>
+                  <div className="mb-5">
+                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>网页地址</label>
                     <input
                       type="url"
                       placeholder="https://example.com/article"
                       value={uploadUrl}
                       onChange={(e) => setUploadUrl(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      className="input w-full"
                     />
                   </div>
                 )}
 
-                {/* 文件上传 */}
+                {/* File input */}
                 {uploadType === 'file' && (
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      选择文件
-                    </label>
+                  <div className="mb-5">
+                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>选择文件</label>
                     <input
                       type="file"
                       accept=".txt,.md,.pdf"
                       onChange={(e) => setUploadFile(e.target.files[0])}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      className="w-full px-3 py-2 rounded-lg text-sm"
+                      style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)' }}
                     />
-                    <p className="text-xs text-gray-500 mt-1">支持 TXT、Markdown、PDF</p>
+                    <p className="text-xs mt-1.5" style={{ color: 'var(--text-tertiary)' }}>支持 TXT、Markdown、PDF</p>
                   </div>
                 )}
 
-                {/* 文本输入 */}
+                {/* Text input */}
                 {uploadType === 'text' && (
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      文本内容
-                    </label>
+                  <div className="mb-5">
+                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>文本内容</label>
                     <textarea
                       placeholder="粘贴或输入文本内容..."
                       value={uploadText}
                       onChange={(e) => setUploadText(e.target.value)}
                       rows={8}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+                      className="w-full px-3 py-2 rounded-lg input-focus text-sm resize-none"
+                      style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)' }}
                     />
                   </div>
                 )}
 
-                {/* 操作按钮 */}
+                {/* Actions */}
                 <div className="flex justify-end gap-3">
                   <button
-                    onClick={() => {
-                      setShowUploadModal(false);
-                      resetUploadForm();
-                    }}
-                    className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+                    onClick={() => { setShowUploadModal(false); resetUploadForm(); }}
+                    className="px-4 py-2 text-sm rounded-lg transition-colors cursor-pointer"
+                    style={{ color: 'var(--text-secondary)' }}
                   >
                     取消
                   </button>
                   <button
                     onClick={handleUpload}
                     disabled={uploading}
-                    className="flex items-center gap-2 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
                   >
                     {uploading && <Loader2 className="w-4 h-4 animate-spin" />}
                     {uploading ? '上传中...' : '添加'}
@@ -347,7 +341,7 @@ export default function MaterialsPage() {
   );
 }
 
-function MaterialItem({ material, onDelete, onClick }) {
+function MaterialItem({ material, statusLabels, statusColors, onDelete, onClick }) {
   const [showMenu, setShowMenu] = useState(false);
 
   const sourceTypeIcon = {
@@ -355,103 +349,90 @@ function MaterialItem({ material, onDelete, onClick }) {
     file: FileType,
     text: FileText,
   };
-
   const Icon = sourceTypeIcon[material.source_type] || FileText;
-
-  const statusColor = {
-    pending: 'text-yellow-600 bg-yellow-50',
-    processing: 'text-blue-600 bg-blue-50',
-    completed: 'text-green-600 bg-green-50',
-    failed: 'text-red-600 bg-red-50',
-  };
+  const status = statusColors[material.ingestion_status] || statusColors.pending;
 
   return (
     <div
-      className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow cursor-pointer"
+      className="card card-hover cursor-pointer group p-4"
       onClick={onClick}
     >
-      <div className="flex items-start gap-4">
-        {/* 图标 */}
-        <div className="flex-shrink-0 w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
-          <Icon className="w-5 h-5 text-indigo-600" />
+      <div className="flex items-start gap-3">
+        <div
+          className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center"
+          style={{ background: 'var(--bg-muted)' }}
+        >
+          <Icon className="w-4 h-4" style={{ color: 'var(--interactive-primary)' }} />
         </div>
 
-        {/* 内容 */}
         <div className="flex-1 min-w-0">
-          {/* 标题 */}
-          <h3 className="text-lg font-medium text-gray-900 mb-1 truncate">
+          <h3 className="font-medium truncate" style={{ color: 'var(--text-primary)' }}>
             {material.title || '无标题'}
           </h3>
 
-          {/* 摘要 */}
           {material.excerpt && (
-            <p className="text-sm text-gray-600 line-clamp-2 mb-2">
+            <p className="text-sm line-clamp-2 mt-1" style={{ color: 'var(--text-secondary)' }}>
               {material.excerpt}
             </p>
           )}
 
-          {/* 元信息 */}
-          <div className="flex items-center gap-4 text-xs text-gray-500">
+          <div className="flex items-center gap-3 mt-2 text-xs" style={{ color: 'var(--text-tertiary)' }}>
             <span className="flex items-center gap-1">
               <Clock className="w-3 h-3" />
               {new Date(material.created_at).toLocaleDateString('zh-CN')}
             </span>
 
-            {material.word_count && (
+            {material.word_count > 0 && (
               <span>{material.word_count.toLocaleString()} 字</span>
             )}
 
             {material.chunk_count > 0 && (
-              <span>{material.chunk_count} 个片段</span>
+              <span>{material.chunk_count} 段</span>
             )}
 
-            <span className={`px-2 py-0.5 rounded-full ${statusColor[material.ingestion_status] || ''}`}>
-              {material.ingestion_status === 'completed' ? '已完成' :
-               material.ingestion_status === 'processing' ? '处理中' :
-               material.ingestion_status === 'failed' ? '失败' : '等待中'}
+            <span
+              className="badge badge-status px-1.5 py-0.5 rounded text-[11px] font-medium"
+              style={{ background: status.bg, color: status.color }}
+            >
+              {statusLabels[material.ingestion_status] || '等待中'}
             </span>
           </div>
 
-          {/* 来源链接 */}
           {material.url && (
             <a
               href={material.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-indigo-600 hover:underline mt-2 inline-block"
+              className="text-xs mt-2 inline-flex items-center gap-1 transition-colors hover:underline"
+              style={{ color: 'var(--interactive-primary)' }}
               onClick={(e) => e.stopPropagation()}
             >
-              查看原文 ↗
+              {extractHostname(material.url)}
+              <ExternalLink className="w-3 h-3" />
             </a>
           )}
         </div>
 
-        {/* 操作菜单 */}
         <div className="relative">
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowMenu(!showMenu);
-            }}
-            className="p-1 hover:bg-gray-100 rounded"
+            onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+            className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+            style={{ color: 'var(--text-tertiary)' }}
           >
-            <MoreVertical className="w-5 h-5 text-gray-400" />
+            <MoreVertical className="w-4 h-4" />
           </button>
 
           {showMenu && (
             <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
               <div
-                className="fixed inset-0 z-10"
-                onClick={() => setShowMenu(false)}
-              />
-              <div className="absolute right-0 top-8 z-20 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[120px]">
+                className="absolute right-0 top-full mt-1 z-20 rounded-lg shadow-lg py-1 min-w-[120px]"
+                style={{ background: 'var(--surface)', border: '1px solid var(--border-primary)' }}
+              >
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(material.id);
-                    setShowMenu(false);
-                  }}
-                  className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                  onClick={(e) => { e.stopPropagation(); onDelete(material.id); setShowMenu(false); }}
+                  className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors cursor-pointer"
+                  style={{ color: 'var(--error)' }}
                 >
                   <Trash2 className="w-4 h-4" />
                   删除

@@ -56,25 +56,25 @@ function Layout() {
     navigate('/login');
   };
 
-  const isFullScreenPage = /^\/(topics\/[^/]+|cards)$/.test(location.pathname);
+  const isFullScreenPage = /^\/$|^\/topics\/[^/]+$|^\/cards$/.test(location.pathname);
 
   return (
-    <div className="h-screen flex flex-col lg:flex-row overflow-hidden" style={{ background: 'var(--bg-0)' }}>
+    <div className="h-screen flex flex-col lg:flex-row overflow-hidden" style={{ background: 'var(--bg-subtle)' }}>
       {/* Mobile header */}
       <header
         className="lg:hidden flex-none fixed top-0 left-0 right-0 h-14 z-50 flex items-center px-4"
-        style={{ background: 'var(--surface-1)', borderBottom: '1px solid var(--stroke-0)' }}
+        style={{ background: 'var(--surface-raised)', borderBottom: '1px solid var(--border-primary)' }}
       >
         <button
           onClick={toggleSidebar}
           className="p-2 -ml-2 rounded-lg transition-colors"
-          style={{ color: 'var(--text-1)' }}
+          style={{ color: 'var(--text-secondary)' }}
         >
           <Menu className="w-5 h-5" />
         </button>
         <div className="flex-1 flex items-center justify-center">
-          <Scale className="w-5 h-5 mr-2" style={{ color: 'var(--accent-400)' }} />
-          <span className="font-semibold" style={{ color: 'var(--text-0)' }}>Verity</span>
+          <Scale className="w-5 h-5 mr-2" style={{ color: 'var(--text-primary)' }} />
+          <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Verity</span>
         </div>
         <div className="w-9" />
       </header>
@@ -93,16 +93,16 @@ function Layout() {
         className={`fixed lg:static inset-y-0 left-0 w-64 z-50 transform transition-transform duration-200 ease-out flex-none flex flex-col ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
-        style={{ background: 'var(--surface-1)', borderRight: '1px solid var(--stroke-0)' }}
+        style={{ background: 'var(--surface-raised)', borderRight: '1px solid var(--border-primary)' }}
       >
         {/* Logo */}
-        <div className="h-16 flex-none flex items-center px-5" style={{ borderBottom: '1px solid var(--stroke-1)' }}>
-          <Scale className="w-7 h-7 mr-2.5" style={{ color: 'var(--accent-400)' }} />
-          <span className="text-lg font-bold" style={{ color: 'var(--text-0)' }}>Verity</span>
+        <div className="h-16 flex-none flex items-center px-5" style={{ borderBottom: '1px solid var(--border-secondary)' }}>
+          <Scale className="w-7 h-7 mr-2.5" style={{ color: 'var(--text-primary)' }} />
+          <span className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Verity</span>
           <button
             onClick={toggleSidebar}
             className="lg:hidden ml-auto p-1.5 transition-colors"
-            style={{ color: 'var(--text-2)' }}
+            style={{ color: 'var(--text-tertiary)' }}
           >
             <X className="w-5 h-5" />
           </button>
@@ -113,9 +113,9 @@ function Layout() {
           {navGroups.map((group, groupIndex) => (
             <div key={group.title}>
               {groupIndex > 0 && (
-                <div className="pt-3 mt-3" style={{ borderTop: '1px solid var(--stroke-1)' }} />
+                <div className="pt-3 mt-3" style={{ borderTop: '1px solid var(--border-secondary)' }} />
               )}
-              <p className="px-3 py-1 text-xs font-medium" style={{ color: 'var(--text-2)' }}>
+              <p className="px-3 py-1 text-xs font-medium" style={{ color: 'var(--text-tertiary)' }}>
                 {group.title}
               </p>
               {group.items.map(({ to, icon: Icon, label, end }) => (
@@ -128,8 +128,8 @@ function Layout() {
                     `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all`
                   }
                   style={({ isActive }) => ({
-                    background: isActive ? 'rgba(99,102,241,0.12)' : 'transparent',
-                    color: isActive ? 'var(--accent-300)' : 'var(--text-1)',
+                    background: isActive ? 'var(--bg-muted)' : 'transparent',
+                    color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
                   })}
                 >
                   <Icon className="w-5 h-5" />
@@ -140,8 +140,8 @@ function Layout() {
           ))}
 
           {/* Divider */}
-          <div className="pt-3 mt-3" style={{ borderTop: '1px solid var(--stroke-1)' }}>
-            <p className="px-3 py-1 text-xs font-medium" style={{ color: 'var(--text-2)' }}>Settings</p>
+          <div className="pt-3 mt-3" style={{ borderTop: '1px solid var(--border-secondary)' }}>
+            <p className="px-3 py-1 text-xs font-medium" style={{ color: 'var(--text-tertiary)' }}>Settings</p>
           </div>
 
           {userItems.map(({ to, icon: Icon, label }) => (
@@ -151,8 +151,8 @@ function Layout() {
               onClick={() => window.innerWidth < 1024 && toggleSidebar()}
               className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all"
               style={({ isActive }) => ({
-                background: isActive ? 'rgba(99,102,241,0.12)' : 'transparent',
-                color: isActive ? 'var(--accent-300)' : 'var(--text-1)',
+                background: isActive ? 'var(--bg-muted)' : 'transparent',
+                color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
               })}
             >
               <Icon className="w-5 h-5" />
@@ -162,24 +162,24 @@ function Layout() {
         </nav>
 
         {/* User info */}
-        <div className="flex-none p-3" style={{ borderTop: '1px solid var(--stroke-1)' }}>
-          <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: 'rgba(0,0,0,0.2)' }}>
+        <div className="flex-none p-3" style={{ borderTop: '1px solid var(--border-secondary)' }}>
+          <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: 'rgba(10,10,10,0.04)' }}>
             <div
               className="w-9 h-9 rounded-full flex items-center justify-center"
-              style={{ background: 'rgba(99,102,241,0.15)' }}
+              style={{ background: 'var(--bg-muted)' }}
             >
-              <User className="w-5 h-5" style={{ color: 'var(--accent-400)' }} />
+              <User className="w-5 h-5" style={{ color: 'var(--text-primary)' }} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate" style={{ color: 'var(--text-0)' }}>
+              <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
                 {user?.name || user?.email?.split('@')[0]}
               </p>
-              <p className="text-xs truncate" style={{ color: 'var(--text-2)' }}>{user?.email}</p>
+              <p className="text-xs truncate" style={{ color: 'var(--text-tertiary)' }}>{user?.email}</p>
             </div>
             <button
               onClick={handleLogout}
               className="p-2 rounded-lg transition-colors"
-              style={{ color: 'var(--text-2)' }}
+              style={{ color: 'var(--text-tertiary)' }}
               title="退出登录"
             >
               <LogOut className="w-4 h-4" />

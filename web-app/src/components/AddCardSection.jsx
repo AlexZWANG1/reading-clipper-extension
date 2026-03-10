@@ -200,12 +200,10 @@ function AddCardSection({ onCardAdded }) {
 
   const canSubmit = (snippet.trim() || imageData || selectedFile) && !loading;
 
-  const inputStyle = { background: 'var(--surface-0)', border: '1px solid var(--stroke-0)', color: 'var(--text-0)' };
-
   return (
-    <div className="rounded-xl p-5 mb-6" style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)' }}>
-      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: 'var(--text-0)' }}>
-        <Plus className="w-5 h-5" style={{ color: 'var(--accent-400)' }} />
+    <div className="card mb-6">
+      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+        <Plus className="w-5 h-5" style={{ color: 'var(--text-primary)' }} />
         添加新卡片
       </h3>
 
@@ -216,19 +214,19 @@ function AddCardSection({ onCardAdded }) {
             onClick={() => fileInputRef.current?.click()}
             disabled={loading}
             className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
-            style={{ border: '1px solid var(--stroke-0)', color: 'var(--text-1)' }}
+            style={{ border: '1px solid var(--border-primary)', color: 'var(--text-secondary)' }}
           >
             <Upload className="w-4 h-4" />
             上传文件
           </button>
-          <span className="text-xs" style={{ color: 'var(--text-2)' }}>支持 PDF、Word、TXT、Markdown</span>
+          <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>支持 PDF、Word、TXT、Markdown</span>
         </div>
 
         {selectedFile && (
-          <div className="flex items-center gap-2 p-3 rounded-lg mb-3" style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)' }}>
-            <FileText className="w-5 h-5" style={{ color: 'var(--accent-400)' }} />
-            <span className="flex-1 text-sm truncate" style={{ color: 'var(--accent-300)' }}>{selectedFile.name}</span>
-            <button onClick={removeFile} className="p-1 rounded" style={{ color: 'var(--text-2)' }}>
+          <div className="flex items-center gap-2 p-3 rounded-lg mb-3" style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-primary)' }}>
+            <FileText className="w-5 h-5" style={{ color: 'var(--accent-blue)' }} />
+            <span className="flex-1 text-sm truncate" style={{ color: 'var(--text-primary)' }}>{selectedFile.name}</span>
+            <button onClick={removeFile} className="p-1 rounded" style={{ color: 'var(--text-tertiary)' }}>
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -238,9 +236,9 @@ function AddCardSection({ onCardAdded }) {
       {!selectedFile && (
         <>
           <div className="flex items-center gap-3 mb-4">
-            <div className="flex-1 h-px" style={{ background: 'var(--stroke-1)' }} />
-            <span className="text-xs" style={{ color: 'var(--text-2)' }}>或</span>
-            <div className="flex-1 h-px" style={{ background: 'var(--stroke-1)' }} />
+            <div className="flex-1 h-px" style={{ background: 'var(--border-primary)' }} />
+            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>或</span>
+            <div className="flex-1 h-px" style={{ background: 'var(--border-primary)' }} />
           </div>
 
           <div className="mb-4">
@@ -252,17 +250,16 @@ function AddCardSection({ onCardAdded }) {
               placeholder="在此粘贴文字内容或图片...（支持 Ctrl+V 粘贴图片）"
               rows={4}
               disabled={loading}
-              className="w-full px-4 py-3 rounded-xl input-focus resize-none disabled:opacity-50"
-              style={inputStyle}
+              className="textarea resize-none disabled:opacity-50"
             />
           </div>
 
           {imageData && (
-            <div className="mb-4 p-3 rounded-xl" style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--stroke-0)' }}>
+            <div className="mb-4 p-3 rounded-xl" style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-primary)' }}>
               <div className="flex items-start gap-3">
-                <img src={imageData} alt="预览图片" className="max-w-[200px] max-h-[150px] rounded-lg object-cover" style={{ border: '1px solid var(--stroke-0)' }} />
+                <img src={imageData} alt="预览图片" className="max-w-[200px] max-h-[150px] rounded-lg object-cover" style={{ border: '1px solid var(--border-primary)' }} />
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 text-sm mb-2" style={{ color: 'var(--text-1)' }}>
+                  <div className="flex items-center gap-2 text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>
                     <Image className="w-4 h-4" />
                     已粘贴图片
                   </div>
@@ -281,7 +278,7 @@ function AddCardSection({ onCardAdded }) {
         <button
           onClick={() => setShowOptions(!showOptions)}
           className="flex items-center gap-1 text-sm transition-colors"
-          style={{ color: 'var(--text-2)' }}
+          style={{ color: 'var(--text-tertiary)' }}
         >
           <ChevronDown className={`w-4 h-4 transition-transform ${showOptions ? 'rotate-180' : ''}`} />
           更多选项（来源、Topic）
@@ -290,22 +287,22 @@ function AddCardSection({ onCardAdded }) {
         {showOptions && (
           <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-2)' }}>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-tertiary)' }}>
                 <LinkIcon className="w-3 h-3 inline mr-1" />来源名称
               </label>
-              <input type="text" value={sourceName} onChange={(e) => setSourceName(e.target.value)} placeholder="文章标题/网站名称" disabled={loading} className="w-full px-3 py-2 text-sm rounded-lg input-focus disabled:opacity-50" style={inputStyle} />
+              <input type="text" value={sourceName} onChange={(e) => setSourceName(e.target.value)} placeholder="文章标题/网站名称" disabled={loading} className="input disabled:opacity-50" />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-2)' }}>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-tertiary)' }}>
                 <LinkIcon className="w-3 h-3 inline mr-1" />来源链接
               </label>
-              <input type="text" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://..." disabled={loading} className="w-full px-3 py-2 text-sm rounded-lg input-focus disabled:opacity-50" style={inputStyle} />
+              <input type="text" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://..." disabled={loading} className="input disabled:opacity-50" />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-2)' }}>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-tertiary)' }}>
                 <Tag className="w-3 h-3 inline mr-1" />归属 Topic
               </label>
-              <select value={topicTitle} onChange={(e) => setTopicTitle(e.target.value)} disabled={loading} className="w-full px-3 py-2 text-sm rounded-lg input-focus cursor-pointer disabled:opacity-50" style={inputStyle}>
+              <select value={topicTitle} onChange={(e) => setTopicTitle(e.target.value)} disabled={loading} className="input cursor-pointer disabled:opacity-50">
                 <option value="">选择 Topic...</option>
                 {topics.map((topic) => (<option key={topic.id} value={topic.title}>{topic.title}</option>))}
               </select>
@@ -315,14 +312,13 @@ function AddCardSection({ onCardAdded }) {
       </div>
 
       <div className="flex items-center justify-between">
-        <p className="text-xs" style={{ color: 'var(--text-2)' }}>
+        <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
           {selectedFile ? '将从文件中提取内容并生成多张卡片' : '将根据内容自动生成摘要和要点'}
         </p>
         <button
           onClick={handleSubmit}
           disabled={!canSubmit}
-          className="flex items-center gap-2 px-4 py-2.5 font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ background: 'var(--accent-600)', color: '#ffffff' }}
+          className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? (
             <><Loader2 className="w-4 h-4 animate-spin" />{loadingText || '处理中...'}</>
@@ -336,8 +332,3 @@ function AddCardSection({ onCardAdded }) {
 }
 
 export default AddCardSection;
-
-
-
-
-

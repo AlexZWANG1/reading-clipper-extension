@@ -226,8 +226,8 @@ function HypothesisSection({ topics = [], selectedCardIds, cards = [], onClearSe
         className="w-full px-5 py-4 flex items-center justify-between transition-colors"
       >
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg" style={{ background: 'rgba(168,85,247,0.1)' }}>
-            <FlaskConical className="w-5 h-5" style={{ color: '#A855F7' }} />
+          <div className="p-2 rounded-lg" style={{ background: 'rgba(24,24,27,0.06)' }}>
+            <FlaskConical className="w-5 h-5" style={{ color: 'var(--text-0)' }} />
           </div>
           <div className="text-left">
             <h3 className="font-semibold" style={{ color: 'var(--text-0)' }}>假设验证</h3>
@@ -237,7 +237,7 @@ function HypothesisSection({ topics = [], selectedCardIds, cards = [], onClearSe
 
         <div className="flex items-center gap-2">
           {selectedCount > 0 && (
-            <span className="text-xs px-2 py-1 rounded-full" style={{ background: 'rgba(99,102,241,0.1)', color: 'var(--accent-300)' }}>
+            <span className="text-xs px-2 py-1 rounded-full" style={{ background: 'rgba(37,99,235,0.08)', color: 'var(--accent-500)' }}>
               已选 {selectedCount} 张卡片
             </span>
           )}
@@ -269,8 +269,8 @@ function HypothesisSection({ topics = [], selectedCardIds, cards = [], onClearSe
 
             <div className="flex gap-4 mb-4">
               <label className="flex-1 flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all" style={{
-                border: sourceMode === 'topic' ? '2px solid var(--accent-400)' : '2px solid var(--stroke-0)',
-                background: sourceMode === 'topic' ? 'rgba(99,102,241,0.08)' : 'transparent',
+                border: sourceMode === 'topic' ? '2px solid var(--accent-500)' : '2px solid var(--stroke-0)',
+                background: sourceMode === 'topic' ? 'rgba(37,99,235,0.04)' : 'transparent',
               }}>
                 <input
                   type="radio"
@@ -288,8 +288,8 @@ function HypothesisSection({ topics = [], selectedCardIds, cards = [], onClearSe
               </label>
 
               <label className="flex-1 flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all" style={{
-                border: sourceMode === 'manual' ? '2px solid var(--accent-400)' : '2px solid var(--stroke-0)',
-                background: sourceMode === 'manual' ? 'rgba(99,102,241,0.08)' : 'transparent',
+                border: sourceMode === 'manual' ? '2px solid var(--accent-500)' : '2px solid var(--stroke-0)',
+                background: sourceMode === 'manual' ? 'rgba(37,99,235,0.04)' : 'transparent',
               }}>
                 <input
                   type="radio"
@@ -351,8 +351,8 @@ function HypothesisSection({ topics = [], selectedCardIds, cards = [], onClearSe
             <button
               onClick={handleSuggestHypothesis}
               disabled={loading || (sourceMode === 'topic' ? !selectedTopicId : selectedCount === 0)}
-              className="flex items-center gap-2 px-4 py-2.5 font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: 'rgba(168,85,247,0.1)', color: '#A855F7' }}
+              className="flex items-center gap-2 px-4 py-2.5 font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              style={{ background: 'rgba(24,24,27,0.06)', color: 'var(--text-0)' }}
             >
               {loading && loadingText.includes('分析') ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -365,8 +365,8 @@ function HypothesisSection({ topics = [], selectedCardIds, cards = [], onClearSe
             <button
               onClick={handleEvaluate}
               disabled={loading || !hypothesis.trim() || (sourceMode === 'topic' ? !selectedTopicId : selectedCount === 0)}
-              className="flex items-center gap-2 px-4 py-2.5 font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: 'var(--accent-600)', color: 'white' }}
+              className="flex items-center gap-2 px-4 py-2.5 font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              style={{ background: 'var(--accent-500)', color: 'white' }}
             >
               {loading && loadingText.includes('验证') ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -386,7 +386,7 @@ function HypothesisSection({ topics = [], selectedCardIds, cards = [], onClearSe
           {evaluationResult && (
             <div className="mt-6 pt-6" style={{ borderTop: '1px solid var(--stroke-0)' }}>
               {evaluationResult.global_summary && (
-                <div className="mb-6 p-4 rounded-xl" style={{ background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.15)' }}>
+                <div className="mb-6 p-4 rounded-xl" style={{ background: 'rgba(24,24,27,0.03)', border: '1px solid var(--stroke-0)' }}>
                   <h4 className="font-semibold mb-2" style={{ color: 'var(--text-0)' }}>综合分析</h4>
                   <p className="text-sm leading-relaxed" style={{ color: 'var(--text-1)' }}>
                     {evaluationResult.global_summary}
