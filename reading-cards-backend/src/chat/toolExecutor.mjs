@@ -11,6 +11,7 @@ import {
 } from "../services/supabase/boards.mjs";
 import { listDocuments, getDocument } from "../services/supabase/documents.mjs";
 import { listSources } from "../services/supabase/sources.mjs";
+import { searchSemantic } from "../services/searchService.mjs";
 
 /**
  * Execute a single tool call.
@@ -25,31 +26,12 @@ export async function executeTool(name, args, ctx) {
   switch (name) {
     // ── Semantic Search ──
     case "semantic_search": {
-      const limit = Math.min(args.limit || 10, 20);
-      const min_score = args.min_score || 0.3;
-
       try {
-        // Call the semantic search API endpoint
-        const response = await fetch(`${process.env.BACKEND_URL || 'http://localhost:3000'}/api/v2/search/semantic`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({
-            query: args.query,
-            limit,
-            min_score,
-            topic_id: args.topic_id,
-          }),
+        const data = await searchSemantic(supabase, userId, args.query, {
+          limit: args.limit,
+          min_score: args.min_score,
+          topic_id: args.topic_id,
         });
-
-        if (!response.ok) {
-          const error = await response.json();
-          return { error: error.error || 'Search failed', results: [] };
-        }
-
-        const data = await response.json();
         return {
           results: data.results || [],
           total: data.total || 0,

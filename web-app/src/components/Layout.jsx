@@ -14,6 +14,7 @@ import {
   FileText,
   Layout as LayoutIcon,
   Scale,
+  ListChecks,
 } from 'lucide-react';
 import { useAuthStore, useUIStore } from '../lib/store';
 
@@ -36,6 +37,7 @@ const navGroups = [
     title: 'Copilot',
     items: [
       { to: '/chat', icon: MessageCircle, label: 'AI 对话' },
+      { to: '/tasks', icon: ListChecks, label: '研究任务' },
     ],
   },
 ];
@@ -59,22 +61,32 @@ function Layout() {
   const isFullScreenPage = /^\/$|^\/topics\/[^/]+$|^\/cards$/.test(location.pathname);
 
   return (
-    <div className="h-screen flex flex-col lg:flex-row overflow-hidden" style={{ background: 'var(--bg-subtle)' }}>
+    <div className="h-screen flex flex-col lg:flex-row overflow-hidden" style={{ background: 'var(--bg-base)' }}>
       {/* Mobile header */}
       <header
         className="lg:hidden flex-none fixed top-0 left-0 right-0 h-14 z-50 flex items-center px-4"
-        style={{ background: 'var(--surface-raised)', borderBottom: '1px solid var(--border-primary)' }}
+        style={{
+          background: 'rgba(255,255,255,0.78)',
+          backdropFilter: 'blur(10px)',
+          borderBottom: '1px solid var(--border-primary)',
+        }}
       >
         <button
           onClick={toggleSidebar}
           className="p-2 -ml-2 rounded-lg transition-colors"
+          aria-label="Open navigation menu"
           style={{ color: 'var(--text-secondary)' }}
         >
           <Menu className="w-5 h-5" />
         </button>
         <div className="flex-1 flex items-center justify-center">
-          <Scale className="w-5 h-5 mr-2" style={{ color: 'var(--text-primary)' }} />
-          <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Verity</span>
+          <div
+            className="w-7 h-7 rounded-lg flex items-center justify-center mr-2"
+            style={{ background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))' }}
+          >
+            <Scale className="w-4 h-4 text-white" />
+          </div>
+          <span className="font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Verity</span>
         </div>
         <div className="w-9" />
       </header>
@@ -93,15 +105,28 @@ function Layout() {
         className={`fixed lg:static inset-y-0 left-0 w-64 z-50 transform transition-transform duration-200 ease-out flex-none flex flex-col ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
-        style={{ background: 'var(--surface-raised)', borderRight: '1px solid var(--border-primary)' }}
+        style={{
+          background: 'rgba(255,255,255,0.82)',
+          backdropFilter: 'blur(10px)',
+          borderRight: '1px solid var(--border-primary)',
+        }}
       >
         {/* Logo */}
         <div className="h-16 flex-none flex items-center px-5" style={{ borderBottom: '1px solid var(--border-secondary)' }}>
-          <Scale className="w-7 h-7 mr-2.5" style={{ color: 'var(--text-primary)' }} />
-          <span className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Verity</span>
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center mr-2.5"
+            style={{ background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))' }}
+          >
+            <Scale className="w-5 h-5 text-white" />
+          </div>
+          <div className="min-w-0">
+            <span className="text-lg font-bold leading-none block tracking-tight" style={{ color: 'var(--text-primary)' }}>Verity</span>
+            <span className="text-[11px] tracking-[0.08em] uppercase" style={{ color: 'var(--text-tertiary)' }}>Evidence Studio</span>
+          </div>
           <button
             onClick={toggleSidebar}
             className="lg:hidden ml-auto p-1.5 transition-colors"
+            aria-label="Close navigation menu"
             style={{ color: 'var(--text-tertiary)' }}
           >
             <X className="w-5 h-5" />
@@ -115,7 +140,7 @@ function Layout() {
               {groupIndex > 0 && (
                 <div className="pt-3 mt-3" style={{ borderTop: '1px solid var(--border-secondary)' }} />
               )}
-              <p className="px-3 py-1 text-xs font-medium" style={{ color: 'var(--text-tertiary)' }}>
+              <p className="px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--text-tertiary)' }}>
                 {group.title}
               </p>
               {group.items.map(({ to, icon: Icon, label, end }) => (
@@ -128,8 +153,12 @@ function Layout() {
                     `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all`
                   }
                   style={({ isActive }) => ({
-                    background: isActive ? 'var(--bg-muted)' : 'transparent',
+                    background: isActive
+                      ? 'linear-gradient(135deg, rgba(13,110,253,0.12), rgba(31,58,95,0.14))'
+                      : 'transparent',
                     color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    border: isActive ? '1px solid rgba(31,58,95,0.22)' : '1px solid transparent',
+                    transform: isActive ? 'translateX(2px)' : 'none',
                   })}
                 >
                   <Icon className="w-5 h-5" />
@@ -141,7 +170,7 @@ function Layout() {
 
           {/* Divider */}
           <div className="pt-3 mt-3" style={{ borderTop: '1px solid var(--border-secondary)' }}>
-            <p className="px-3 py-1 text-xs font-medium" style={{ color: 'var(--text-tertiary)' }}>Settings</p>
+            <p className="px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--text-tertiary)' }}>Settings</p>
           </div>
 
           {userItems.map(({ to, icon: Icon, label }) => (
@@ -151,8 +180,12 @@ function Layout() {
               onClick={() => window.innerWidth < 1024 && toggleSidebar()}
               className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all"
               style={({ isActive }) => ({
-                background: isActive ? 'var(--bg-muted)' : 'transparent',
+                background: isActive
+                  ? 'linear-gradient(135deg, rgba(13,110,253,0.12), rgba(31,58,95,0.14))'
+                  : 'transparent',
                 color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                border: isActive ? '1px solid rgba(31,58,95,0.22)' : '1px solid transparent',
+                transform: isActive ? 'translateX(2px)' : 'none',
               })}
             >
               <Icon className="w-5 h-5" />
@@ -163,7 +196,7 @@ function Layout() {
 
         {/* User info */}
         <div className="flex-none p-3" style={{ borderTop: '1px solid var(--border-secondary)' }}>
-          <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: 'rgba(10,10,10,0.04)' }}>
+          <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.72)', border: '1px solid var(--border-primary)' }}>
             <div
               className="w-9 h-9 rounded-full flex items-center justify-center"
               style={{ background: 'var(--bg-muted)' }}
@@ -179,8 +212,9 @@ function Layout() {
             <button
               onClick={handleLogout}
               className="p-2 rounded-lg transition-colors"
+              aria-label="Log out"
               style={{ color: 'var(--text-tertiary)' }}
-              title="退出登录"
+              title="Log out"
             >
               <LogOut className="w-4 h-4" />
             </button>

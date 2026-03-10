@@ -295,6 +295,9 @@ function APIConfigCard({ settings, onUpdate, saving, testing, testResult, onTest
                     模型选择
                 </label>
                 <select
+                    id="ai-model-select"
+                    name="ai_model"
+                    aria-label="AI model selection"
                     value={model}
                     onChange={(e) => setModel(e.target.value)}
                     className="w-full px-4 py-3 rounded-xl input-focus"
@@ -318,6 +321,9 @@ function APIConfigCard({ settings, onUpdate, saving, testing, testResult, onTest
                     )}
                 </label>
                 <input
+                    id="openai-api-key"
+                    name="openai_api_key"
+                    aria-label="OpenAI API key"
                     type="password"
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
@@ -528,6 +534,9 @@ function PromptCard({ prompt, onSave, saving }) {
                                     Prompt Template
                                 </label>
                                 <textarea
+                                    id={`prompt-template-${prompt.id}`}
+                                    name={`prompt_template_${prompt.id}`}
+                                    aria-label={`Prompt template for ${prompt.name}`}
                                     value={editedTemplate}
                                     onChange={(e) => setEditedTemplate(e.target.value)}
                                     disabled={!isEditable}

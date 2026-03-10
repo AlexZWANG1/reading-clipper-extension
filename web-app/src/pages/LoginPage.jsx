@@ -1,7 +1,22 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Scale, Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
+import { Scale, Mail, Lock, Loader2, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { useAuthStore, useUIStore } from '../lib/store';
+
+function getFriendlyLoginError(error) {
+  const message = error?.message || '';
+  const normalized = message.toLowerCase();
+
+  if (error?.status === 401 || normalized.includes('invalid') || normalized.includes('密码错误')) {
+    return '账号或密码不正确';
+  }
+
+  if (error?.status >= 500 || normalized.includes('server_error') || normalized.includes('服务器内部错误')) {
+    return '登录服务暂时不可用，请检查后端服务状态后重试';
+  }
+
+  return message || '登录失败';
+}
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -10,6 +25,7 @@ function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -26,7 +42,7 @@ function LoginPage() {
       showToast('登录成功', 'success');
       navigate('/');
     } catch (error) {
-      showToast(error.message || '登录失败', 'error');
+      showToast(getFriendlyLoginError(error), 'error');
     } finally {
       setLoading(false);
     }
@@ -34,7 +50,15 @@ function LoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-base)' }}>
-      <div className="flex-1 flex items-center justify-center p-4">
+      <div className="flex-1 flex items-center justify-center p-4 relative overflow-hidden">
+        <div
+          className="absolute -top-24 -right-24 w-72 h-72 rounded-full pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(13,110,253,0.2) 0%, rgba(13,110,253,0) 70%)' }}
+        />
+        <div
+          className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(182,134,44,0.16) 0%, rgba(182,134,44,0) 72%)' }}
+        />
         <div className="w-full max-w-md">
           {/* Logo */}
           <div className="text-center mb-8">
@@ -44,11 +68,23 @@ function LoginPage() {
             >
               <Scale className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+            <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
               Verity
             </h1>
-            <p className="mt-1" style={{ color: 'var(--text-tertiary)' }}>
-              求真 · 研究验证工具
+            <p className="mt-1 text-sm" style={{ color: 'var(--text-tertiary)' }}>
+              Evidence-driven research workspace
+            </p>
+          </div>
+
+          <div
+            className="mb-4 rounded-xl px-4 py-3"
+            style={{ background: 'rgba(255,255,255,0.72)', border: '1px solid var(--border-primary)' }}
+          >
+            <p className="text-xs font-medium uppercase tracking-[0.12em]" style={{ color: 'var(--text-tertiary)' }}>
+              Brand Positioning
+            </p>
+            <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+              Structured evidence. Clear arguments. Faster high-quality decisions.
             </p>
           </div>
 
@@ -64,6 +100,7 @@ function LoginPage() {
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label
+                  htmlFor="login-email"
                   className="block text-sm font-medium mb-1.5"
                   style={{ color: 'var(--text-secondary)' }}
                 >
@@ -76,10 +113,15 @@ function LoginPage() {
                   />
                   <input
                     type="email"
+                    id="login-email"
+                    name="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    aria-label="Email"
+                    autoComplete="email"
                     placeholder="your@email.com"
                     className="input w-full pl-11 pr-4 py-3 rounded-xl"
+                    autoFocus
                     disabled={loading}
                   />
                 </div>
@@ -87,6 +129,7 @@ function LoginPage() {
 
               <div>
                 <label
+                  htmlFor="login-password"
                   className="block text-sm font-medium mb-1.5"
                   style={{ color: 'var(--text-secondary)' }}
                 >
@@ -98,13 +141,28 @@ function LoginPage() {
                     style={{ color: 'var(--text-tertiary)' }}
                   />
                   <input
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
+                    id="login-password"
+                    name="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    aria-label="Password"
+                    autoComplete="current-password"
                     placeholder="••••••••"
-                    className="input w-full pl-11 pr-4 py-3 rounded-xl"
+                    className="input w-full pl-11 pr-11 py-3 rounded-xl"
                     disabled={loading}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded transition-colors"
+                    style={{ color: 'var(--text-tertiary)' }}
+                    aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                    title={showPassword ? '隐藏密码' : '显示密码'}
+                    disabled={loading}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
 

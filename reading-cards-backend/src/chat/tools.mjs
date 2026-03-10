@@ -27,6 +27,9 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "read_only",
+    task_auto: true,
+    task_phases: ["filter"],
+    task_capability: "search",
   },
   {
     type: "function",
@@ -44,6 +47,9 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "read_only",
+    task_auto: true,
+    task_phases: ["filter"],
+    task_capability: "search",
   },
   {
     type: "function",
@@ -60,6 +66,9 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "read_only",
+    task_auto: true,
+    task_phases: [],
+    task_capability: "knowledge_read",
   },
   {
     type: "function",
@@ -75,6 +84,9 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "read_only",
+    task_auto: true,
+    task_phases: [],
+    task_capability: "knowledge_read",
   },
   {
     type: "function",
@@ -84,6 +96,9 @@ export const TOOL_DEFINITIONS = [
       parameters: { type: "object", properties: {}, required: [] },
     },
     side_effect: "read_only",
+    task_auto: true,
+    task_phases: [],
+    task_capability: "knowledge_read",
   },
   {
     type: "function",
@@ -100,6 +115,9 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "read_only",
+    task_auto: true,
+    task_phases: [],
+    task_capability: "knowledge_read",
   },
   {
     type: "function",
@@ -109,6 +127,9 @@ export const TOOL_DEFINITIONS = [
       parameters: { type: "object", properties: {}, required: [] },
     },
     side_effect: "read_only",
+    task_auto: true,
+    task_phases: [],
+    task_capability: "knowledge_read",
   },
   {
     type: "function",
@@ -124,6 +145,9 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "read_only",
+    task_auto: true,
+    task_phases: [],
+    task_capability: "knowledge_read",
   },
   {
     type: "function",
@@ -139,6 +163,9 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "read_only",
+    task_auto: true,
+    task_phases: [],
+    task_capability: "knowledge_read",
   },
   {
     type: "function",
@@ -154,6 +181,9 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "read_only",
+    task_auto: true,
+    task_phases: [],
+    task_capability: "knowledge_read",
   },
 
   // ── Write tools (cards + board mutations) ─────────
@@ -210,6 +240,9 @@ export const TOOL_DEFINITIONS = [
     },
     side_effect: "write",
     confirm_template: "创建卡片到主题「{topic_title}」: \"{summary}\"",
+    task_auto: true,
+    task_phases: ["cardify"],
+    task_capability: "knowledge_capture",
   },
   {
     type: "function",
@@ -230,6 +263,9 @@ export const TOOL_DEFINITIONS = [
     },
     side_effect: "write",
     confirm_template: "创建{node_type}节点: \"{text}\"",
+    task_auto: false,
+    task_phases: ["synthesize"],
+    task_capability: "structure_mutation",
   },
   {
     type: "function",
@@ -251,6 +287,9 @@ export const TOOL_DEFINITIONS = [
     },
     side_effect: "write",
     confirm_template: "更新节点 {node_id}",
+    task_auto: false,
+    task_phases: ["synthesize"],
+    task_capability: "structure_mutation",
   },
   {
     type: "function",
@@ -267,6 +306,9 @@ export const TOOL_DEFINITIONS = [
     },
     side_effect: "destructive",
     confirm_template: "删除节点 {node_id}（含所有子节点）",
+    task_auto: false,
+    task_phases: [],
+    task_capability: "structure_mutation",
   },
   {
     type: "function",
@@ -286,6 +328,9 @@ export const TOOL_DEFINITIONS = [
     },
     side_effect: "write",
     confirm_template: "创建{relation_type}关系边",
+    task_auto: false,
+    task_phases: ["synthesize"],
+    task_capability: "structure_mutation",
   },
 ];
 

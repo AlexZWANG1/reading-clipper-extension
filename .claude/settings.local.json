@@ -17,7 +17,8 @@
       "WebSearch",
       "mcp__context7__resolve-library-id",
       "Bash(powershell:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

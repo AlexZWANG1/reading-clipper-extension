@@ -1,6 +1,10 @@
 import { Download, Chrome, ExternalLink, CheckCircle, ArrowRight, BookOpen, Zap, Shield } from 'lucide-react';
 
 function DownloadPage() {
+  const REPO_URL = 'https://github.com/AlexZWANG1/reading-clipper-extension';
+  const RELEASES_URL = `${REPO_URL}/releases`;
+  const ISSUES_URL = `${REPO_URL}/issues`;
+
   return (
     <div className="space-y-8 animate-fade-in">
       {/* 页面标题 */}
@@ -35,7 +39,7 @@ function DownloadPage() {
                 从 GitHub Releases 或项目仓库下载扩展的 ZIP 文件
               </p>
               <a
-                href="https://github.com/your-repo/reading-clipper-extension/releases"
+                href={RELEASES_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
@@ -230,7 +234,7 @@ function DownloadPage() {
         </p>
         <div className="flex gap-3">
           <a
-            href="https://github.com/your-repo/reading-clipper-extension"
+            href={REPO_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
@@ -239,7 +243,7 @@ function DownloadPage() {
             <ExternalLink className="w-4 h-4" />
           </a>
           <a
-            href="https://github.com/your-repo/reading-clipper-extension/issues"
+            href={ISSUES_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-4 py-2 bg-white text-primary-600 border border-primary-300 rounded-lg hover:bg-primary-50 transition-colors"

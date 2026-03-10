@@ -209,7 +209,16 @@ function AddCardSection({ onCardAdded }) {
 
       <div className="mb-4">
         <div className="flex items-center gap-3 mb-3">
-          <input ref={fileInputRef} type="file" accept={ACCEPTED_FILE_TYPES} onChange={handleFileSelect} className="hidden" />
+          <input
+            ref={fileInputRef}
+            id="add-card-file-input"
+            name="add_card_file"
+            type="file"
+            accept={ACCEPTED_FILE_TYPES}
+            aria-label="Upload document file"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={loading}
@@ -226,7 +235,7 @@ function AddCardSection({ onCardAdded }) {
           <div className="flex items-center gap-2 p-3 rounded-lg mb-3" style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-primary)' }}>
             <FileText className="w-5 h-5" style={{ color: 'var(--accent-blue)' }} />
             <span className="flex-1 text-sm truncate" style={{ color: 'var(--text-primary)' }}>{selectedFile.name}</span>
-            <button onClick={removeFile} className="p-1 rounded" style={{ color: 'var(--text-tertiary)' }}>
+            <button onClick={removeFile} className="p-1 rounded" aria-label="Remove selected file" title="Remove selected file" style={{ color: 'var(--text-tertiary)' }}>
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -244,6 +253,9 @@ function AddCardSection({ onCardAdded }) {
           <div className="mb-4">
             <textarea
               ref={textareaRef}
+              id="add-card-snippet"
+              name="add_card_snippet"
+              aria-label="Card content input"
               value={snippet}
               onChange={(e) => setSnippet(e.target.value)}
               onPaste={handlePaste}
@@ -287,22 +299,22 @@ function AddCardSection({ onCardAdded }) {
         {showOptions && (
           <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-tertiary)' }}>
+              <label htmlFor="add-card-source-name" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-tertiary)' }}>
                 <LinkIcon className="w-3 h-3 inline mr-1" />来源名称
               </label>
-              <input type="text" value={sourceName} onChange={(e) => setSourceName(e.target.value)} placeholder="文章标题/网站名称" disabled={loading} className="input disabled:opacity-50" />
+              <input id="add-card-source-name" name="add_card_source_name" type="text" value={sourceName} onChange={(e) => setSourceName(e.target.value)} placeholder="文章标题/网站名称" disabled={loading} className="input disabled:opacity-50" />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-tertiary)' }}>
+              <label htmlFor="add-card-source-url" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-tertiary)' }}>
                 <LinkIcon className="w-3 h-3 inline mr-1" />来源链接
               </label>
-              <input type="text" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://..." disabled={loading} className="input disabled:opacity-50" />
+              <input id="add-card-source-url" name="add_card_source_url" type="text" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://..." disabled={loading} className="input disabled:opacity-50" />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-tertiary)' }}>
+              <label htmlFor="add-card-topic-title" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-tertiary)' }}>
                 <Tag className="w-3 h-3 inline mr-1" />归属 Topic
               </label>
-              <select value={topicTitle} onChange={(e) => setTopicTitle(e.target.value)} disabled={loading} className="input cursor-pointer disabled:opacity-50">
+              <select id="add-card-topic-title" name="add_card_topic_title" value={topicTitle} onChange={(e) => setTopicTitle(e.target.value)} disabled={loading} className="input cursor-pointer disabled:opacity-50">
                 <option value="">选择 Topic...</option>
                 {topics.map((topic) => (<option key={topic.id} value={topic.title}>{topic.title}</option>))}
               </select>

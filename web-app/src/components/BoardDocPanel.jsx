@@ -1,57 +1,67 @@
-// ========= Board Document Panel — Structured hypothesis outline =========
-// Q → H → E tree as a readable document. Visual hierarchy:
-//   Question = section header with left accent bar
-//   Hypothesis = card with colored left border + state badge
-//   Evidence = compact row with relation indicator + source
-
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Loader2, ChevronRight, ChevronDown, AlertCircle, ExternalLink } from 'lucide-react';
 import { boardsApi } from '../lib/api';
 
-// ── Visual constants ─────────────────────────────────────────────────────────
-
 const STATE_STYLES = {
-  pending:   { label: '待验证', bg: 'rgba(168,85,247,0.10)', color: '#A855F7', border: '#A855F7' },
-  validated: { label: '已验证', bg: 'rgba(16,185,129,0.10)', color: '#10B981', border: '#10B981' },
-  falsified: { label: '已否定', bg: 'rgba(239,68,68,0.10)',  color: '#EF4444', border: '#EF4444' },
+  pending: {
+    label: '待验证',
+    bg: 'rgba(47,128,255,0.10)',
+    color: 'var(--workbench-blue-ink)',
+    border: 'rgba(47,128,255,0.48)',
+  },
+  validated: {
+    label: '已验证',
+    bg: 'rgba(31,157,103,0.10)',
+    color: 'var(--workbench-green)',
+    border: 'rgba(31,157,103,0.48)',
+  },
+  falsified: {
+    label: '已证伪',
+    bg: 'rgba(195,74,60,0.10)',
+    color: 'var(--workbench-red)',
+    border: 'rgba(195,74,60,0.48)',
+  },
 };
 
 const RELATION_STYLES = {
-  supports: { label: '支持', color: '#10B981', bg: 'rgba(16,185,129,0.08)', icon: '↑' },
-  refutes:  { label: '反驳', color: '#EF4444', bg: 'rgba(239,68,68,0.08)',  icon: '↓' },
-  neutral:  { label: '中立', color: '#94A3B8', bg: 'rgba(148,163,184,0.08)', icon: '—' },
+  supports: { label: '支持', color: 'var(--workbench-green)', bg: 'rgba(31,157,103,0.10)', icon: '↑' },
+  refutes: { label: '反驳', color: 'var(--workbench-red)', bg: 'rgba(195,74,60,0.10)', icon: '↓' },
+  neutral: { label: '中立', color: 'var(--workbench-text-muted)', bg: 'rgba(130,121,106,0.10)', icon: '—' },
 };
 
-// ── Tree builder ─────────────────────────────────────────────────────────────
+function normalizeConfidencePercent(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  if (numeric <= 1) return Math.round(Math.max(0, numeric) * 100);
+  return Math.round(Math.max(0, Math.min(100, numeric)));
+}
 
 function buildTree(nodes, edges) {
-  // Map edge relations: targetNodeId → relation_type
   const edgeRelMap = {};
-  (edges || []).forEach(e => { edgeRelMap[e.target_node_id] = e.relation_type || 'neutral'; });
+  (edges || []).forEach((edge) => {
+    edgeRelMap[edge.target_node_id] = edge.relation_type || 'neutral';
+  });
 
   const childrenMap = {};
   const nodeMap = {};
-  const hasParent = new Set(); // track nodes that have a parent (via parent_id or edge)
+  const hasParent = new Set();
 
-  nodes.forEach(n => {
-    nodeMap[n.id] = { ...n, edgeRelation: edgeRelMap[n.id] };
-    if (!childrenMap[n.id]) childrenMap[n.id] = [];
+  nodes.forEach((node) => {
+    nodeMap[node.id] = { ...node, edgeRelation: edgeRelMap[node.id] };
+    if (!childrenMap[node.id]) childrenMap[node.id] = [];
   });
 
-  // 1) parent_id based relationships (Q→Q, Q→H, H→H)
-  nodes.forEach(n => {
-    if (n.parent_id && nodeMap[n.parent_id]) {
-      if (!childrenMap[n.parent_id]) childrenMap[n.parent_id] = [];
-      childrenMap[n.parent_id].push(n.id);
-      hasParent.add(n.id);
+  nodes.forEach((node) => {
+    if (node.parent_id && nodeMap[node.parent_id]) {
+      if (!childrenMap[node.parent_id]) childrenMap[node.parent_id] = [];
+      childrenMap[node.parent_id].push(node.id);
+      hasParent.add(node.id);
     }
   });
 
-  // 2) board_edges based relationships (H→E supports/refutes/neutral)
-  //    Evidence nodes are linked via edges, not parent_id
-  (edges || []).forEach(e => {
-    const source = e.source_node_id;
-    const target = e.target_node_id;
+  (edges || []).forEach((edge) => {
+    const source = edge.source_node_id;
+    const target = edge.target_node_id;
     if (nodeMap[source] && nodeMap[target] && !hasParent.has(target)) {
       if (!childrenMap[source]) childrenMap[source] = [];
       childrenMap[source].push(target);
@@ -59,11 +69,9 @@ function buildTree(nodes, edges) {
     }
   });
 
-  const roots = nodes.filter(n => !hasParent.has(n.id));
+  const roots = nodes.filter((node) => !hasParent.has(node.id));
   return { roots, childrenMap, nodeMap };
 }
-
-// ── Question node ────────────────────────────────────────────────────────────
 
 function QuestionDoc({ nodeId, nodeMap, childrenMap, depth = 0 }) {
   const [expanded, setExpanded] = useState(true);
@@ -77,57 +85,68 @@ function QuestionDoc({ nodeId, nodeMap, childrenMap, depth = 0 }) {
 
   return (
     <div style={{ marginTop: depth > 0 ? 8 : 0 }}>
-      {/* Question header */}
       <button
         onClick={() => hasChildren && setExpanded(!expanded)}
         className="flex items-start gap-2 w-full text-left group"
-        style={{ padding: '6px 0' }}
+        style={{
+          padding: isRoot ? '10px 10px' : '8px 10px',
+          background: 'var(--workbench-card)',
+          border: '1px solid var(--workbench-border)',
+          borderRadius: 10,
+          boxShadow: isRoot ? '0 4px 12px rgba(30,26,18,0.07)' : 'none',
+        }}
       >
-        {/* Left accent bar */}
         <div
           className="shrink-0 rounded-sm"
           style={{
             width: 3,
             minHeight: isRoot ? 20 : 16,
             alignSelf: 'stretch',
-            background: isRoot ? '#3B82F6' : 'rgba(59,130,246,0.35)',
+            background: isRoot ? 'var(--workbench-blue)' : 'rgba(47,128,255,0.36)',
             marginTop: 2,
           }}
         />
         <div className="flex-1 min-w-0 flex items-start gap-1.5">
           {hasChildren && (
             expanded
-              ? <ChevronDown size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--text-2)' }} />
-              : <ChevronRight size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--text-2)' }} />
+              ? <ChevronDown size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--workbench-text-muted)' }} />
+              : <ChevronRight size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--workbench-text-muted)' }} />
           )}
           <span
-            className={`leading-snug ${isRoot ? 'text-sm font-bold' : 'text-[13px] font-semibold'}`}
-            style={{ color: 'var(--text-0)' }}
+            className={`leading-snug ${isRoot ? 'text-[14px] font-bold' : 'text-[13px] font-semibold'}`}
+            style={{ color: 'var(--workbench-text)' }}
           >
             {text}
           </span>
           {node.status === 'resolved' && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0 ml-1" style={{ background: 'rgba(16,185,129,0.12)', color: '#10B981' }}>已解决</span>
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded-full border shrink-0 ml-1"
+              style={{ background: 'rgba(31,157,103,0.10)', color: 'var(--workbench-green)', borderColor: 'rgba(31,157,103,0.30)' }}
+            >
+              已解决
+            </span>
           )}
           {node.status === 'blocked' && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0 ml-1" style={{ background: 'rgba(239,68,68,0.12)', color: '#EF4444' }}>受阻</span>
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded-full border shrink-0 ml-1"
+              style={{ background: 'rgba(195,74,60,0.10)', color: 'var(--workbench-red)', borderColor: 'rgba(195,74,60,0.30)' }}
+            >
+              受阻
+            </span>
           )}
         </div>
       </button>
 
-      {/* Children */}
       {expanded && hasChildren && (
         <div style={{ marginLeft: 12 }}>
-          {children.map(cid => (
-            <DocNode key={cid} nodeId={cid} nodeMap={nodeMap} childrenMap={childrenMap} depth={depth + 1} />
+          {children.map((childId) => (
+            <DocNode key={childId} nodeId={childId} nodeMap={nodeMap} childrenMap={childrenMap} depth={depth + 1} />
           ))}
         </div>
       )}
     </div>
   );
 }
-
-// ── Hypothesis node ──────────────────────────────────────────────────────────
 
 function HypothesisDoc({ nodeId, nodeMap, childrenMap, depth = 0 }) {
   const [expanded, setExpanded] = useState(true);
@@ -138,32 +157,32 @@ function HypothesisDoc({ nodeId, nodeMap, childrenMap, depth = 0 }) {
   const hasChildren = children.length > 0;
   const claim = node.claim || node.content?.text || '未命名假说';
   const state = STATE_STYLES[node.hypo_state] || STATE_STYLES.pending;
-  const confidence = node.confidence || 0;
+  const confidence = normalizeConfidencePercent(node.confidence);
 
   return (
     <div style={{ marginTop: 6 }}>
-      {/* Hypothesis card */}
       <button
         onClick={() => hasChildren && setExpanded(!expanded)}
         className="w-full text-left rounded-lg transition-colors"
         style={{
           padding: '8px 10px',
-          background: state.bg,
+          background: 'var(--workbench-card)',
+          border: '1px solid var(--workbench-border)',
           borderLeft: `3px solid ${state.border}`,
+          boxShadow: '0 4px 10px rgba(30,26,18,0.06)',
         }}
       >
-        {/* State badge row */}
         <div className="flex items-center gap-2 mb-1">
           <span
-            className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider"
-            style={{ color: state.color }}
+            className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider rounded-full border px-1.5 py-0.5"
+            style={{ color: state.color, background: state.bg, borderColor: state.border }}
           >
             <span className="w-1.5 h-1.5 rounded-full" style={{ background: state.border }} />
             {state.label}
           </span>
           {confidence > 0 && (
-            <span className="text-[10px] tabular-nums font-medium" style={{ color: 'var(--text-2)' }}>
-              CONFIDENCE {confidence}%
+            <span className="text-[10px] tabular-nums font-medium" style={{ color: 'var(--workbench-text-muted)' }}>
+              置信度 {confidence}%
             </span>
           )}
           {hasChildren && (
@@ -175,17 +194,15 @@ function HypothesisDoc({ nodeId, nodeMap, childrenMap, depth = 0 }) {
             </span>
           )}
         </div>
-        {/* Claim text */}
-        <p className="text-[13px] leading-relaxed" style={{ color: 'var(--text-0)' }}>
+        <p className="text-[13px] leading-relaxed" style={{ color: 'var(--workbench-text-soft)' }}>
           {claim}
         </p>
       </button>
 
-      {/* Children (evidence) */}
       {expanded && hasChildren && (
         <div style={{ marginLeft: 8, marginTop: 4 }}>
-          {children.map(cid => (
-            <DocNode key={cid} nodeId={cid} nodeMap={nodeMap} childrenMap={childrenMap} depth={depth + 1} />
+          {children.map((childId) => (
+            <DocNode key={childId} nodeId={childId} nodeMap={nodeMap} childrenMap={childrenMap} depth={depth + 1} />
           ))}
         </div>
       )}
@@ -193,39 +210,42 @@ function HypothesisDoc({ nodeId, nodeMap, childrenMap, depth = 0 }) {
   );
 }
 
-// ── Evidence node ────────────────────────────────────────────────────────────
-
 function EvidenceDoc({ nodeId, nodeMap }) {
   const node = nodeMap[nodeId];
   if (!node) return null;
 
-  const rel = RELATION_STYLES[node.edgeRelation] || RELATION_STYLES.neutral;
+  const relation = RELATION_STYLES[node.edgeRelation] || RELATION_STYLES.neutral;
   const text = node.content?.text || node.card?.summary || '证据';
   const sourceName = node.card?.source?.name || (() => {
     if (!node.card?.source_url) return '';
-    try { return new URL(node.card.source_url).hostname.replace('www.', ''); } catch { return ''; }
+    try {
+      return new URL(node.card.source_url).hostname.replace('www.', '');
+    } catch {
+      return '';
+    }
   })();
   const sourceUrl = node.card?.source_url || '';
 
   return (
     <div
-      className="flex items-start gap-2 rounded-md"
+      className="flex items-start gap-2 rounded-lg border"
       style={{
         padding: '6px 8px',
         marginTop: 3,
-        background: rel.bg,
+        background: 'var(--workbench-card)',
+        borderColor: 'var(--workbench-border)',
+        borderLeft: `2px solid ${relation.color}`,
       }}
     >
-      {/* Relation indicator */}
       <span
-        className="text-[10px] font-bold shrink-0 rounded px-1 py-0.5 mt-px"
-        style={{ color: rel.color, background: `${rel.color}18` }}
+        className="text-[10px] font-bold shrink-0 rounded-full border px-1.5 py-0.5 mt-px"
+        style={{ color: relation.color, background: relation.bg, borderColor: relation.color }}
       >
-        {rel.icon} {rel.label}
+        {relation.icon} {relation.label}
       </span>
-      {/* Content */}
+
       <div className="flex-1 min-w-0">
-        <p className="text-[12px] leading-snug line-clamp-3" style={{ color: 'var(--text-1)' }}>
+        <p className="text-[12px] leading-snug line-clamp-3" style={{ color: 'var(--workbench-text-soft)' }}>
           {text}
         </p>
         {sourceName && (
@@ -236,14 +256,14 @@ function EvidenceDoc({ nodeId, nodeMap }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[10px] truncate transition-colors hover:underline flex items-center gap-0.5"
-                style={{ color: 'var(--accent-300)' }}
-                onClick={e => e.stopPropagation()}
+                style={{ color: 'var(--workbench-blue-ink)' }}
+                onClick={(event) => event.stopPropagation()}
               >
                 <ExternalLink size={9} className="shrink-0" />
                 {sourceName}
               </a>
             ) : (
-              <span className="text-[10px] truncate" style={{ color: 'var(--text-2)' }}>{sourceName}</span>
+              <span className="text-[10px] truncate" style={{ color: 'var(--workbench-text-muted)' }}>{sourceName}</span>
             )}
           </div>
         )}
@@ -251,8 +271,6 @@ function EvidenceDoc({ nodeId, nodeMap }) {
     </div>
   );
 }
-
-// ── Dispatcher ───────────────────────────────────────────────────────────────
 
 function DocNode({ nodeId, nodeMap, childrenMap, depth = 0 }) {
   const node = nodeMap[nodeId];
@@ -270,9 +288,7 @@ function DocNode({ nodeId, nodeMap, childrenMap, depth = 0 }) {
   return null;
 }
 
-// ── Main panel ───────────────────────────────────────────────────────────────
-
-function BoardDocPanel({ topicId, topic }) {
+function BoardDocPanel({ topicId }) {
   const [loading, setLoading] = useState(true);
   const [boardData, setBoardData] = useState(null);
   const [error, setError] = useState(null);
@@ -291,7 +307,9 @@ function BoardDocPanel({ topicId, topic }) {
     }
   }, [topicId]);
 
-  useEffect(() => { loadBoard(); }, [loadBoard]);
+  useEffect(() => {
+    loadBoard();
+  }, [loadBoard]);
 
   const tree = useMemo(() => {
     if (!boardData?.nodes?.length) return null;
@@ -301,7 +319,7 @@ function BoardDocPanel({ topicId, topic }) {
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center p-6">
-        <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--accent-400)' }} />
+        <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--workbench-blue)' }} />
       </div>
     );
   }
@@ -309,8 +327,8 @@ function BoardDocPanel({ topicId, topic }) {
   if (error) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-2 p-6">
-        <AlertCircle size={20} style={{ color: 'var(--text-2)' }} />
-        <p className="text-xs" style={{ color: 'var(--text-2)' }}>{error}</p>
+        <AlertCircle size={20} style={{ color: 'var(--workbench-text-muted)' }} />
+        <p className="text-xs" style={{ color: 'var(--workbench-text-muted)' }}>{error}</p>
       </div>
     );
   }
@@ -319,39 +337,45 @@ function BoardDocPanel({ topicId, topic }) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-2 p-6">
         <svg width="36" height="28" viewBox="0 0 36 28" fill="none" opacity="0.4">
-          <rect x="4" y="2" width="28" height="4" rx="2" fill="var(--text-2)" />
-          <rect x="8" y="10" width="24" height="3" rx="1.5" fill="var(--text-2)" opacity="0.5" />
-          <rect x="8" y="17" width="20" height="3" rx="1.5" fill="var(--text-2)" opacity="0.35" />
-          <rect x="8" y="24" width="16" height="3" rx="1.5" fill="var(--text-2)" opacity="0.2" />
+          <rect x="4" y="2" width="28" height="4" rx="2" fill="var(--workbench-text-muted)" />
+          <rect x="8" y="10" width="24" height="3" rx="1.5" fill="var(--workbench-text-muted)" opacity="0.5" />
+          <rect x="8" y="17" width="20" height="3" rx="1.5" fill="var(--workbench-text-muted)" opacity="0.35" />
+          <rect x="8" y="24" width="16" height="3" rx="1.5" fill="var(--workbench-text-muted)" opacity="0.2" />
         </svg>
-        <p className="text-xs text-center" style={{ color: 'var(--text-2)' }}>
-          尚无假说文档<br />在论证板中创建问题和假说后<br />将在此显示结构化大纲
+        <p className="text-xs text-center" style={{ color: 'var(--workbench-text-muted)' }}>
+          尚无假说文档
+          <br />
+          在论证板中创建问题和假说后
+          <br />
+          将在此显示结构化大纲
         </p>
       </div>
     );
   }
 
-  const questionCount = boardData.nodes.filter(n => n.node_type === 'question').length;
-  const hypoCount = boardData.nodes.filter(n => n.node_type === 'hypothesis').length;
-  const evidenceCount = boardData.nodes.filter(n => n.node_type === 'evidence').length;
+  const questionCount = boardData.nodes.filter((node) => node.node_type === 'question').length;
+  const hypoCount = boardData.nodes.filter((node) => node.node_type === 'hypothesis').length;
+  const evidenceCount = boardData.nodes.filter((node) => node.node_type === 'evidence').length;
 
   return (
     <div className="flex-1 overflow-y-auto">
-      {/* Stats strip */}
       <div
-        className="flex items-center gap-2 px-4 py-2.5 text-[11px] font-medium"
-        style={{ borderBottom: '1px solid var(--stroke-0)' }}
+        className="flex items-center gap-2 px-4 py-3"
+        style={{ borderBottom: '1px solid var(--workbench-border)', background: 'var(--workbench-card-soft)' }}
       >
-        <span style={{ color: '#3B82F6' }}>{questionCount} 问题</span>
-        <span style={{ color: 'var(--stroke-1)' }}>·</span>
-        <span style={{ color: '#A855F7' }}>{hypoCount} 假说</span>
-        <span style={{ color: 'var(--stroke-1)' }}>·</span>
-        <span style={{ color: '#10B981' }}>{evidenceCount} 证据</span>
+        <span className="text-[11px] font-semibold px-2 py-1 rounded-full border" style={{ color: 'var(--workbench-blue)', borderColor: 'rgba(47,128,255,0.30)', background: 'rgba(47,128,255,0.08)' }}>
+          {questionCount} 问题
+        </span>
+        <span className="text-[11px] font-semibold px-2 py-1 rounded-full border" style={{ color: 'var(--workbench-blue-ink)', borderColor: 'rgba(47,128,255,0.30)', background: 'rgba(47,128,255,0.08)' }}>
+          {hypoCount} 假说
+        </span>
+        <span className="text-[11px] font-semibold px-2 py-1 rounded-full border" style={{ color: 'var(--workbench-green)', borderColor: 'rgba(31,157,103,0.28)', background: 'rgba(31,157,103,0.08)' }}>
+          {evidenceCount} 证据
+        </span>
       </div>
 
-      {/* Document tree */}
       <div className="p-4 space-y-2">
-        {tree.roots.map(root => (
+        {tree.roots.map((root) => (
           <DocNode
             key={root.id}
             nodeId={root.id}

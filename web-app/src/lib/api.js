@@ -621,6 +621,43 @@ export const searchApi = {
     }),
 };
 
+// ========= 研究任务 API =========
+
+export const tasksApi = {
+  list: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/v2/tasks${query ? `?${query}` : ''}`);
+  },
+  get: (id) => request(`/v2/tasks/${id}`),
+  create: (intent, topicId) =>
+    request('/v2/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ intent, topic_id: topicId || null }),
+    }),
+  update: (id, data) =>
+    request(`/v2/tasks/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  delete: (id) =>
+    request(`/v2/tasks/${id}`, { method: 'DELETE' }),
+  triggerRun: (id) =>
+    request(`/v2/tasks/${id}/run`, { method: 'POST' }),
+  listRuns: (id, params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/v2/tasks/${id}/runs${query ? `?${query}` : ''}`);
+  },
+  getRun: (id, runId) => request(`/v2/tasks/${id}/runs/${runId}`),
+  listProposals: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/v2/tasks/proposals${query ? `?${query}` : ''}`);
+  },
+  approveProposal: (id) =>
+    request(`/v2/tasks/proposals/${id}/approve`, { method: 'POST' }),
+  rejectProposal: (id) =>
+    request(`/v2/tasks/proposals/${id}/reject`, { method: 'POST' }),
+};
+
 export { ApiError, API_BASE, getAccessToken };
 
 

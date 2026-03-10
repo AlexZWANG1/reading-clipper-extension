@@ -60,6 +60,9 @@ function EditCardModal({ card, onClose, onSave }) {
             <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Topic (主题)</label>
             <input
               list="topics-list"
+              id="edit-card-topic"
+              name="edit_card_topic"
+              aria-label="Edit card topic"
               type="text"
               value={topicTitle}
               onChange={(e) => setTopicTitle(e.target.value)}
@@ -74,6 +77,9 @@ function EditCardModal({ card, onClose, onSave }) {
           <div>
             <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Note (批注)</label>
             <textarea
+              id="edit-card-note"
+              name="edit_card_note"
+              aria-label="Edit card note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows="4"
@@ -117,7 +123,7 @@ function CardItem({ card, onEdit, onDelete, isSelected, onToggleSelect, cardRef 
 
   const cardTitle = card.title || "暂未命名";
   const factOrView = card.fact_or_view === 'view' ? 'VIEW' : 'FACT';
-  const badgeClass = factOrView === 'VIEW' ? 'badge-view' : 'badge-fact';
+  const badgeClass = factOrView === 'VIEW' ? 'badge badge-view' : 'badge badge-fact';
 
   return (
     <div
@@ -155,13 +161,14 @@ function CardItem({ card, onEdit, onDelete, isSelected, onToggleSelect, cardRef 
             <button
               onClick={() => onToggleSelect(card.id)}
               className="p-1 rounded transition-colors -ml-1"
+              aria-label={isSelected ? 'Deselect card' : 'Select card'}
               style={{ color: isSelected ? 'var(--interactive-primary)' : 'var(--text-tertiary)' }}
               title={isSelected ? '取消选择' : '选择此卡片'}
             >
               {isSelected ? (
                 <CheckSquare className="w-5 h-5" />
               ) : (
-                <Square className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <Square className="w-5 h-5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" />
               )}
             </button>
           )}
@@ -170,7 +177,9 @@ function CardItem({ card, onEdit, onDelete, isSelected, onToggleSelect, cardRef 
         <div className="relative">
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+            className="p-1.5 rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
+            aria-label="Open card actions"
+            title="Open card actions"
             style={{ color: 'var(--text-tertiary)' }}
           >
             <MoreVertical className="w-4 h-4" />
@@ -494,7 +503,7 @@ function CardsPage() {
   const currentTopic = topics.find((t) => t.id === (topicId || selectedTopic));
 
   return (
-    <div className="flex gap-0 h-full">
+    <div className="flex gap-0 h-full" style={{ background: 'var(--workbench-bg)' }}>
       {editingCard && (
         <EditCardModal
           card={editingCard}
@@ -515,13 +524,13 @@ function CardsPage() {
         className="hidden lg:flex"
       />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="shrink-0 px-4 lg:px-6 pt-4 lg:pt-6 pb-0">
+      <div className="flex-1 flex flex-col overflow-hidden" style={{ background: 'var(--workbench-bg)' }}>
+        <div className="shrink-0 px-4 lg:px-6 pt-4 lg:pt-6 pb-1 border-b" style={{ borderColor: 'var(--workbench-border)' }}>
           <div className="max-w-5xl">
-            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+            <h1 className="text-[30px] font-extrabold tracking-tight" style={{ color: 'var(--workbench-text)' }}>
               {currentTopic ? currentTopic.title : '全部卡片'}
             </h1>
-            <p className="mt-1" style={{ color: 'var(--text-tertiary)' }}>
+            <p className="mt-1 text-sm" style={{ color: 'var(--workbench-text-muted)' }}>
               共 {filteredCards.length} 张卡片
               {filteredCards.length !== cards.length && ` (已筛选，共 ${cards.length} 张)`}
               {currentTopic && ` · ${currentTopic.title}`}
@@ -532,33 +541,24 @@ function CardsPage() {
         <div className="shrink-0 px-4 lg:px-6 pt-4">
           <div className="max-w-5xl">
           {selectedTopic && (
-            <div className="flex items-center gap-1 border-b" style={{ borderColor: 'var(--border-primary)' }}>
+            <div className="workbench-tab-strip">
               <button
                 onClick={() => setActiveTab('cards')}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 ${
-                  activeTab === 'cards' ? 'border-current' : 'border-transparent'
-                }`}
-                style={{ color: activeTab === 'cards' ? 'var(--text-primary)' : 'var(--text-tertiary)' }}
+                className={`workbench-tab ${activeTab === 'cards' ? 'workbench-tab-active' : ''}`}
               >
                 <LayoutGrid className="w-4 h-4" />
                 证据卡
               </button>
               <button
                 onClick={() => setActiveTab('board')}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 ${
-                  activeTab === 'board' ? 'border-current' : 'border-transparent'
-                }`}
-                style={{ color: activeTab === 'board' ? 'var(--text-primary)' : 'var(--text-tertiary)' }}
+                className={`workbench-tab ${activeTab === 'board' ? 'workbench-tab-active' : ''}`}
               >
                 <Network className="w-4 h-4" />
                 论证板
               </button>
               <button
                 onClick={() => setActiveTab('memo')}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 ${
-                  activeTab === 'memo' ? 'border-current' : 'border-transparent'
-                }`}
-                style={{ color: activeTab === 'memo' ? 'var(--text-primary)' : 'var(--text-tertiary)' }}
+                className={`workbench-tab ${activeTab === 'memo' ? 'workbench-tab-active' : ''}`}
               >
                 <FileText className="w-4 h-4" />
                 研究备忘
@@ -570,9 +570,12 @@ function CardsPage() {
 
         {activeTab === 'board' && selectedTopic && (
           <div className="flex-1 relative" style={{ minHeight: 0 }}>
-            <div className="absolute inset-0">
+            <div
+              className="absolute inset-0 m-3 rounded-2xl overflow-hidden"
+              style={{ border: '1px solid var(--workbench-border)', boxShadow: 'var(--workbench-shadow-card)' }}
+            >
               <Suspense fallback={
-                <div className="flex items-center justify-center h-full" style={{ background: 'var(--bg-subtle)' }}>
+                <div className="flex items-center justify-center h-full" style={{ background: 'var(--workbench-canvas)' }}>
                   <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'var(--text-primary)' }} />
                 </div>
               }>
@@ -594,12 +597,17 @@ function CardsPage() {
                 selectedCardIds={selectedCardIds}
                 cards={filteredCards}
                 onClearSelection={clearSelection}
+                activeTopicId={selectedTopic}
+                activeTopicTitle={currentTopic?.title || ''}
               />
 
               <div className="flex flex-col xl:flex-row gap-3">
             <form onSubmit={handleSearch} className="flex-1 relative min-w-[200px]">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: 'var(--text-tertiary)' }} />
               <input
+                id="cards-search"
+                name="cards_search"
+                aria-label="Search cards"
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -614,6 +622,8 @@ function CardsPage() {
                     fetchCards(selectedTopic ? { topic_id: selectedTopic } : {});
                   }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 p-1"
+                  aria-label="Clear card search"
+                  title="Clear card search"
                   style={{ color: 'var(--text-tertiary)' }}
                 >
                   <X className="w-4 h-4" />
@@ -625,6 +635,9 @@ function CardsPage() {
               {!topicId && (
                 <div className="relative">
                   <select
+                    id="cards-topic-filter"
+                    name="cards_topic_filter"
+                    aria-label="Filter cards by topic"
                     value={selectedTopic}
                     onChange={(e) => setSelectedTopic(e.target.value)}
                     className="input appearance-none w-full sm:w-40 pr-9 cursor-pointer text-sm"
@@ -642,6 +655,9 @@ function CardsPage() {
 
               <div className="relative">
                 <select
+                  id="cards-category-filter"
+                  name="cards_category_filter"
+                  aria-label="Filter cards by category"
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
                   className="input appearance-none w-full sm:w-40 pr-9 cursor-pointer text-sm"
@@ -732,6 +748,9 @@ function CardsPage() {
                     </button>
                   </div>
                   <textarea
+                    id="topic-memo-content"
+                    name="topic_memo_content"
+                    aria-label="Research memo content"
                     value={memoContent}
                     onChange={(e) => setMemoContent(e.target.value)}
                     placeholder="在这里记录你的研究思路、关键发现、待验证问题...&#10;&#10;提示：使用空行分隔不同段落"

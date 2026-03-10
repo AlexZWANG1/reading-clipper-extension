@@ -45,6 +45,7 @@ import chatRouterV2 from "./routes/v2/chat.mjs";
 import materialsRouterV2 from "./routes/v2/materials.mjs";
 import searchRouterV2 from "./routes/v2/search.mjs";
 import highlightsRouterV2 from "./routes/v2/highlights.mjs";
+import tasksRouterV2 from "./routes/v2/tasks.mjs";
 
 // ========= Express 应用配置 =========
 const app = express();
@@ -106,6 +107,7 @@ app.use("/api/v2/chat", chatRouterV2);
 app.use("/api/v2/materials", materialsRouterV2);
 app.use("/api/v2/search", searchRouterV2);
 app.use("/api/v2/highlights", highlightsRouterV2);
+app.use("/api/v2/tasks", tasksRouterV2);
 
 // ========= 错误处理 =========
 app.use((err, req, res, next) => {

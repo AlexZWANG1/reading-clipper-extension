@@ -1,7 +1,7 @@
 // ========= 全局状态管理 =========
 
 import { create } from 'zustand';
-import { authApi, cardsApi, topicsApi, documentsApi, sourcesApi } from './api';
+import { authApi, cardsApi, topicsApi, documentsApi, sourcesApi, tasksApi } from './api';
 
 // ========= 认证状态 =========
 export const useAuthStore = create((set, get) => ({
@@ -285,9 +285,96 @@ export const useSourcesStore = create((set, get) => ({
   clear: () => set({ sources: [], loading: false, error: null }),
 }));
 
+// ========= Tasks 状态 =========
+export const useTasksStore = create((set, get) => ({
+  tasks: [],
+  currentTask: null,
+  runs: [],
+  proposals: [],
+  loading: false,
+  error: null,
+
+  fetchTasks: async (params = {}) => {
+    set({ loading: true, error: null });
+    try {
+      const { tasks } = await tasksApi.list(params);
+      set({ tasks, loading: false });
+    } catch (error) {
+      set({ error: error.message, loading: false });
+      throw error;
+    }
+  },
+
+  fetchTask: async (id) => {
+    set({ loading: true, error: null });
+    try {
+      const { task, runs, proposals } = await tasksApi.get(id);
+      set({ currentTask: task, runs, proposals, loading: false });
+      return { task, runs, proposals };
+    } catch (error) {
+      set({ error: error.message, loading: false });
+      throw error;
+    }
+  },
+
+  createTask: async (intent, topicId) => {
+    const { task } = await tasksApi.create(intent, topicId);
+    set((state) => ({ tasks: [task, ...state.tasks] }));
+    return task;
+  },
+
+  updateTask: async (id, data) => {
+    const { task } = await tasksApi.update(id, data);
+    set((state) => ({
+      tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...task } : t)),
+      currentTask: state.currentTask?.id === id ? { ...state.currentTask, ...task } : state.currentTask,
+    }));
+    return task;
+  },
+
+  deleteTask: async (id) => {
+    await tasksApi.delete(id);
+    set((state) => ({
+      tasks: state.tasks.filter((t) => t.id !== id),
+      currentTask: state.currentTask?.id === id ? null : state.currentTask,
+    }));
+  },
+
+  triggerRun: async (id) => {
+    await tasksApi.triggerRun(id);
+  },
+
+  fetchRuns: async (taskId) => {
+    const { runs } = await tasksApi.listRuns(taskId);
+    set({ runs });
+    return runs;
+  },
+
+  fetchRun: async (taskId, runId) => {
+    const { run } = await tasksApi.getRun(taskId, runId);
+    return run;
+  },
+
+  approveProposal: async (id) => {
+    await tasksApi.approveProposal(id);
+    set((state) => ({
+      proposals: state.proposals.filter((p) => p.id !== id),
+    }));
+  },
+
+  rejectProposal: async (id) => {
+    await tasksApi.rejectProposal(id);
+    set((state) => ({
+      proposals: state.proposals.filter((p) => p.id !== id),
+    }));
+  },
+
+  clear: () => set({ tasks: [], currentTask: null, runs: [], proposals: [], loading: false, error: null }),
+}));
+
 // ========= UI 状态 =========
 export const useUIStore = create((set) => ({
-  sidebarOpen: true,
+  sidebarOpen: typeof window === 'undefined' ? true : window.innerWidth >= 1024,
   toast: null,
 
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
@@ -300,5 +387,4 @@ export const useUIStore = create((set) => ({
 
   hideToast: () => set({ toast: null }),
 }));
-
 

@@ -37,6 +37,15 @@ const nodeTypes = {
   evidenceNode: EvidenceNode,
 };
 
+const BOARD_PALETTE = {
+  question: '#2F80FF',
+  hypothesis: '#2F80FF',
+  hypothesisPending: '#2F80FF',
+  evidence: '#1F9D67',
+  neutral: '#8D8576',
+  refute: '#C34A3C',
+};
+
 function MonoStepEdge({ sourceX, sourceY, targetX, targetY, style, markerEnd, data }) {
   const [path] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY });
   const glow = !!data?.isFocus;
@@ -73,9 +82,9 @@ const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
 
 const NODE_DIMS = {
-  questionNode:   { width: 280, height: 140 },
-  hypothesisNode: { width: 280, height: 180 },
-  evidenceNode:   { width: 240, height: 160 },
+  questionNode: { width: 336, height: 176 },
+  hypothesisNode: { width: 306, height: 188 },
+  evidenceNode: { width: 300, height: 184 },
 };
 
 function getLayoutedElements(nodes, edges, direction = 'TB') {
@@ -104,19 +113,26 @@ function getLayoutedElements(nodes, edges, direction = 'TB') {
 // ── Edge style helpers ────────────────────────────────────────────────────────
 
 function getEvidenceEdgeStyle(rel) {
-  if (rel === 'supports') return { stroke: '#10B981', strokeWidth: 2, markerEnd: { type: MarkerType.ArrowClosed, color: '#10B981' } };
-  if (rel === 'refutes')  return { stroke: '#EF4444', strokeWidth: 2, markerEnd: { type: MarkerType.ArrowClosed, color: '#EF4444' } };
-  return { stroke: '#94A3B8', strokeWidth: 1.6, markerEnd: { type: MarkerType.ArrowClosed, color: '#94A3B8' } };
+  if (rel === 'supports') {
+    return { stroke: BOARD_PALETTE.evidence, strokeWidth: 2, markerEnd: { type: MarkerType.ArrowClosed, color: BOARD_PALETTE.evidence } };
+  }
+  if (rel === 'refutes') {
+    return { stroke: BOARD_PALETTE.refute, strokeWidth: 2, markerEnd: { type: MarkerType.ArrowClosed, color: BOARD_PALETTE.refute } };
+  }
+  return { stroke: BOARD_PALETTE.neutral, strokeWidth: 1.6, markerEnd: { type: MarkerType.ArrowClosed, color: BOARD_PALETTE.neutral } };
 }
 
 function getParentEdgeStyle(isHypo, hypoState) {
   if (isHypo) {
     const pending = !hypoState || hypoState === 'pending';
     return {
-      stroke: pending ? '#A855F7' : '#7C3AED',
+      stroke: pending ? BOARD_PALETTE.hypothesisPending : BOARD_PALETTE.hypothesis,
       strokeWidth: pending ? 1.6 : 2,
       strokeDasharray: pending ? '6 4' : '0',
-      markerEnd: { type: MarkerType.ArrowClosed, color: pending ? '#A855F7' : '#7C3AED' },
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: pending ? BOARD_PALETTE.hypothesisPending : BOARD_PALETTE.hypothesis,
+      },
     };
   }
   return {
@@ -452,37 +468,37 @@ function EmbeddedThinkBoardInner({ topicId, topic }) {
   // ── Render ──────────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'var(--bg-0)' }}>
-        <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--accent-400)' }} />
-        <span className="ml-2 text-xs" style={{ color: 'var(--text-2)' }}>加载中…</span>
+      <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'var(--workbench-canvas)' }}>
+        <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--workbench-blue)' }} />
+        <span className="ml-2 text-xs" style={{ color: 'var(--workbench-text-muted)' }}>加载中…</span>
       </div>
     );
   }
 
   if (nodes.length === 0) {
     return (
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6" style={{ background: 'var(--bg-0)' }}>
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6" style={{ background: 'var(--workbench-canvas)' }}>
         {/* Abstract graph icon — not a generic lucide icon */}
         <svg width="36" height="36" viewBox="0 0 36 36" fill="none" style={{ marginBottom: 4 }}>
-          <circle cx="18" cy="8"  r="4" fill="rgba(99,102,241,0.18)" stroke="#6366F1" strokeWidth="1.5"/>
-          <circle cx="8"  cy="26" r="4" fill="rgba(168,85,247,0.14)" stroke="#A855F7" strokeWidth="1.5"/>
-          <circle cx="28" cy="26" r="4" fill="rgba(16,185,129,0.14)" stroke="#10B981" strokeWidth="1.5"/>
-          <line x1="18" y1="12" x2="9.4"  y2="22.4" stroke="#6366F1" strokeWidth="1.2" strokeDasharray="3 2" opacity="0.7"/>
-          <line x1="18" y1="12" x2="26.6" y2="22.4" stroke="#6366F1" strokeWidth="1.2" strokeDasharray="3 2" opacity="0.7"/>
+          <circle cx="18" cy="8" r="4" fill="rgba(47,128,255,0.2)" stroke="#2F80FF" strokeWidth="1.5" />
+          <circle cx="8" cy="26" r="4" fill="rgba(47,128,255,0.16)" stroke="#2F80FF" strokeWidth="1.5" />
+          <circle cx="28" cy="26" r="4" fill="rgba(24,160,106,0.16)" stroke="#18A06A" strokeWidth="1.5" />
+          <line x1="18" y1="12" x2="9.4" y2="22.4" stroke="#2F80FF" strokeWidth="1.2" strokeDasharray="3 2" opacity="0.7" />
+          <line x1="18" y1="12" x2="26.6" y2="22.4" stroke="#2F80FF" strokeWidth="1.2" strokeDasharray="3 2" opacity="0.7" />
         </svg>
-        <p className="text-sm font-medium" style={{ color: 'var(--text-0)' }}>
+        <p className="text-sm font-medium" style={{ color: 'var(--workbench-text)' }}>
           从核心问题开始
         </p>
-        <p className="text-xs text-center leading-relaxed" style={{ color: 'var(--text-2)' }}>
+        <p className="text-xs text-center leading-relaxed" style={{ color: 'var(--workbench-text-muted)' }}>
           拆解问题 · 提出假说 · 收集证据
         </p>
         <button
           onClick={createRootQuestion}
-          className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg transition-all"
+          className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg transition-all hover:-translate-y-0.5"
           style={{
-            background: 'var(--accent-600)',
+            background: 'var(--workbench-blue)',
             color: 'white',
-            boxShadow: '0 0 16px rgba(99,102,241,0.2)',
+            boxShadow: '0 10px 18px rgba(47, 128, 255, 0.24)',
           }}
         >
           <Plus size={13} /> 创建根问题
@@ -503,24 +519,25 @@ function EmbeddedThinkBoardInner({ topicId, topic }) {
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
-        fitViewOptions={{ padding: 0.25, maxZoom: 1, minZoom: 0.2 }}
-        minZoom={0.1}
+        fitViewOptions={{ padding: 0.25, maxZoom: 1, minZoom: 0.45 }}
+        minZoom={0.2}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
-        style={{ background: 'var(--bg-0)' }}
+        style={{ background: 'var(--workbench-canvas)' }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="rgba(148,163,184,0.07)" />
+        <Background id="grid-bg" variant={BackgroundVariant.Lines} gap={42} size={1} color="rgba(130,121,106,0.10)" />
+        <Background id="dots-bg" variant={BackgroundVariant.Dots} gap={21} size={1} color="rgba(130,121,106,0.14)" />
 
         <Panel position="bottom-center">
           <button
             onClick={autoLayout}
-            className="p-1.5 rounded-lg transition-colors"
+            className="p-1.5 rounded-lg transition-colors hover:bg-blue-500/10"
             title="自动排列"
             style={{
-              background: 'var(--surface-0)',
-              border: '1px solid var(--stroke-0)',
-              color: 'var(--text-2)',
-              backdropFilter: 'blur(8px)',
+              background: 'var(--workbench-card)',
+              border: '1px solid var(--workbench-border)',
+              color: 'var(--workbench-text-soft)',
+              boxShadow: '0 8px 14px rgba(30,26,18,0.10)',
             }}
           >
             <LayoutGrid size={13} />
@@ -531,21 +548,22 @@ function EmbeddedThinkBoardInner({ topicId, topic }) {
           position="bottom-left"
           showInteractive={false}
           style={{
-            background: 'var(--surface-0)',
+            background: 'var(--workbench-card)',
             backdropFilter: 'blur(12px)',
-            border: '1px solid var(--stroke-0)',
-            borderRadius: '10px',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.2)',
+            border: '1px solid var(--workbench-border)',
+            borderRadius: '12px',
+            boxShadow: '0 10px 18px rgba(30, 26, 18, 0.12)',
           }}
         />
         <MiniMap
           position="bottom-right"
-          nodeColor={n => n.type === 'questionNode' ? '#1D4ED8' : n.type === 'hypothesisNode' ? '#6B21A8' : '#10B981'}
-          maskColor="rgba(248,250,252,0.8)"
+          nodeColor={n => n.type === 'questionNode' ? BOARD_PALETTE.question : n.type === 'hypothesisNode' ? BOARD_PALETTE.hypothesis : BOARD_PALETTE.evidence}
+          maskColor="rgba(248,245,238,0.84)"
           style={{
-            background: 'var(--surface-0)',
-            border: '1px solid var(--stroke-0)',
-            borderRadius: '10px',
+            background: 'var(--workbench-card)',
+            border: '1px solid var(--workbench-border)',
+            borderRadius: '12px',
+            boxShadow: '0 10px 18px rgba(30, 26, 18, 0.12)',
           }}
         />
       </ReactFlow>

@@ -38,6 +38,7 @@ function TopicCard({ topic, onEdit, onDelete }) {
           <button
             onClick={() => setMenuOpen(!menuOpen)}
             className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+            aria-label="Open topic actions"
             style={{ color: 'var(--text-2)' }}
           >
             <MoreVertical className="w-4 h-4" />
@@ -126,7 +127,7 @@ function CreateTopicModal({ isOpen, onClose, onSubmit, editingTopic }) {
           <h2 className="text-xl font-semibold" style={{ color: 'var(--text-0)' }}>
             {editingTopic ? '编辑 Topic' : '新建 Topic'}
           </h2>
-          <button onClick={onClose} className="p-2 rounded-lg transition-colors" style={{ color: 'var(--text-2)' }}>
+          <button onClick={onClose} className="p-2 rounded-lg transition-colors" aria-label="Close topic modal" style={{ color: 'var(--text-2)' }}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -135,6 +136,9 @@ function CreateTopicModal({ isOpen, onClose, onSubmit, editingTopic }) {
           <div>
             <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-1)' }}>名称</label>
             <input
+              id="topic-title"
+              name="topic_title"
+              aria-label="Topic title"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -150,6 +154,9 @@ function CreateTopicModal({ isOpen, onClose, onSubmit, editingTopic }) {
               描述 <span style={{ color: 'var(--text-2)' }}>(可选)</span>
             </label>
             <textarea
+              id="topic-description"
+              name="topic_description"
+              aria-label="Topic description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="简要描述这个 Topic"
@@ -205,6 +212,7 @@ function TopicsPage() {
         await createTopic(data);
         showToast('Topic 已创建', 'success');
       }
+      await fetchTopics(true);
       setEditingTopic(null);
     } catch (error) {
       showToast(error.message || '操作失败', 'error');
@@ -222,6 +230,7 @@ function TopicsPage() {
     try {
       await deleteTopic(id);
       showToast('Topic 已删除', 'success');
+      await fetchTopics(true);
     } catch (error) {
       showToast('删除失败', 'error');
     }

@@ -10,7 +10,6 @@ import {
     MiniMap,
     useNodesState,
     useEdgesState,
-    addEdge,
     MarkerType,
     Panel,
     useReactFlow,
@@ -20,8 +19,8 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import dagre from 'dagre';
-import { ArrowLeft, Plus, ExternalLink, Loader2, LayoutGrid, ZoomIn, ZoomOut, Maximize2, Map, GripVertical, Search } from 'lucide-react';
-import { boardsApi, cardsApi } from '../lib/api';
+import { ArrowLeft, Plus, ExternalLink, Loader2, LayoutGrid, GripVertical, Search, Target } from 'lucide-react';
+import { boardsApi } from '../lib/api';
 import { useUIStore, useCardsStore } from '../lib/store';
 import AddCardSection from '../components/AddCardSection';
 import BoardChatPanel from '../components/BoardChatPanel';
@@ -35,6 +34,15 @@ const nodeTypes = {
     questionNode: QuestionNode,
     hypothesisNode: HypothesisNode,
     evidenceNode: EvidenceNode,
+};
+
+const BOARD_PALETTE = {
+    question: '#2F80FF',
+    hypothesis: '#2F80FF',
+    hypothesisPending: '#2F80FF',
+    evidence: '#18A06A',
+    neutral: '#94A3B8',
+    refute: '#C33A30',
 };
 
 // ========= Custom Edges =========
@@ -119,11 +127,23 @@ function getLayoutedElements(nodes, edges, direction = 'TB') {
 function getEvidenceEdgeStyle(relationType) {
     switch (relationType) {
         case 'supports':
-            return { stroke: '#10B981', strokeWidth: 2, markerEnd: { type: MarkerType.ArrowClosed, color: '#10B981' } };
+            return {
+                stroke: BOARD_PALETTE.evidence,
+                strokeWidth: 2,
+                markerEnd: { type: MarkerType.ArrowClosed, color: BOARD_PALETTE.evidence },
+            };
         case 'refutes':
-            return { stroke: '#EF4444', strokeWidth: 2, markerEnd: { type: MarkerType.ArrowClosed, color: '#EF4444' } };
+            return {
+                stroke: BOARD_PALETTE.refute,
+                strokeWidth: 2,
+                markerEnd: { type: MarkerType.ArrowClosed, color: BOARD_PALETTE.refute },
+            };
         default: // neutral
-            return { stroke: '#94A3B8', strokeWidth: 1.6, markerEnd: { type: MarkerType.ArrowClosed, color: '#94A3B8' } };
+            return {
+                stroke: BOARD_PALETTE.neutral,
+                strokeWidth: 1.6,
+                markerEnd: { type: MarkerType.ArrowClosed, color: BOARD_PALETTE.neutral },
+            };
     }
 }
 
@@ -134,10 +154,13 @@ function getParentEdgeStyle(isHypoTarget, hypoState) {
         // Pending = dashed, Verified = solid
         const isPending = !hypoState || hypoState === 'pending';
         return {
-            stroke: isPending ? '#A855F7' : '#7C3AED',
+            stroke: isPending ? BOARD_PALETTE.hypothesisPending : BOARD_PALETTE.hypothesis,
             strokeWidth: isPending ? 1.6 : 2,
             strokeDasharray: isPending ? '6 4' : '0',
-            markerEnd: { type: MarkerType.ArrowClosed, color: isPending ? '#A855F7' : '#7C3AED' },
+            markerEnd: {
+                type: MarkerType.ArrowClosed,
+                color: isPending ? BOARD_PALETTE.hypothesisPending : BOARD_PALETTE.hypothesis,
+            },
         };
     }
     // Q→Q decompose: always solid gray
@@ -170,7 +193,7 @@ function ThinkingBoardPage() {
 }
 
 function ThinkingBoardInner() {
-    const { screenToFlowPosition } = useReactFlow();
+    const { screenToFlowPosition, setCenter } = useReactFlow();
     const navigate = useNavigate();
     const { topicId } = useParams();
     const { showToast } = useUIStore();
@@ -532,6 +555,27 @@ function ThinkingBoardInner() {
         });
     }, [setNodes, setEdges]);
 
+    const focusRootQuestion = useCallback(() => {
+        const questionNodes = nodes.filter((node) => node.type === 'questionNode');
+        if (questionNodes.length === 0) {
+            showToast('暂无问题节点可聚焦', 'warning');
+            return;
+        }
+
+        const parentTargets = new Set(
+            edges
+                .filter((edge) => edge.data?.isParent)
+                .map((edge) => edge.target)
+        );
+
+        const rootNode = questionNodes.find((node) => !parentTargets.has(node.id)) || questionNodes[0];
+        const dims = NODE_DIMS[rootNode.type] || { width: NODE_WIDTH, height: 180 };
+        const centerX = rootNode.position.x + dims.width / 2;
+        const centerY = rootNode.position.y + dims.height / 2;
+
+        setCenter(centerX, centerY, { zoom: 0.95, duration: 350 });
+    }, [nodes, edges, setCenter, showToast]);
+
     // ========= Inject callbacks into node data =========
     const nodesWithCallbacks = useMemo(() => {
         return nodes.map(node => {
@@ -609,7 +653,7 @@ function ThinkingBoardInner() {
                 const targetState = hypoStateMap[edge.target] || 'pending';
                 const isPending = targetState === 'pending';
                 extraStyle = {
-                    stroke: isPending ? '#A855F7' : '#7C3AED',
+                    stroke: isPending ? BOARD_PALETTE.hypothesisPending : BOARD_PALETTE.hypothesis,
                     strokeWidth: isPending ? 1.6 : 2,
                     strokeDasharray: isPending ? '6 4' : '0',
                 };
@@ -874,7 +918,7 @@ function ThinkingBoardInner() {
         try {
             const result = await boardsApi.createNode(boardId, {
                 node_type: 'question',
-                content: { text: topic?.title || '核心问题?' },
+                content: { text: topic?.title || '核心问题' },
                 priority: 'critical',
                 status: 'open',
                 position_x: 400,
@@ -929,7 +973,6 @@ function ThinkingBoardInner() {
             {/* ========= Canvas ========= */}
             <div className="flex-1 relative" style={{ height: '100%' }} onDragOver={onDragOver} onDrop={onDrop}>
                 {nodes.length === 0 ? (
-                    /* Empty state — McKinsey Professional */
                     <div className="flex flex-col items-center justify-center gap-4" style={{ height: '100%', background: 'var(--surface-1)' }}>
                         <div className="text-center">
                             <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--text-0)' }}>
@@ -940,11 +983,11 @@ function ThinkingBoardInner() {
                             </p>
                             <button
                                 onClick={createRootQuestion}
-                                className="inline-flex items-center gap-2 px-6 py-3 font-medium rounded-xl transition-all"
+                                className="inline-flex items-center gap-2 px-6 py-3 font-medium rounded-xl transition-all hover:-translate-y-0.5"
                                 style={{
-                                    background: 'var(--accent-600)',
-                                    color: 'var(--text-0)',
-                                    boxShadow: '0 0 24px rgba(99,102,241,0.3)',
+                                    background: 'linear-gradient(135deg, var(--accent-500) 0%, var(--interactive-hover) 100%)',
+                                    color: '#fff',
+                                    boxShadow: '0 10px 24px rgba(31, 58, 95, 0.28)',
                                 }}
                             >
                                 <Plus size={18} /> 创建根问题
@@ -964,8 +1007,8 @@ function ThinkingBoardInner() {
                         nodeTypes={nodeTypes}
                         edgeTypes={edgeTypes}
                         fitView
-                        fitViewOptions={{ padding: 0.3, maxZoom: 1, minZoom: 0.5 }}
-                        minZoom={0.2}
+                        fitViewOptions={{ padding: 0.3, maxZoom: 1, minZoom: 0.55 }}
+                        minZoom={0.25}
                         maxZoom={2}
                         proOptions={{ hideAttribution: true }}
                         style={{ background: 'var(--bg-0)' }}
@@ -979,14 +1022,12 @@ function ThinkingBoardInner() {
 
                         {/* Floating bottom toolbar — merged Controls + MiniMap + Auto Layout */}
                         <Panel position="top-left">
-                            <div className="flex items-center gap-2 px-4 py-2 rounded-xl glass-surface" style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.4)' }}>
+                            <div className="flex items-center gap-2 px-4 py-2 rounded-xl glass-surface" style={{ boxShadow: '0 10px 22px rgba(31, 27, 20, 0.14)' }}>
                                 <button
                                     onClick={() => navigate(-1)}
-                                    className="p-2 rounded-lg transition-colors"
+                                    className="p-2 rounded-lg transition-colors hover:bg-blue-500/10"
                                     style={{ color: 'var(--text-1)' }}
                                     title="返回"
-                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(148,163,184,0.1)'}
-                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                                 >
                                     <ArrowLeft size={18} />
                                 </button>
@@ -998,16 +1039,28 @@ function ThinkingBoardInner() {
                         </Panel>
 
                         <Panel position="bottom-center">
-                            <div className="flex items-center gap-1 px-3 py-2 rounded-xl glass-surface" style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.4)' }}>
+                            <div className="flex items-center gap-1 px-3 py-2 rounded-xl glass-surface" style={{ boxShadow: '0 10px 22px rgba(31, 27, 20, 0.14)' }}>
+                                <button
+                                    onClick={focusRootQuestion}
+                                    className="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors hover:bg-blue-500/10"
+                                    style={{ color: 'var(--text-1)' }}
+                                    title="聚焦核心问题"
+                                >
+                                    <span className="inline-flex items-center gap-1.5">
+                                        <Target size={15} />
+                                        聚焦核心问题
+                                    </span>
+                                </button>
                                 <button
                                     onClick={autoLayout}
-                                    className="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
+                                    className="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors hover:bg-blue-500/10"
                                     style={{ color: 'var(--text-1)' }}
-                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(148,163,184,0.1)'}
-                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                                     title="自动排列"
                                 >
-                                    <LayoutGrid size={16} />
+                                    <span className="inline-flex items-center gap-1.5">
+                                        <LayoutGrid size={16} />
+                                        自动排列
+                                    </span>
                                 </button>
                             </div>
                         </Panel>
@@ -1020,46 +1073,49 @@ function ThinkingBoardInner() {
                                 backdropFilter: 'blur(12px)',
                                 border: '1px solid var(--stroke-0)',
                                 borderRadius: '12px',
-                                boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+                                boxShadow: '0 10px 22px rgba(31, 27, 20, 0.14)',
                             }}
                         />
                         <MiniMap
                             position="bottom-right"
                             nodeColor={(n) => {
-                                if (n.type === 'questionNode') return '#1D4ED8';
-                                if (n.type === 'hypothesisNode') return '#6B21A8';
-                                return '#10B981';
+                                if (n.type === 'questionNode') return BOARD_PALETTE.question;
+                                if (n.type === 'hypothesisNode') return BOARD_PALETTE.hypothesis;
+                                return BOARD_PALETTE.evidence;
                             }}
                             maskColor="rgba(248,250,252,0.8)"
                             style={{
                                 background: 'var(--surface-0)',
                                 border: '1px solid var(--stroke-0)',
                                 borderRadius: '12px',
+                                boxShadow: '0 10px 22px rgba(31, 27, 20, 0.14)',
                             }}
                         />
                     </ReactFlow>
                 )}
             </div>
 
-            {/* ========= Sidebar — Deep Space ========= */}
+            {/* ========= Sidebar ========= */}
             {sidebarOpen && (
                 <div className="w-72 flex flex-col h-full shrink-0" style={{ background: 'var(--surface-1)', borderLeft: '1px solid var(--stroke-0)' }}>
                     {/* Sidebar header */}
                     <div className="p-4" style={{ borderBottom: '1px solid var(--stroke-1)' }}>
                         <div className="flex items-center justify-between mb-3">
-                            <h3 className="font-bold text-sm" style={{ color: 'var(--text-0)' }}>Evidence Pool</h3>
+                            <h3 className="font-bold text-sm" style={{ color: 'var(--text-0)' }}>证据池</h3>
                             <button
                                 onClick={() => setSidebarOpen(false)}
-                                className="p-1 rounded transition-colors"
+                                className="p-1 rounded transition-colors hover:bg-blue-500/10"
                                 style={{ color: 'var(--text-2)' }}
-                                onMouseEnter={e => e.currentTarget.style.color = 'var(--text-1)'}
-                                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-2)'}
+                                title="收起证据池"
                             >✕</button>
                         </div>
                         {/* Search bar */}
                         <div className="relative mb-3">
                             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-2)' }} />
                             <input
+                                id="board-evidence-search"
+                                name="board_evidence_search"
+                                aria-label="搜索证据"
                                 type="text"
                                 placeholder="搜索证据..."
                                 value={searchQuery}
@@ -1070,8 +1126,8 @@ function ThinkingBoardInner() {
                                     color: 'var(--text-0)',
                                     border: '1px solid var(--stroke-0)',
                                 }}
-                                onFocus={e => e.target.style.borderColor = 'var(--accent-400)'}
-                                onBlur={e => e.target.style.borderColor = 'rgba(148,163,184,0.18)'}
+                                onFocus={(e) => { e.target.style.borderColor = 'var(--accent-400)'; }}
+                                onBlur={(e) => { e.target.style.borderColor = 'var(--stroke-0)'; }}
                             />
                         </div>
                         <div className="flex gap-1">
@@ -1079,7 +1135,7 @@ function ThinkingBoardInner() {
                                 onClick={() => setShowAllCards(false)}
                                 className="flex-1 text-xs py-1.5 rounded-lg font-medium transition-colors"
                                 style={{
-                                    background: !showAllCards ? 'rgba(99,102,241,0.15)' : 'transparent',
+                                    background: !showAllCards ? 'rgba(13,110,253,0.12)' : 'transparent',
                                     color: !showAllCards ? 'var(--accent-300)' : 'var(--text-2)',
                                 }}
                             >
@@ -1089,7 +1145,7 @@ function ThinkingBoardInner() {
                                 onClick={() => setShowAllCards(true)}
                                 className="flex-1 text-xs py-1.5 rounded-lg font-medium transition-colors"
                                 style={{
-                                    background: showAllCards ? 'rgba(99,102,241,0.15)' : 'transparent',
+                                    background: showAllCards ? 'rgba(13,110,253,0.12)' : 'transparent',
                                     color: showAllCards ? 'var(--accent-300)' : 'var(--text-2)',
                                 }}
                             >
@@ -1107,24 +1163,16 @@ function ThinkingBoardInner() {
                                     key={card.id}
                                     draggable
                                     onDragStart={() => handleDragStart(card)}
-                                    className="group/card flex items-start gap-2 p-3 rounded-xl cursor-grab text-sm transition-all"
+                                    className="group/card flex items-start gap-2 p-3 rounded-xl cursor-grab text-sm transition-all hover:-translate-y-0.5"
                                     style={{
                                         background: 'var(--surface-0)',
                                         border: '1px solid var(--stroke-0)',
                                         boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                                    }}
-                                    onMouseEnter={e => {
-                                        e.currentTarget.style.borderColor = 'var(--accent-400)';
-                                        e.currentTarget.style.transform = 'translateY(-1px)';
-                                    }}
-                                    onMouseLeave={e => {
-                                        e.currentTarget.style.borderColor = 'var(--stroke-0)';
-                                        e.currentTarget.style.transform = 'translateY(0)';
-                                    }}
-                                >
-                                    {/* Drag affordance icon */}
-                                    <div className="shrink-0 pt-0.5 opacity-30 group-hover/card:opacity-70 transition-opacity" style={{ color: 'var(--text-2)' }}>
-                                        <GripVertical size={14} />
+                                }}
+                            >
+                                {/* Drag affordance icon */}
+                                <div className="shrink-0 pt-0.5 opacity-30 group-hover/card:opacity-70 transition-opacity" style={{ color: 'var(--text-2)' }}>
+                                    <GripVertical size={14} />
                                     </div>
                                     {/* Card content */}
                                     <div className="flex-1 min-w-0">
@@ -1134,7 +1182,7 @@ function ThinkingBoardInner() {
                                                     className="text-[9px] font-mono font-bold uppercase tracking-wide px-1 rounded-sm shrink-0"
                                                     style={{
                                                         color: '#fff',
-                                                        backgroundColor: card.fact_or_view === 'view' ? 'var(--accent-400)' : '#10B981',
+                                                        backgroundColor: card.fact_or_view === 'view' ? 'var(--text-secondary)' : 'var(--text-primary)',
                                                         marginTop: '2px'
                                                     }}
                                                 >
@@ -1180,7 +1228,7 @@ function ThinkingBoardInner() {
                     <div className="p-3" style={{ borderTop: '1px solid var(--stroke-1)' }}>
                         <button
                             onClick={() => setShowAddCard(!showAddCard)}
-                            className="w-full text-xs py-2 rounded-lg font-medium transition-colors hover:bg-black/5"
+                            className="w-full text-xs py-2 rounded-lg font-medium transition-colors hover:bg-blue-500/10"
                             style={{ background: 'var(--bg-1)', border: '1px solid var(--stroke-0)', color: 'var(--text-1)' }}
                         >
                             {showAddCard ? '收起' : '+ 新建卡片'}
@@ -1199,10 +1247,10 @@ function ThinkingBoardInner() {
                 <button
                     onClick={() => setSidebarOpen(true)}
                     className="fixed right-4 top-1/2 -translate-y-1/2 rounded-xl px-2 py-4 transition-colors z-10 glass-surface"
-                    style={{ color: 'var(--text-1)', boxShadow: '0 4px 24px rgba(0,0,0,0.4)' }}
-                    title="打开 Evidence Pool"
+                    style={{ color: 'var(--text-1)', boxShadow: '0 10px 22px rgba(31, 27, 20, 0.14)' }}
+                    title="打开证据池"
                 >
-                    <span className="text-xs font-bold" style={{ writingMode: 'vertical-rl' }}>Evidence</span>
+                    <span className="text-xs font-bold" style={{ writingMode: 'vertical-rl' }}>证据池</span>
                 </button>
             )}
 

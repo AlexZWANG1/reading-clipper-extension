@@ -3,6 +3,23 @@ import { Send, Bot, User, Loader2, Trash2, ShieldCheck, ShieldAlert, X, Check } 
 import { chatApi } from '../lib/api';
 import { useUIStore } from '../lib/store';
 
+const QUICK_PROMPTS = [
+  '帮我总结最近一周新增卡片的核心趋势',
+  '按 Topic 列出证据最充分和最薄弱的结论',
+  '基于当前卡片，给出 3 个可验证的新假设',
+];
+
+function toFriendlyChatError(error) {
+  const message = error?.message || '';
+  const normalized = message.toLowerCase();
+
+  if (error?.status >= 500 || normalized.includes('fetch failed')) {
+    return 'AI 服务暂时不可用，请检查后端服务与模型配置';
+  }
+
+  return message || '请求失败';
+}
+
 function ChatPage() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -34,7 +51,9 @@ function ChatPage() {
     try {
       const data = await chatApi.send(newMessages);
       if (!data.ok) {
-        showToast(data.error || '请求失败', 'error');
+        const errorMessage = toFriendlyChatError({ message: data.error, status: data.status });
+        showToast(errorMessage, 'error');
+        setMessages((prev) => [...prev, { role: 'assistant', content: `系统提示：${errorMessage}` }]);
         return;
       }
 
@@ -46,7 +65,9 @@ function ChatPage() {
         setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
       }
     } catch (err) {
-      showToast(err.message || '网络错误', 'error');
+      const errorMessage = toFriendlyChatError(err);
+      showToast(errorMessage, 'error');
+      setMessages((prev) => [...prev, { role: 'assistant', content: `系统提示：${errorMessage}` }]);
     } finally {
       setLoading(false);
     }
@@ -64,7 +85,9 @@ function ChatPage() {
       setPendingToolCalls(null);
 
       if (!data.ok) {
-        showToast(data.error || '执行失败', 'error');
+        const errorMessage = toFriendlyChatError({ message: data.error, status: data.status });
+        showToast(errorMessage, 'error');
+        setMessages((prev) => [...prev, { role: 'assistant', content: `系统提示：${errorMessage}` }]);
         return;
       }
 
@@ -76,7 +99,9 @@ function ChatPage() {
         setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
       }
     } catch (err) {
-      showToast(err.message || '网络错误', 'error');
+      const errorMessage = toFriendlyChatError(err);
+      showToast(errorMessage, 'error');
+      setMessages((prev) => [...prev, { role: 'assistant', content: `系统提示：${errorMessage}` }]);
     } finally {
       setLoading(false);
     }
@@ -126,6 +151,25 @@ function ChatPage() {
               <Bot className="w-6 h-6" style={{ color: 'var(--text-primary)' }} />
             </div>
             <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>问我任何关于你的阅读笔记的问题</p>
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-2 max-w-[680px]">
+              {QUICK_PROMPTS.map((prompt) => (
+                <button
+                  key={prompt}
+                  onClick={() => {
+                    setInput(prompt);
+                    inputRef.current?.focus();
+                  }}
+                  className="px-3 py-1.5 rounded-full text-xs transition-colors"
+                  style={{
+                    background: 'var(--bg-subtle)',
+                    border: '1px solid var(--border-primary)',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           <>
@@ -216,32 +260,41 @@ function ChatPage() {
       </div>
 
       {/* Input area */}
-      <div
-        className="mt-3 flex items-end gap-2 rounded-xl p-2"
-        style={{ background: 'var(--surface)', border: '1px solid var(--border-primary)' }}
-      >
-        <textarea
-          ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="输入你的问题..."
-          rows={1}
-          disabled={!!pendingActions}
-          className="textarea flex-1 resize-none text-sm px-2 py-2 disabled:opacity-50"
-          style={{ maxHeight: '120px' }}
-          onInput={(e) => {
-            e.target.style.height = 'auto';
-            e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
-          }}
-        />
-        <button
-          onClick={handleSend}
-          disabled={!input.trim() || loading || !!pendingActions}
-          className="btn btn-primary flex-none w-9 h-9 rounded-lg flex items-center justify-center"
+      <div className="mt-3 space-y-2">
+        <div
+          className="flex items-end gap-2 rounded-xl p-2"
+          style={{ background: 'var(--surface)', border: '1px solid var(--border-primary)' }}
         >
-          <Send className="w-4 h-4" />
-        </button>
+          <textarea
+            ref={inputRef}
+            id="chat-input"
+            name="chat_input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            aria-label="Chat input"
+            placeholder={pendingActions ? '请先确认或取消待执行操作' : '输入你的问题...'}
+            rows={1}
+            disabled={!!pendingActions}
+            className="textarea flex-1 resize-none text-sm px-2 py-2 disabled:opacity-50"
+            style={{ maxHeight: '120px' }}
+            onInput={(e) => {
+              e.target.style.height = 'auto';
+              e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+            }}
+          />
+          <button
+            onClick={handleSend}
+            disabled={!input.trim() || loading || !!pendingActions}
+            aria-label="Send message"
+            className="btn btn-primary flex-none w-9 h-9 rounded-lg flex items-center justify-center"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </div>
+        <p className="text-xs px-1" style={{ color: 'var(--text-tertiary)' }}>
+          Enter 发送，Shift+Enter 换行
+        </p>
       </div>
     </div>
   );

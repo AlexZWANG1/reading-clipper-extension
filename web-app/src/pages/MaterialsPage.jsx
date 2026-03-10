@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search,
@@ -38,23 +38,31 @@ export default function MaterialsPage() {
   const [uploadTitle, setUploadTitle] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const loadRequestRef = useRef(0);
 
   const loadMaterials = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
     try {
       setLoading(true);
       const params = {};
       if (topicId) params.topic_id = topicId;
       const response = await materialsApi.list(params);
+      if (requestId !== loadRequestRef.current) return;
       setMaterials(response.materials || []);
     } catch (error) {
+      if (requestId !== loadRequestRef.current) return;
       console.error('Failed to load materials:', error);
     } finally {
+      if (requestId !== loadRequestRef.current) return;
       setLoading(false);
     }
   }, [topicId]);
 
   useEffect(() => {
     loadMaterials();
+    return () => {
+      loadRequestRef.current += 1;
+    };
   }, [loadMaterials]);
 
   const filteredMaterials = materials.filter(m =>
@@ -172,7 +180,10 @@ export default function MaterialsPage() {
       <div className="relative">
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: 'var(--text-tertiary)' }} />
         <input
+          id="materials-search"
+          name="materials_search"
           type="text"
+          aria-label="Search materials"
           placeholder="搜索材料..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
@@ -229,6 +240,7 @@ export default function MaterialsPage() {
                   <button
                     onClick={() => { setShowUploadModal(false); resetUploadForm(); }}
                     className="p-1.5 rounded-lg transition-colors cursor-pointer"
+                    aria-label="Close upload modal"
                     style={{ color: 'var(--text-tertiary)' }}
                   >
                     <X className="w-5 h-5" />
@@ -262,6 +274,9 @@ export default function MaterialsPage() {
                 <div className="mb-4">
                   <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>标题（可选）</label>
                   <input
+                    id="material-upload-title"
+                    name="material_upload_title"
+                    aria-label="Material title"
                     type="text"
                     placeholder="留空则自动提取"
                     value={uploadTitle}
@@ -275,6 +290,9 @@ export default function MaterialsPage() {
                   <div className="mb-5">
                     <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>网页地址</label>
                     <input
+                      id="material-upload-url"
+                      name="material_upload_url"
+                      aria-label="Material URL"
                       type="url"
                       placeholder="https://example.com/article"
                       value={uploadUrl}
@@ -289,6 +307,9 @@ export default function MaterialsPage() {
                   <div className="mb-5">
                     <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>选择文件</label>
                     <input
+                      id="material-upload-file"
+                      name="material_upload_file"
+                      aria-label="Material file upload"
                       type="file"
                       accept=".txt,.md,.pdf"
                       onChange={(e) => setUploadFile(e.target.files[0])}
@@ -304,6 +325,9 @@ export default function MaterialsPage() {
                   <div className="mb-5">
                     <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>文本内容</label>
                     <textarea
+                      id="material-upload-text"
+                      name="material_upload_text"
+                      aria-label="Material text content"
                       placeholder="粘贴或输入文本内容..."
                       value={uploadText}
                       onChange={(e) => setUploadText(e.target.value)}
@@ -416,7 +440,8 @@ function MaterialItem({ material, statusLabels, statusColors, onDelete, onClick 
         <div className="relative">
           <button
             onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-            className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+            className="p-1.5 rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer"
+            aria-label="Open material actions"
             style={{ color: 'var(--text-tertiary)' }}
           >
             <MoreVertical className="w-4 h-4" />

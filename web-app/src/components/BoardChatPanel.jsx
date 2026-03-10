@@ -142,7 +142,7 @@ Be concise. Answer in the same language the user uses.`,
         style={{
           background: 'var(--accent-500)',
           color: '#fff',
-          boxShadow: '0 4px 24px rgba(99,102,241,0.4)',
+          boxShadow: '0 10px 24px rgba(31, 58, 95, 0.3)',
         }}
         title="AI 助手"
       >
@@ -159,7 +159,7 @@ Be concise. Answer in the same language the user uses.`,
         height: '520px',
         background: 'var(--surface-1)',
         border: '1px solid var(--stroke-0)',
-        boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
+        boxShadow: '0 18px 34px rgba(31, 27, 20, 0.2)',
       }}
     >
       {/* Header */}
@@ -167,7 +167,7 @@ Be concise. Answer in the same language the user uses.`,
         <div className="flex items-center gap-2">
           <Bot className="w-4 h-4" style={{ color: 'var(--accent-400)' }} />
           <span className="text-sm font-bold" style={{ color: 'var(--text-0)' }}>AI 助手</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(99,102,241,0.12)', color: 'var(--accent-300)' }}>
+          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(13,110,253,0.1)', color: 'var(--accent-300)' }}>
             {topicTitle || 'Board'}
           </span>
         </div>
@@ -194,7 +194,7 @@ Be concise. Answer in the same language the user uses.`,
         {messages.map((msg, i) => (
           <div key={i} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : ''}`}>
             {msg.role === 'assistant' && (
-              <div className="w-6 h-6 rounded-full flex-none flex items-center justify-center mt-0.5" style={{ background: 'rgba(99,102,241,0.12)' }}>
+              <div className="w-6 h-6 rounded-full flex-none flex items-center justify-center mt-0.5" style={{ background: 'rgba(13,110,253,0.1)' }}>
                 <Bot className="w-3.5 h-3.5" style={{ color: 'var(--accent-400)' }} />
               </div>
             )}
@@ -247,7 +247,7 @@ Be concise. Answer in the same language the user uses.`,
 
         {loading && !pendingActions && (
           <div className="flex gap-2">
-            <div className="w-6 h-6 rounded-full flex-none flex items-center justify-center mt-0.5" style={{ background: 'rgba(99,102,241,0.12)' }}>
+            <div className="w-6 h-6 rounded-full flex-none flex items-center justify-center mt-0.5" style={{ background: 'rgba(13,110,253,0.1)' }}>
               <Bot className="w-3.5 h-3.5" style={{ color: 'var(--accent-400)' }} />
             </div>
             <div className="rounded-xl px-3 py-2" style={{ background: 'var(--bg-1)', border: '1px solid var(--stroke-0)' }}>

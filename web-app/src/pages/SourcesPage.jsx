@@ -96,6 +96,7 @@ function SourceModal({ isOpen, onClose, onSubmit, editingSource }) {
           <button
             onClick={onClose}
             className="p-2 rounded-lg transition-colors"
+            aria-label="Close source modal"
             style={{ color: 'var(--text-2)' }}
           >
             <X className="w-5 h-5" />
@@ -109,6 +110,9 @@ function SourceModal({ isOpen, onClose, onSubmit, editingSource }) {
               信息源名称 <span style={{ color: '#EF4444' }}>*</span>
             </label>
             <input
+              id="source-name"
+              name="source_name"
+              aria-label="Source name"
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -124,6 +128,9 @@ function SourceModal({ isOpen, onClose, onSubmit, editingSource }) {
               网站地址 <span style={{ color: '#EF4444' }}>*</span>
             </label>
             <input
+              id="source-url"
+              name="source_url"
+              aria-label="Source URL"
               type="url"
               value={formData.url}
               onChange={(e) => setFormData({ ...formData, url: e.target.value })}
@@ -139,6 +146,9 @@ function SourceModal({ isOpen, onClose, onSubmit, editingSource }) {
               分类
             </label>
             <select
+              id="source-category"
+              name="source_category"
+              aria-label="Source category"
               value={formData.category}
               onChange={(e) => setFormData({ ...formData, category: e.target.value })}
               className="w-full px-4 py-2.5 bg-surface-50 border border-surface-200 rounded-xl text-surface-900 input-focus cursor-pointer"
@@ -158,6 +168,9 @@ function SourceModal({ isOpen, onClose, onSubmit, editingSource }) {
                 重要度
               </label>
               <select
+                id="source-importance"
+                name="source_importance_level"
+                aria-label="Source importance level"
                 value={formData.importance_level}
                 onChange={(e) =>
                   setFormData({ ...formData, importance_level: Number(e.target.value) })
@@ -177,6 +190,9 @@ function SourceModal({ isOpen, onClose, onSubmit, editingSource }) {
                 地区
               </label>
               <select
+                id="source-region"
+                name="source_region"
+                aria-label="Source region"
                 value={formData.region}
                 onChange={(e) => setFormData({ ...formData, region: e.target.value })}
                 className="w-full px-4 py-2.5 bg-surface-50 border border-surface-200 rounded-xl text-surface-900 input-focus cursor-pointer"
@@ -196,6 +212,9 @@ function SourceModal({ isOpen, onClose, onSubmit, editingSource }) {
               描述 <span className="text-surface-400">(可选，有助于 AI 匹配)</span>
             </label>
             <textarea
+              id="source-description"
+              name="source_description"
+              aria-label="Source description"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="额外的关键词或描述..."
@@ -291,7 +310,8 @@ function SourceRow({ source, onEdit, onDelete }) {
         <div className="relative">
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="p-1.5 text-surface-400 hover:text-surface-600 hover:bg-surface-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+            className="p-1.5 text-surface-400 hover:text-surface-600 hover:bg-surface-100 rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
+            aria-label="Open source actions"
           >
             <MoreVertical className="w-4 h-4" />
           </button>
@@ -352,6 +372,7 @@ function SourcesPage() {
         await createSource(data);
         showToast('信息源已添加', 'success');
       }
+      await fetchSources();
       setEditingSource(null);
     } catch (error) {
       showToast(error.message || '操作失败', 'error');
@@ -369,6 +390,7 @@ function SourcesPage() {
     try {
       await deleteSource(id);
       showToast('信息源已删除', 'success');
+      await fetchSources();
     } catch (error) {
       showToast('删除失败', 'error');
     }

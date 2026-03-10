@@ -8,17 +8,17 @@ export default {
     extend: {
       colors: {
         primary: {
-          50: '#f5f3ff',
-          100: '#ede9fe',
-          200: '#ddd6fe',
-          300: '#c4b5fd',
-          400: '#a78bfa',
-          500: '#8b5cf6',
-          600: '#7c3aed',
-          700: '#6d28d9',
-          800: '#5b21b6',
-          900: '#4c1d95',
-          950: '#2e1065',
+          50: '#eef4fb',
+          100: '#dbe9f8',
+          200: '#bfd8f1',
+          300: '#94bfe5',
+          400: '#5f98d4',
+          500: '#2f73ba',
+          600: '#1f5c97',
+          700: '#194a7a',
+          800: '#173f66',
+          900: '#152f4c',
+          950: '#0d1b2f',
         },
         surface: {
           50: '#fafafa',
@@ -52,8 +52,8 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        display: ['Cabinet Grotesk', 'Inter', 'sans-serif'],
+        sans: ['IBM Plex Sans', 'system-ui', '-apple-system', 'sans-serif'],
+        display: ['Manrope', 'IBM Plex Sans', 'sans-serif'],
       },
       animation: {
         'slide-up': 'slideUp 0.3s ease-out',

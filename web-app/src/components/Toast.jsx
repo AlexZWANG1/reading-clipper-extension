@@ -37,7 +37,7 @@ function Toast({ message, type = 'info' }) {
   const style = colorStyles[type] || colorStyles.info;
 
   return (
-    <div className="fixed bottom-4 right-4 z-[100] animate-slide-up">
+    <div className="fixed bottom-4 right-4 z-[100] animate-slide-up" role="status" aria-live="polite">
       <div
         className="flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg"
         style={style}
@@ -48,6 +48,8 @@ function Toast({ message, type = 'info' }) {
           onClick={hideToast}
           className="p-1 rounded transition-opacity ml-2 hover:opacity-70 cursor-pointer"
           style={{ color: 'inherit', opacity: 0.8 }}
+          aria-label="关闭提示"
+          title="关闭提示"
         >
           <X className="w-4 h-4" />
         </button>

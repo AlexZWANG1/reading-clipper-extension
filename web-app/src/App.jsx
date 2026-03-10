@@ -13,6 +13,8 @@ import DownloadPage from './pages/DownloadPage';
 import ChatPage from './pages/ChatPage';
 import MaterialsPage from './pages/MaterialsPage';
 import MaterialReaderPage from './pages/MaterialReaderPage';
+import TasksPage from './pages/TasksPage';
+import TaskDetailView from './pages/TaskDetailView';
 
 // Lazy load ThinkingBoardPage (heavy: React Flow + dagre)
 const ThinkingBoardPage = lazy(() => import('./pages/ThinkingBoardPage'));
@@ -30,7 +32,7 @@ function ProtectedRoute({ children }) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface-50">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-[3px] border-primary-500 border-t-transparent rounded-full animate-spin" />
           <p className="text-surface-500">加载中...</p>
         </div>
       </div>
@@ -53,7 +55,7 @@ function PublicRoute({ children }) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface-50">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-[3px] border-primary-500 border-t-transparent rounded-full animate-spin" />
           <p className="text-surface-500">加载中...</p>
         </div>
       </div>
@@ -110,10 +112,12 @@ function App() {
           <Route path="materials" element={<MaterialsPage />} />
           <Route path="materials/:id" element={<MaterialReaderPage />} />
           <Route path="topics" element={<TopicsPage />} />
-          <Route path="topics/:topicId" element={<Suspense fallback={<div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" /></div>}><ThinkingBoardPage /></Suspense>} />
+          <Route path="topics/:topicId" element={<Suspense fallback={<div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-[3px] border-blue-500 border-t-transparent rounded-full animate-spin" /></div>}><ThinkingBoardPage /></Suspense>} />
           <Route path="sources" element={<SourcesPage />} />
           <Route path="ai-settings" element={<AISettingsPage />} />
           <Route path="chat" element={<ChatPage />} />
+          <Route path="tasks" element={<TasksPage />} />
+          <Route path="tasks/:id" element={<TaskDetailView />} />
           <Route path="download" element={<DownloadPage />} />
         </Route>
 
@@ -128,6 +132,5 @@ function App() {
 }
 
 export default App;
-
 
 
