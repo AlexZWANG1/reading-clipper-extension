@@ -2,8 +2,11 @@
 // Extracted from routes/v2/materials.mjs for reuse by task runner.
 
 const SIDECAR_URL = process.env.SIDECAR_URL || 'http://127.0.0.1:8100';
-const SIDECAR_API_KEY = process.env.SIDECAR_API_KEY || 'rc-sidecar-2026';
+const SIDECAR_API_KEY = process.env.SIDECAR_API_KEY;
 const CONTENT_FETCH_URL = process.env.CONTENT_FETCH_URL || 'http://127.0.0.1:8200';
+if (!SIDECAR_API_KEY) {
+  console.warn('[ingestion] SIDECAR_API_KEY not set — sidecar calls will fail');
+}
 
 /**
  * Ingest a URL: extract content → create material → trigger sidecar chunking.
@@ -85,14 +88,16 @@ export async function ingestUrl(supabase, userId, opts) {
       'X-Sidecar-Key': SIDECAR_API_KEY,
     },
     body: JSON.stringify(sidecarPayload),
-  }).catch((err) => {
-    console.error('[ingestion] sidecar failed:', err.message);
-    supabase
-      .from('materials')
-      .update({ ingestion_status: 'failed', ingestion_error: err.message })
-      .eq('id', material.id)
-      .then(() => {})
-      .catch((updateErr) => console.error('[ingestion] failed to update material status:', updateErr.message));
+  }).catch(async (err) => {
+    console.error('[ingestion] sidecar failed for material', material.id, ':', err.message);
+    try {
+      await supabase
+        .from('materials')
+        .update({ ingestion_status: 'failed', ingestion_error: err.message })
+        .eq('id', material.id);
+    } catch (updateErr) {
+      console.error('[ingestion] failed to update material status:', updateErr.message);
+    }
   });
 
   return { material_id: material.id, status: 'pending', title: material.title };
@@ -133,14 +138,16 @@ export async function ingestText(supabase, userId, opts) {
       text,
       topic_id: topic_id || null,
     }),
-  }).catch((err) => {
-    console.error('[ingestion] sidecar failed:', err.message);
-    supabase
-      .from('materials')
-      .update({ ingestion_status: 'failed', ingestion_error: err.message })
-      .eq('id', material.id)
-      .then(() => {})
-      .catch((updateErr) => console.error('[ingestion] failed to update material status:', updateErr.message));
+  }).catch(async (err) => {
+    console.error('[ingestion] sidecar failed for material', material.id, ':', err.message);
+    try {
+      await supabase
+        .from('materials')
+        .update({ ingestion_status: 'failed', ingestion_error: err.message })
+        .eq('id', material.id);
+    } catch (updateErr) {
+      console.error('[ingestion] failed to update material status:', updateErr.message);
+    }
   });
 
   return { material_id: material.id, status: 'pending', title: material.title };

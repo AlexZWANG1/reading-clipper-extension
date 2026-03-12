@@ -136,8 +136,7 @@ router.post('/ingest', requireAuth, async (req, res) => {
           ingestion_error: err.message,
         })
         .eq('id', material.id)
-        .then(() => {})
-        .catch((updateErr) => console.error('[materials] failed to update material status:', updateErr.message));
+        .then();
     });
 
     res.json({
