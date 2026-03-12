@@ -12,6 +12,8 @@ import {
 import { listDocuments, getDocument } from "../services/supabase/documents.mjs";
 import { listSources } from "../services/supabase/sources.mjs";
 import { searchSemantic } from "../services/searchService.mjs";
+import { fetchRssItems } from "../tasks/fetchers/rss.mjs";
+import { ingestUrl } from "../services/ingestion.mjs";
 
 /**
  * Execute a single tool call.
@@ -121,6 +123,39 @@ export async function executeTool(name, args, ctx) {
       const doc = await getDocument(supabase, args.doc_id);
       if (!doc) return { error: "document_not_found" };
       return { document: doc };
+    }
+
+    // ── RSS + Ingestion (task-oriented) ──
+    case "fetch_rss": {
+      const feeds = args.feeds || [];
+      const maxItems = args.max_items || 20;
+      try {
+        let items = await fetchRssItems(feeds, { maxItems });
+        // Optional keyword filter
+        if (Array.isArray(args.keywords) && args.keywords.length > 0) {
+          const kws = args.keywords.map((k) => k.toLowerCase());
+          items = items.filter((item) => {
+            const text = `${item.title || ""} ${item.summary || ""}`.toLowerCase();
+            return kws.some((kw) => text.includes(kw));
+          });
+        }
+        return { items, count: items.length };
+      } catch (error) {
+        return { error: error.message, items: [] };
+      }
+    }
+
+    case "ingest_url": {
+      try {
+        const result = await ingestUrl(supabase, userId, {
+          url: args.url,
+          title: args.title,
+          topic_id: args.topic_id,
+        });
+        return result;
+      } catch (error) {
+        return { error: error.message };
+      }
     }
 
     // ── Board mutations (write) ──

@@ -3,17 +3,22 @@
 // ── Tasks ──
 
 export async function createTask(supabase, userId, data) {
+  const row = {
+    user_id: userId,
+    topic_id: data.topic_id || null,
+    title: data.title,
+    intent: data.intent,
+    task_spec: data.task_spec || {},
+    status: data.status || 'active',
+    schedule: data.schedule || { type: 'manual' },
+  };
+  // Optional new fields (from plan system)
+  if (data.conversation_id) row.conversation_id = data.conversation_id;
+  if (data.plan_display) row.plan_display = data.plan_display;
+
   const { data: task, error } = await supabase
     .from('tasks')
-    .insert({
-      user_id: userId,
-      topic_id: data.topic_id || null,
-      title: data.title,
-      intent: data.intent,
-      task_spec: data.task_spec || {},
-      status: 'active',
-      schedule: data.schedule || { type: 'manual' },
-    })
+    .insert(row)
     .select()
     .single();
 
@@ -146,16 +151,21 @@ export async function getRun(supabase, userId, runId) {
 // ── Task Run Steps ──
 
 export async function createStep(supabase, userId, runId, stepData) {
+  const row = {
+    run_id: runId,
+    user_id: userId,
+    step_index: stepData.step_index,
+    phase: stepData.phase,
+    status: 'running',
+    input_summary: stepData.input_summary || null,
+  };
+  // New fields from plan system
+  if (stepData.tool) row.tool = stepData.tool;
+  if (stepData.tool_input) row.tool_input = stepData.tool_input;
+
   const { data, error } = await supabase
     .from('task_run_steps')
-    .insert({
-      run_id: runId,
-      user_id: userId,
-      step_index: stepData.step_index,
-      phase: stepData.phase,
-      status: 'running',
-      input_summary: stepData.input_summary || null,
-    })
+    .insert(row)
     .select()
     .single();
 

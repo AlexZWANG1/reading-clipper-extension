@@ -26,9 +26,9 @@ if %errorlevel% equ 0 (
     echo  [ ] Python Sidecar   Stopped
 )
 
-netstat -ano | findstr ":3001" >nul 2>&1
+netstat -ano | findstr ":3000" >nul 2>&1
 if %errorlevel% equ 0 (
-    echo  [OK] Backend          Port 3001
+    echo  [OK] Backend          Port 3000
 ) else (
     echo  [ ] Backend          Stopped
 )

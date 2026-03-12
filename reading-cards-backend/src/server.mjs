@@ -47,6 +47,7 @@ import searchRouterV2 from "./routes/v2/search.mjs";
 import highlightsRouterV2 from "./routes/v2/highlights.mjs";
 import tasksRouterV2 from "./routes/v2/tasks.mjs";
 import rssRouterV2 from "./routes/v2/rss.mjs";
+import conversationsRouterV2 from "./routes/v2/conversations.mjs";
 import { startRssScheduler } from "./services/rss/scheduler.mjs";
 
 // ========= Express 应用配置 =========
@@ -54,18 +55,38 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // CORS 配置
+const normalizedFrontendOrigins = [
+  process.env.FRONTEND_URL,
+  ...(process.env.FRONTEND_URLS || "").split(","),
+]
+  .map((value) => value?.trim())
+  .filter(Boolean)
+  .map((value) => value.replace(/\/$/, ""));
+
+const allowedOrigins = [
+  "http://localhost:5173", // Web App Dev
+  "http://127.0.0.1:5173", // Web App Dev (loopback)
+  "http://localhost:4173", // Vite preview
+  "http://127.0.0.1:4173", // Vite preview (loopback)
+  "http://localhost:3000", // Backend
+  "http://127.0.0.1:3000", // Backend (loopback)
+  "chrome-extension://", // Extension
+  ...normalizedFrontendOrigins,
+];
+
+const isOriginAllowed = (origin) =>
+  allowedOrigins.some((allowed) => {
+    if (allowed === "chrome-extension://") {
+      return origin.startsWith(allowed);
+    }
+    return origin === allowed;
+  });
+
 const corsOptions = {
   origin: (origin, callback) => {
-    const allowedOrigins = [
-      "http://localhost:5173",      // Web App Dev
-      "http://localhost:3000",      // Backend
-      "chrome-extension://",        // Extension
-      process.env.FRONTEND_URL,
-    ].filter(Boolean);
-
     if (!origin) return callback(null, true);
 
-    if (allowedOrigins.some(allowed => origin.startsWith(allowed) || allowed === origin)) {
+    if (isOriginAllowed(origin)) {
       callback(null, true);
     } else {
       console.warn("CORS 拒绝来源:", origin);
@@ -111,6 +132,7 @@ app.use("/api/v2/search", searchRouterV2);
 app.use("/api/v2/highlights", highlightsRouterV2);
 app.use("/api/v2/tasks", tasksRouterV2);
 app.use("/api/v2/rss", rssRouterV2);
+app.use("/api/v2/conversations", conversationsRouterV2);
 
 // ========= 错误处理 =========
 app.use((err, req, res, next) => {

@@ -29,7 +29,7 @@ Services Status
 -------------------------------------------------
 [OK] Content Fetch    Port 8200
 [OK] Python Sidecar   Port 8100
-[OK] Backend          Port 3001
+[OK] Backend          Port 3000
 [OK] Web App          Port 5173
 
 

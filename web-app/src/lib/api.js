@@ -560,6 +560,13 @@ export const boardsApi = {
 
 // ========= Chat API =========
 export const chatApi = {
+  // New conversation-aware mode
+  sendMessage: (conversationId, userMessage) =>
+    request('/v2/chat', {
+      method: 'POST',
+      body: JSON.stringify({ conversation_id: conversationId, user_message: userMessage }),
+    }),
+  // Legacy stateless mode
   send: (messages) =>
     request('/v2/chat', {
       method: 'POST',
@@ -570,6 +577,38 @@ export const chatApi = {
       method: 'POST',
       body: JSON.stringify({ messages, pendingToolCalls, confirmedIds }),
     }),
+  executePlan: (conversationId, planSpec, planDisplay, topicId) =>
+    request('/v2/chat/execute-plan', {
+      method: 'POST',
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        plan_spec: planSpec,
+        plan_display: planDisplay,
+        topic_id: topicId || null,
+      }),
+    }),
+  getTemplates: () => request('/v2/chat/templates'),
+};
+
+// ========= Conversations API =========
+export const conversationsApi = {
+  list: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/v2/conversations${query ? `?${query}` : ''}`);
+  },
+  get: (id) => request(`/v2/conversations/${id}`),
+  create: (title) =>
+    request('/v2/conversations', {
+      method: 'POST',
+      body: JSON.stringify({ title }),
+    }),
+  update: (id, data) =>
+    request(`/v2/conversations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  delete: (id) =>
+    request(`/v2/conversations/${id}`, { method: 'DELETE' }),
 };
 
 export const materialsApi = {

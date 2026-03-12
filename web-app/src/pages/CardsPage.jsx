@@ -7,6 +7,8 @@ import {
   Trash2,
   Edit3,
   ExternalLink,
+  ArrowRight,
+  Plus,
   Clock,
   Tag,
   X,
@@ -332,11 +334,25 @@ function CardsPage() {
   const [editingCard, setEditingCard] = useState(null);
   const [selectedCardIds, setSelectedCardIds] = useState(new Set());
   const [activeTab, setActiveTab] = useState('cards');
+  const [selectedBoardNodeId, setSelectedBoardNodeId] = useState(null);
+  const [focusedBoardNodeIds, setFocusedBoardNodeIds] = useState([]);
+  const [boardRefreshToken, setBoardRefreshToken] = useState(0);
+  const [boardFocusRequest, setBoardFocusRequest] = useState(null);
 
   const [memoContent, setMemoContent] = useState('');
   const [memoDocument, setMemoDocument] = useState(null);
   const [memoLoading, setMemoLoading] = useState(false);
   const [memoSaving, setMemoSaving] = useState(false);
+
+  const sameIdList = useCallback((a = [], b = []) => {
+    if (a === b) return true;
+    if (!Array.isArray(a) || !Array.isArray(b)) return false;
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i += 1) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }, []);
 
   const toggleCardSelection = (cardId) => {
     setSelectedCardIds(prev => {
@@ -358,6 +374,14 @@ function CardsPage() {
     fetchTopics();
     fetchSources();
   }, [fetchTopics, fetchSources]);
+
+  useEffect(() => {
+    if (topicId) {
+      setSelectedTopic(topicId);
+      return;
+    }
+    setSelectedTopic('');
+  }, [topicId]);
 
   const categories = useMemo(() => {
     const categorySet = new Set(sources.map(s => s.category).filter(Boolean));
@@ -501,6 +525,79 @@ function CardsPage() {
   }, []);
 
   const currentTopic = topics.find((t) => t.id === (topicId || selectedTopic));
+  const isTopicOverview = !selectedTopic;
+
+  const topicOverviewItems = useMemo(() => {
+    return topics
+      .map((topic) => {
+        const topicCards = cards.filter((card) => card.topic_id === topic.id);
+        const latestCardAt = topicCards.reduce((latest, card) => {
+          if (!card?.created_at) return latest;
+          if (!latest) return card.created_at;
+          return new Date(card.created_at) > new Date(latest) ? card.created_at : latest;
+        }, null);
+
+        return {
+          topic,
+          cardCount: topic.card_count ?? topicCards.length,
+          latestCardAt,
+        };
+      })
+      .sort((a, b) => {
+        if (!a.latestCardAt && !b.latestCardAt) return 0;
+        if (!a.latestCardAt) return 1;
+        if (!b.latestCardAt) return -1;
+        return new Date(b.latestCardAt) - new Date(a.latestCardAt);
+      });
+  }, [topics, cards]);
+
+  const formatLatestTime = useCallback((dateValue) => {
+    if (!dateValue) return '暂无卡片';
+    return new Date(dateValue).toLocaleString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }, []);
+
+  useEffect(() => {
+    setSelectedBoardNodeId(null);
+    setFocusedBoardNodeIds([]);
+    setBoardFocusRequest(null);
+  }, [selectedTopic]);
+
+  const previousTopicRef = useRef(selectedTopic);
+  useEffect(() => {
+    if (previousTopicRef.current === selectedTopic) return;
+    previousTopicRef.current = selectedTopic;
+    setActiveTab('cards');
+  }, [selectedTopic]);
+
+  const handleBoardMutated = useCallback(() => {
+    setBoardRefreshToken((prev) => prev + 1);
+  }, []);
+
+  const handleBoardSelectionChange = useCallback((nodeId, branchIds = []) => {
+    const nextNodeId = nodeId || null;
+    const nextBranchIds = Array.isArray(branchIds) ? branchIds : [];
+    setSelectedBoardNodeId((prev) => (prev === nextNodeId ? prev : nextNodeId));
+    setFocusedBoardNodeIds((prev) => (sameIdList(prev, nextBranchIds) ? prev : nextBranchIds));
+  }, [sameIdList]);
+
+  const handleDocNodeSelect = useCallback((nodeId, branchIds = []) => {
+    const nextNodeId = nodeId || null;
+    const nextBranchIds = Array.isArray(branchIds) ? branchIds : [];
+    setSelectedBoardNodeId((prev) => (prev === nextNodeId ? prev : nextNodeId));
+    setFocusedBoardNodeIds((prev) => (sameIdList(prev, nextBranchIds) ? prev : nextBranchIds));
+
+    // Avoid repeated focus requests on the same node; this causes visible jank on rapid clicks.
+    if (nextNodeId && nextNodeId !== selectedBoardNodeId) {
+      setBoardFocusRequest({ nodeId: nextNodeId, nonce: Date.now() });
+    } else if (!nextNodeId) {
+      setBoardFocusRequest(null);
+    }
+  }, [sameIdList, selectedBoardNodeId]);
 
   return (
     <div className="flex gap-0 h-full" style={{ background: 'var(--workbench-bg)' }}>
@@ -528,18 +625,18 @@ function CardsPage() {
         <div className="shrink-0 px-4 lg:px-6 pt-4 lg:pt-6 pb-1 border-b" style={{ borderColor: 'var(--workbench-border)' }}>
           <div className="max-w-5xl">
             <h1 className="text-[30px] font-extrabold tracking-tight" style={{ color: 'var(--workbench-text)' }}>
-              {currentTopic ? currentTopic.title : '全部卡片'}
+              {isTopicOverview ? '工作台' : (currentTopic ? currentTopic.title : '全部卡片')}
             </h1>
             <p className="mt-1 text-sm" style={{ color: 'var(--workbench-text-muted)' }}>
-              共 {filteredCards.length} 张卡片
-              {filteredCards.length !== cards.length && ` (已筛选，共 ${cards.length} 张)`}
-              {currentTopic && ` · ${currentTopic.title}`}
+              {isTopicOverview
+                ? `共 ${topics.length} 个 Topic`
+                : `共 ${filteredCards.length} 张卡片${filteredCards.length !== cards.length ? ` (已筛选，共 ${cards.length} 张)` : ''}${currentTopic ? ` · ${currentTopic.title}` : ''}`}
             </p>
           </div>
         </div>
 
         <div className="shrink-0 px-4 lg:px-6 pt-4">
-          <div className="max-w-5xl">
+          <div className="max-w-5xl flex items-center justify-between gap-3">
           {selectedTopic && (
             <div className="workbench-tab-strip">
               <button
@@ -565,27 +662,142 @@ function CardsPage() {
               </button>
             </div>
           )}
+          {selectedTopic && (
+            <button
+              type="button"
+              onClick={() => navigate(`/topics/${selectedTopic}`)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 h-[34px] rounded-lg transition-colors hover:bg-blue-500/10"
+              style={{
+                color: 'var(--workbench-blue-ink)',
+                background: 'var(--workbench-card)',
+                border: '1px solid var(--workbench-border)',
+              }}
+              title="进入全屏论证页"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              全屏论证页
+            </button>
+          )}
           </div>
         </div>
 
-        {activeTab === 'board' && selectedTopic && (
-          <div className="flex-1 relative" style={{ minHeight: 0 }}>
-            <div
-              className="absolute inset-0 m-3 rounded-2xl overflow-hidden"
-              style={{ border: '1px solid var(--workbench-border)', boxShadow: 'var(--workbench-shadow-card)' }}
-            >
-              <Suspense fallback={
-                <div className="flex items-center justify-center h-full" style={{ background: 'var(--workbench-canvas)' }}>
-                  <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'var(--text-primary)' }} />
+        {isTopicOverview && (
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-5xl mx-auto px-4 lg:px-6 py-6 space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--workbench-text)' }}>
+                  Topic 总览
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => navigate('/topics')}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 h-8 rounded-lg transition-colors hover:bg-blue-500/10"
+                  style={{
+                    color: 'var(--workbench-blue-ink)',
+                    background: 'var(--workbench-card)',
+                    border: '1px solid var(--workbench-border)',
+                  }}
+                  title="管理 Topic"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  管理 Topic
+                </button>
+              </div>
+
+              {topicOverviewItems.length > 0 ? (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                  {topicOverviewItems.map(({ topic, cardCount, latestCardAt }) => (
+                    <button
+                      key={topic.id}
+                      type="button"
+                      onClick={() => setSelectedTopic(topic.id)}
+                      className="w-full text-left rounded-xl p-4 transition-all hover:-translate-y-0.5"
+                      style={{
+                        background: 'var(--workbench-card)',
+                        border: '1px solid var(--workbench-border)',
+                        boxShadow: 'var(--workbench-shadow-card)',
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-base font-semibold truncate" style={{ color: 'var(--workbench-text)' }}>
+                            {topic.title}
+                          </p>
+                          <p className="text-xs mt-1" style={{ color: 'var(--workbench-text-muted)' }}>
+                            最近更新：{formatLatestTime(latestCardAt)}
+                          </p>
+                        </div>
+                        <ArrowRight className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--workbench-blue-ink)' }} />
+                      </div>
+
+                      <div className="mt-4 flex items-center flex-wrap gap-2">
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium"
+                          style={{ background: 'var(--workbench-card-soft)', color: 'var(--workbench-text-soft)' }}
+                        >
+                          <LayoutGrid className="w-3 h-3" />
+                          {cardCount} 张卡片
+                        </span>
+                        {latestCardAt && (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium"
+                            style={{ background: 'var(--workbench-card-soft)', color: 'var(--workbench-text-soft)' }}
+                          >
+                            <Clock className="w-3 h-3" />
+                            {formatLatestTime(latestCardAt)}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
                 </div>
-              }>
-                <EmbeddedThinkBoard topicId={selectedTopic} topic={currentTopic} />
-              </Suspense>
+              ) : (
+                <div
+                  className="rounded-xl p-6 text-sm"
+                  style={{ border: '1px solid var(--workbench-border)', background: 'var(--workbench-card)' }}
+                >
+                  暂无 Topic，点击左侧或上方按钮创建后开始使用工作台。
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {activeTab !== 'board' && (
+        {!isTopicOverview && activeTab === 'board' && (
+          <div className="flex-1 relative" style={{ minHeight: 0 }}>
+            {selectedTopic ? (
+              <div
+                className="absolute inset-0 m-3 rounded-2xl overflow-hidden"
+                style={{ border: '1px solid var(--workbench-border)', boxShadow: 'var(--workbench-shadow-card)' }}
+              >
+                <Suspense fallback={
+                  <div className="flex items-center justify-center h-full" style={{ background: 'var(--workbench-canvas)' }}>
+                    <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'var(--text-primary)' }} />
+                  </div>
+                }>
+                  <EmbeddedThinkBoard
+                    topicId={selectedTopic}
+                    topic={currentTopic}
+                    selectedNodeId={selectedBoardNodeId}
+                    focusRequest={boardFocusRequest}
+                    boardRefreshToken={boardRefreshToken}
+                    onSelectionChange={handleBoardSelectionChange}
+                    onBoardMutated={handleBoardMutated}
+                  />
+                </Suspense>
+              </div>
+            ) : (
+              <div className="absolute inset-0 m-3 rounded-2xl flex items-center justify-center px-6 text-center" style={{ border: '1px solid var(--workbench-border)', background: 'var(--workbench-canvas)' }}>
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--workbench-text)' }}>请选择一个 Topic</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--workbench-text-muted)' }}>选中 Topic 后可进入论证板并添加节点</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!isTopicOverview && activeTab !== 'board' && (
         <div className="flex-1 overflow-y-auto">
         <div className="max-w-5xl mx-auto px-4 lg:px-6 pb-6 space-y-6">
           {activeTab === 'cards' && (
@@ -774,6 +986,14 @@ function CardsPage() {
       <CanvasPlaceholder
         topicId={selectedTopic || null}
         topic={currentTopic || null}
+        selectedNodeId={selectedBoardNodeId}
+        focusedNodeIds={focusedBoardNodeIds}
+        boardRefreshToken={boardRefreshToken}
+        onSelectNode={handleDocNodeSelect}
+        onBoardMutated={handleBoardMutated}
+        onOpenFullBoard={() => {
+          if (selectedTopic) navigate(`/topics/${selectedTopic}`);
+        }}
         width={rightSidebarWidth}
         onWidthChange={setRightSidebarWidth}
         isOpen={canvasOpen}

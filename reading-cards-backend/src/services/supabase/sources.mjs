@@ -2,6 +2,8 @@
 
 import { supabaseAdmin } from "../../config/supabase.mjs";
 
+const ALLOWED_SOURCE_STATUS = new Set(["active", "inactive", "archived"]);
+
 /**
  * 列出信息源（支持筛选）
  * @param {Object} supabase - Supabase client
@@ -21,6 +23,9 @@ export async function listSources(supabase, userId, filters = {}) {
     query = query.eq("category", filters.category);
   }
   if (filters.status) {
+    if (!ALLOWED_SOURCE_STATUS.has(filters.status)) {
+      throw new Error("invalid_source_status");
+    }
     query = query.eq("status", filters.status);
   }
   if (filters.importance_level !== undefined) {

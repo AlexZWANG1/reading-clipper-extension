@@ -1,10 +1,16 @@
-import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Network } from 'lucide-react';
+﻿import { useState } from 'react';
+import { ChevronLeft, ChevronRight, ExternalLink, Network } from 'lucide-react';
 import BoardDocPanel from './BoardDocPanel';
 
 function CanvasPlaceholder({
   topicId = null,
-  topic   = null,
+  topic = null,
+  selectedNodeId = null,
+  focusedNodeIds = [],
+  boardRefreshToken = 0,
+  onSelectNode,
+  onBoardMutated,
+  onOpenFullBoard,
   width = 400,
   onWidthChange,
   isOpen = true,
@@ -13,7 +19,6 @@ function CanvasPlaceholder({
 }) {
   const [isResizing, setIsResizing] = useState(false);
 
-  // ── Drag-resize handle ─────────────────────────────────────────────────────
   const handleResizeStart = (e) => {
     e.preventDefault();
     setIsResizing(true);
@@ -32,7 +37,6 @@ function CanvasPlaceholder({
     document.addEventListener('mouseup', onUp);
   };
 
-  // ── Collapsed strip ────────────────────────────────────────────────────────
   if (!isOpen) {
     return (
       <div
@@ -47,9 +51,9 @@ function CanvasPlaceholder({
           onClick={() => onToggle?.(true)}
           className="p-1.5 rounded-lg transition-colors"
           style={{ color: 'var(--workbench-text-muted)' }}
-          title="展开假说文档"
-          onMouseEnter={e => e.currentTarget.style.color = 'var(--workbench-text-soft)'}
-          onMouseLeave={e => e.currentTarget.style.color = 'var(--workbench-text-muted)'}
+          title="展开文档"
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--workbench-text-soft)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--workbench-text-muted)'; }}
         >
           <ChevronLeft size={16} />
         </button>
@@ -68,19 +72,20 @@ function CanvasPlaceholder({
     );
   }
 
-  // ── No topic selected — idle state ─────────────────────────────────────────
   const idleState = (
     <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6">
       <svg width="48" height="40" viewBox="0 0 48 40" fill="none" opacity="0.4">
-        <rect x="10" y="2"  width="28" height="5" rx="2.5" fill="currentColor" style={{ color: 'var(--workbench-text-muted)' }}/>
-        <rect x="14" y="12" width="24" height="3" rx="1.5" fill="currentColor" style={{ color: 'var(--workbench-text-muted)' }} opacity="0.6"/>
-        <rect x="14" y="20" width="20" height="3" rx="1.5" fill="currentColor" style={{ color: 'var(--workbench-text-muted)' }} opacity="0.4"/>
-        <rect x="14" y="28" width="16" height="3" rx="1.5" fill="currentColor" style={{ color: 'var(--workbench-text-muted)' }} opacity="0.25"/>
+        <rect x="10" y="2" width="28" height="5" rx="2.5" fill="currentColor" style={{ color: 'var(--workbench-text-muted)' }} />
+        <rect x="14" y="12" width="24" height="3" rx="1.5" fill="currentColor" style={{ color: 'var(--workbench-text-muted)' }} opacity="0.6" />
+        <rect x="14" y="20" width="20" height="3" rx="1.5" fill="currentColor" style={{ color: 'var(--workbench-text-muted)' }} opacity="0.4" />
+        <rect x="14" y="28" width="16" height="3" rx="1.5" fill="currentColor" style={{ color: 'var(--workbench-text-muted)' }} opacity="0.25" />
       </svg>
       <div className="text-center">
         <p className="text-sm font-medium mb-1" style={{ color: 'var(--workbench-text-soft)' }}>假说文档</p>
         <p className="text-xs leading-relaxed" style={{ color: 'var(--workbench-text-muted)' }}>
-          选择左侧 Topic<br />查看结构化假说大纲
+          选择左侧 Topic
+          <br />
+          查看结构化论证大纲
         </p>
       </div>
     </div>
@@ -95,7 +100,6 @@ function CanvasPlaceholder({
         borderLeft: '1px solid var(--workbench-border)',
       }}
     >
-      {/* ── Panel header ──────────────────────────────────────────────────── */}
       <div
         className="flex items-center justify-between shrink-0"
         style={{
@@ -113,32 +117,57 @@ function CanvasPlaceholder({
             {topic?.title ? `${topic.title} · 假说` : '假说文档'}
           </span>
         </div>
-        <button
-          onClick={() => onToggle?.(false)}
-          className="p-1.5 rounded-lg transition-colors shrink-0 ml-2"
-          title="折叠"
-          style={{ color: 'var(--workbench-text-muted)' }}
-          onMouseEnter={e => e.currentTarget.style.color = 'var(--workbench-text)'}
-          onMouseLeave={e => e.currentTarget.style.color = 'var(--workbench-text-muted)'}
-        >
-          <ChevronRight size={15} />
-        </button>
+
+        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          {topicId && (
+            <button
+              onClick={() => onOpenFullBoard?.()}
+              className="p-1.5 rounded-lg transition-colors"
+              title="全屏论证页"
+              style={{ color: 'var(--workbench-text-muted)' }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--workbench-blue-ink)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--workbench-text-muted)'; }}
+            >
+              <ExternalLink size={15} />
+            </button>
+          )}
+          <button
+            onClick={() => onToggle?.(false)}
+            className="p-1.5 rounded-lg transition-colors"
+            title="收起"
+            style={{ color: 'var(--workbench-text-muted)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--workbench-text)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--workbench-text-muted)'; }}
+          >
+            <ChevronRight size={15} />
+          </button>
+        </div>
       </div>
 
-      {/* ── Document content ──────────────────────────────────────────────── */}
       {topicId ? (
-        <BoardDocPanel topicId={topicId} topic={topic} />
+        <BoardDocPanel
+          topicId={topicId}
+          topic={topic}
+          selectedNodeId={selectedNodeId}
+          focusedNodeIds={focusedNodeIds}
+          boardRefreshToken={boardRefreshToken}
+          onSelectNode={onSelectNode}
+          onBoardMutated={onBoardMutated}
+        />
       ) : (
         idleState
       )}
 
-      {/* ── Drag-resize handle ─────────────────────────────────────────────── */}
       <div
         className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize transition-colors"
         style={{ background: isResizing ? 'var(--workbench-blue)' : 'transparent' }}
         onMouseDown={handleResizeStart}
-        onMouseEnter={e => { if (!isResizing) e.currentTarget.style.background = 'rgba(47,128,255,0.22)'; }}
-        onMouseLeave={e => { if (!isResizing) e.currentTarget.style.background = 'transparent'; }}
+        onMouseEnter={(e) => {
+          if (!isResizing) e.currentTarget.style.background = 'rgba(47,128,255,0.22)';
+        }}
+        onMouseLeave={(e) => {
+          if (!isResizing) e.currentTarget.style.background = 'transparent';
+        }}
       />
     </div>
   );

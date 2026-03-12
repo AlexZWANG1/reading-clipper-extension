@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { Handle, Position, NodeResizer } from '@xyflow/react';
 import { ExternalLink, Trash2, Star } from 'lucide-react';
 
@@ -53,9 +53,14 @@ function EvidenceNode({ id, data, selected }) {
     onEdgeUpdate,
     lod = 'normal',
     dimmed = false,
+    compactMode = true,
   } = data;
+  const [hovered, setHovered] = useState(false);
 
   const relation = RELATION_CONFIG[edgeRelation] || RELATION_CONFIG.neutral;
+  const isCompact = compactMode && lod !== 'full';
+  const isExpanded = !isCompact || hovered || selected;
+  const stackedCompact = isCompact && !isExpanded;
   const sourceName = card?.source_name || (card?.source_url
     ? (() => {
       try {
@@ -65,33 +70,69 @@ function EvidenceNode({ id, data, selected }) {
       }
     })()
     : '');
-  const displayText = card?.summary || content?.text || '(无内容)';
+  const summaryText = (card?.summary || content?.text || '').replace(/\s+/g, ' ').trim();
+  const displayText = summaryText || '(无内容)';
   const cardTitle = card?.title || '新卡片';
   const factOrView = card?.fact_or_view === 'view' ? 'VIEW' : 'FACT';
   const factBadgeClass = `badge ${factOrView === 'VIEW' ? 'badge-view' : 'badge-fact'}`;
 
   return (
     <>
-      <NodeResizer minWidth={300} minHeight={160} isVisible={selected} />
+      <NodeResizer minWidth={220} minHeight={96} isVisible={selected} />
       <div
-        className="relative group transition-all flex flex-col overflow-hidden"
+        className="relative group flex flex-col"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
         style={{
-          borderRadius: 13,
+          borderRadius: 12,
           background: 'var(--workbench-card)',
           border: '1px solid var(--workbench-border)',
-          borderLeft: `3px solid ${relation.lineColor}`,
-          boxShadow: 'var(--workbench-shadow-node)',
+          borderLeft: `2px solid ${relation.lineColor}`,
+          boxShadow: selected ? '0 0 0 2px rgba(47,128,255,0.2)' : 'var(--workbench-shadow-node)',
           width: '100%',
           height: '100%',
-          minWidth: 300,
-          minHeight: 160,
+          minWidth: 220,
+          minHeight: 96,
           opacity: dimmed ? 0.3 : 1,
-          pointerEvents: dimmed ? 'none' : 'auto',
         }}
       >
+        {stackedCompact && (
+          <>
+            <div
+              aria-hidden
+              className="pointer-events-none absolute"
+              style={{
+                zIndex: -1,
+                left: 4,
+                right: 4,
+                top: 4,
+                bottom: -4,
+                borderRadius: 11,
+                background: 'var(--workbench-card)',
+                border: '1px solid rgba(130,121,106,0.24)',
+                boxShadow: '0 4px 10px rgba(30,26,18,0.06)',
+              }}
+            />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute"
+              style={{
+                zIndex: -2,
+                left: 8,
+                right: 8,
+                top: 8,
+                bottom: -8,
+                borderRadius: 10,
+                background: 'rgba(247,243,235,0.9)',
+                border: '1px solid rgba(130,121,106,0.18)',
+              }}
+            />
+          </>
+        )}
+
         <Handle type="target" position={Position.Top} className="neuro-handle" />
 
-        <div className={`flex items-center gap-2 px-3 pt-3 ${lod === 'mini' ? 'pb-2' : 'mb-2'}`}>
+        <div className={`flex items-center gap-2 px-3 ${lod === 'mini' ? 'py-2' : 'pt-2.5 pb-1.5'}`}>
           <span className={factBadgeClass}>
             {factOrView}
           </span>
@@ -109,62 +150,69 @@ function EvidenceNode({ id, data, selected }) {
             <option value="refutes">反驳</option>
             <option value="neutral">中立</option>
           </select>
+          {sourceName && (
+            <span className="ml-auto text-[10px] truncate max-w-[110px]" style={{ color: 'var(--workbench-text-muted)' }} title={sourceName}>
+              {sourceName}
+            </span>
+          )}
         </div>
 
         {lod !== 'mini' && (
-          <div className="px-3 pb-3 flex-1 flex flex-col">
-            <div className="font-semibold text-[13px] mb-2 leading-tight" style={{ color: 'var(--workbench-text)' }}>
-              {cardTitle}
-            </div>
+          <div className="px-3 pb-2.5 flex-1 flex flex-col">
+            {isExpanded && (
+              <div className="font-semibold text-[12px] mb-1 leading-tight" style={{ color: 'var(--workbench-text)' }}>
+                {cardTitle}
+              </div>
+            )}
             <div
-              className={`text-[12.5px] leading-relaxed mb-2 flex-1 overflow-y-auto ${lod === 'normal' ? 'line-clamp-6' : ''}`}
+              className={`text-[12px] leading-[1.42] ${isExpanded ? 'line-clamp-4' : 'line-clamp-1'} ${isExpanded ? 'mb-2' : 'mb-1.5'}`}
               style={{ color: 'var(--workbench-text-soft)' }}
             >
               <span className="font-semibold" style={{ color: relation.color }}>{relation.icon}</span> {displayText}
             </div>
 
-            {sourceName && (
-              <div className="flex items-center gap-1 text-[10px] pt-1.5" style={{ borderTop: '1px solid var(--workbench-border)', color: 'var(--workbench-text-muted)' }}>
-                <span className="truncate max-w-[140px]">{sourceName}</span>
-                {card?.source_url && (
-                  <a
-                    href={buildHighlightUrl(card.source_url, card.raw_snippet)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ml-auto transition-colors"
-                    style={{ color: 'var(--workbench-blue-ink)' }}
-                    onClick={(e) => e.stopPropagation()}
-                    title="跳转原文"
-                    aria-label="跳转原文"
+            <div className="flex items-center gap-1 text-[10px] pt-1" style={{ borderTop: '1px solid var(--workbench-border)', color: 'var(--workbench-text-muted)' }}>
+              <span className="truncate">{sourceName || '未标注来源'}</span>
+              {card?.source_url && (
+                <a
+                  href={buildHighlightUrl(card.source_url, card.raw_snippet)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-auto"
+                  style={{ color: 'var(--workbench-blue-ink)' }}
+                  onClick={(e) => e.stopPropagation()}
+                  title="跳转原文"
+                  aria-label="跳转原文"
+                >
+                  <ExternalLink size={10} />
+                </a>
+              )}
+            </div>
+
+            {isExpanded && (
+              <div className="flex items-center gap-1 mt-1 justify-end opacity-80 group-hover:opacity-100">
+                <span className="text-[10px]" style={{ color: 'var(--workbench-text-muted)' }}>强度</span>
+                {[1, 2, 3, 4, 5].map((level) => (
+                  <button
+                    key={level}
+                    onClick={() => onUpdate?.(id, { strength: level })}
+                    style={{ color: level <= strength ? 'var(--workbench-amber)' : 'rgba(130,121,106,0.36)', padding: 0 }}
+                    className=""
+                    title={`设置证据强度 ${level}`}
+                    aria-label={`设置证据强度 ${level}`}
                   >
-                    <ExternalLink size={10} />
-                  </a>
-                )}
+                    <Star size={10} fill={level <= strength ? 'currentColor' : 'none'} />
+                  </button>
+                ))}
               </div>
             )}
-
-            <div className="flex items-center gap-1 mt-1 justify-end opacity-80 group-hover:opacity-100 transition-opacity">
-              <span className="text-[10px]" style={{ color: 'var(--workbench-text-muted)' }}>强度</span>
-              {[1, 2, 3, 4, 5].map((level) => (
-                <button
-                  key={level}
-                  onClick={() => onUpdate?.(id, { strength: level })}
-                  style={{ color: level <= strength ? 'var(--workbench-amber)' : 'rgba(130,121,106,0.36)', padding: 0 }}
-                  className="hover:scale-110 transition-transform"
-                  title={`设置证据强度 ${level}`}
-                  aria-label={`设置证据强度 ${level}`}
-                >
-                  <Star size={10} fill={level <= strength ? 'currentColor' : 'none'} />
-                </button>
-              ))}
-            </div>
           </div>
         )}
 
-        <div className="absolute top-1 right-1 opacity-75 group-hover:opacity-100 transition-opacity">
+        <div className="absolute top-1 right-1 opacity-75 group-hover:opacity-100">
           <button
             onClick={() => onDelete?.(id)}
-            className="p-0.5 rounded transition-colors hover:bg-red-500/10 hover:text-red-500"
+            className="p-0.5 rounded hover:bg-red-500/10 hover:text-red-500"
             style={{ color: 'var(--workbench-text-muted)' }}
             title="删除证据"
             aria-label="删除证据"

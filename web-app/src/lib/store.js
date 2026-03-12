@@ -1,7 +1,7 @@
 // ========= 全局状态管理 =========
 
 import { create } from 'zustand';
-import { authApi, cardsApi, topicsApi, documentsApi, sourcesApi, tasksApi, rssApi } from './api';
+import { authApi, cardsApi, topicsApi, documentsApi, sourcesApi, tasksApi, rssApi, conversationsApi, chatApi } from './api';
 
 // ========= 认证状态 =========
 export const useAuthStore = create((set, get) => ({
@@ -474,6 +474,253 @@ export const useRssStore = create((set, get) => ({
     items: [],
     loading: false,
     error: null,
+  }),
+}));
+
+// ========= Conversations 状态 =========
+export const useConversationsStore = create((set, get) => ({
+  conversations: [],
+  loading: false,
+  error: null,
+
+  fetchConversations: async () => {
+    set({ loading: true, error: null });
+    try {
+      const { conversations } = await conversationsApi.list();
+      set({ conversations, loading: false });
+    } catch (error) {
+      set({ error: error.message, loading: false });
+    }
+  },
+
+  createConversation: async (title) => {
+    const { conversation } = await conversationsApi.create(title);
+    set((state) => ({ conversations: [conversation, ...state.conversations] }));
+    return conversation;
+  },
+
+  updateConversation: async (id, data) => {
+    const { conversation } = await conversationsApi.update(id, data);
+    set((state) => ({
+      conversations: state.conversations.map((c) => (c.id === id ? { ...c, ...conversation } : c)),
+    }));
+    return conversation;
+  },
+
+  deleteConversation: async (id) => {
+    await conversationsApi.delete(id);
+    set((state) => ({
+      conversations: state.conversations.filter((c) => c.id !== id),
+    }));
+  },
+
+  // Push a conversation to the top of the list (after activity)
+  touchConversation: (id, updates = {}) => {
+    set((state) => {
+      const conv = state.conversations.find((c) => c.id === id);
+      if (!conv) return state;
+      const updated = { ...conv, ...updates, updated_at: new Date().toISOString() };
+      return {
+        conversations: [updated, ...state.conversations.filter((c) => c.id !== id)],
+      };
+    });
+  },
+
+  clear: () => set({ conversations: [], loading: false, error: null }),
+}));
+
+// ========= Chat 状态 =========
+export const useChatStore = create((set, get) => ({
+  conversationId: null,
+  messages: [],       // UI messages (rendered in chat)
+  sending: false,
+  activePlan: null,   // { planSpec, planDisplay, suggestedTopicId } when plan proposed
+  executing: false,   // true while plan is executing
+  templates: [],
+
+  // Set current conversation and load its messages
+  loadConversation: async (conversationId) => {
+    if (!conversationId) {
+      set({ conversationId: null, messages: [], activePlan: null, executing: false });
+      return;
+    }
+    try {
+      const { messages } = await conversationsApi.get(conversationId);
+      // Check if there's a pending plan proposal in messages
+      const planMsg = messages?.findLast?.((m) => m.message_type === 'plan_proposal');
+      let activePlan = null;
+      if (planMsg?.metadata?.plan_spec) {
+        // Check if plan was already confirmed/executed
+        const confirmed = messages?.some((m) =>
+          m.message_type === 'plan_confirmed' && new Date(m.created_at) > new Date(planMsg.created_at)
+        );
+        if (!confirmed) {
+          activePlan = {
+            planSpec: planMsg.metadata.plan_spec,
+            planDisplay: planMsg.metadata.plan_display,
+            suggestedTopicId: planMsg.metadata.suggested_topic_id,
+          };
+        }
+      }
+      set({ conversationId, messages: messages || [], activePlan, executing: false });
+    } catch {
+      set({ conversationId, messages: [], activePlan: null });
+    }
+  },
+
+  // Start a new empty conversation
+  newConversation: () => {
+    set({ conversationId: null, messages: [], activePlan: null, executing: false });
+  },
+
+  // Send a message
+  sendMessage: async (text) => {
+    const { conversationId } = get();
+    set({ sending: true });
+
+    // Optimistically add user message
+    const tempUserMsg = { id: `temp-${Date.now()}`, role: 'user', content: text, message_type: 'text', created_at: new Date().toISOString() };
+    set((state) => ({ messages: [...state.messages, tempUserMsg] }));
+
+    try {
+      const result = await chatApi.sendMessage(conversationId, text);
+      const newConvId = result.conversation_id;
+
+      // Build assistant message
+      const assistantMsg = {
+        id: `resp-${Date.now()}`,
+        role: 'assistant',
+        content: result.reply,
+        message_type: result.message_type || 'text',
+        metadata: {},
+        created_at: new Date().toISOString(),
+      };
+
+      if (result.plan) {
+        assistantMsg.metadata = {
+          plan_spec: result.plan.planSpec,
+          plan_display: result.plan.planDisplay,
+          suggested_topic_id: result.plan.suggestedTopicId,
+        };
+        set({
+          conversationId: newConvId,
+          activePlan: result.plan,
+          sending: false,
+        });
+      } else {
+        set({
+          conversationId: newConvId,
+          activePlan: null,
+          sending: false,
+        });
+      }
+
+      set((state) => ({ messages: [...state.messages, assistantMsg] }));
+
+      // Update conversations list
+      const { touchConversation } = useConversationsStore.getState();
+      touchConversation(newConvId, { title: result.reply?.slice(0, 30) });
+
+      return result;
+    } catch (error) {
+      // Remove optimistic message on failure
+      set((state) => ({
+        messages: state.messages.filter((m) => m.id !== tempUserMsg.id),
+        sending: false,
+      }));
+      throw error;
+    }
+  },
+
+  // Execute a confirmed plan
+  executePlan: async (topicId) => {
+    const { conversationId, activePlan } = get();
+    if (!conversationId || !activePlan) return;
+
+    set({ executing: true });
+
+    try {
+      const result = await chatApi.executePlan(
+        conversationId,
+        activePlan.planSpec,
+        activePlan.planDisplay,
+        topicId
+      );
+
+      // Add confirmation message
+      const confirmMsg = {
+        id: `confirm-${Date.now()}`,
+        role: 'user',
+        content: '确认执行计划',
+        message_type: 'plan_confirmed',
+        created_at: new Date().toISOString(),
+      };
+      set((state) => ({
+        messages: [...state.messages, confirmMsg],
+        activePlan: null,
+      }));
+
+      // Start polling for step progress
+      get().pollForProgress();
+
+      return result;
+    } catch (error) {
+      set({ executing: false });
+      throw error;
+    }
+  },
+
+  // Dismiss a plan proposal without executing
+  dismissPlan: () => {
+    set({ activePlan: null });
+  },
+
+  // Poll for new messages (step progress during execution)
+  pollForProgress: () => {
+    const { conversationId } = get();
+    if (!conversationId) return;
+
+    const poll = setInterval(async () => {
+      try {
+        const { messages } = await conversationsApi.get(conversationId);
+        const currentMsgs = get().messages;
+        if (messages && messages.length > currentMsgs.length) {
+          set({ messages });
+          // Check if execution completed
+          const hasComplete = messages.some((m) => m.message_type === 'plan_complete');
+          if (hasComplete) {
+            clearInterval(poll);
+            set({ executing: false });
+          }
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 3000);
+
+    // Stop polling after 10 minutes
+    setTimeout(() => {
+      clearInterval(poll);
+      set({ executing: false });
+    }, 600000);
+  },
+
+  // Load templates
+  fetchTemplates: async () => {
+    try {
+      const { templates } = await chatApi.getTemplates();
+      set({ templates: templates || [] });
+    } catch {
+      // non-fatal
+    }
+  },
+
+  clear: () => set({
+    conversationId: null,
+    messages: [],
+    sending: false,
+    activePlan: null,
+    executing: false,
   }),
 }));
 

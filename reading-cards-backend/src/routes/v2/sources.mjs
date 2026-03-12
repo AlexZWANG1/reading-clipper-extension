@@ -6,6 +6,7 @@ import { requireAuth } from "../../middleware/auth.mjs";
 import { supabaseAdmin } from "../../config/supabase.mjs";
 
 const sourcesRouterV2 = Router();
+const ALLOWED_SOURCE_STATUS = new Set(["active", "inactive", "archived"]);
 
 // 所有路由都需要认证
 sourcesRouterV2.use(requireAuth);
@@ -83,6 +84,13 @@ sourcesRouterV2.get("/", async (req, res) => {
     try {
         const userId = req.user.id;
         const { category, status, importance_level } = req.query;
+        if (status && !ALLOWED_SOURCE_STATUS.has(status)) {
+            return res.status(400).json({
+                ok: false,
+                error: "invalid_status",
+                message: "status must be active/inactive/archived",
+            });
+        }
 
         const supabase = supabaseAdmin;
 
@@ -176,6 +184,14 @@ sourcesRouterV2.patch("/:id", async (req, res) => {
         }
 
         // 只允许更新特定字段
+        if (updates.status !== undefined && !ALLOWED_SOURCE_STATUS.has(updates.status)) {
+            return res.status(400).json({
+                ok: false,
+                error: "invalid_status",
+                message: "status must be active/inactive/archived",
+            });
+        }
+
         const allowedFields = ["name", "category", "importance_level", "url", "region", "description", "status"];
         const updateData = {};
         for (const field of allowedFields) {

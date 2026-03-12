@@ -1,27 +1,53 @@
 // ========= Chat Route =========
-// POST /api/v2/chat          — AI chat with tool-calling support
+// POST /api/v2/chat          — AI chat with conversation persistence + plan support
 // POST /api/v2/chat/confirm  — Confirm pending write/destructive actions
+// POST /api/v2/chat/execute-plan — Confirm and execute a generated plan
 
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.mjs";
-import { chat, chatConfirm } from "../../chat/orchestrator.mjs";
+import { chat, chatConfirm, chatWithConversation, confirmAndExecutePlan } from "../../chat/orchestrator.mjs";
+import { PLAN_TEMPLATES } from "../../chat/planner.mjs";
 
 const chatRouter = Router();
 chatRouter.use(requireAuth);
 
 /**
  * POST /api/v2/chat
- * Body: { messages: [{role, content}, ...] }
- * Returns: { ok, reply, messages, pendingActions?, pendingToolCalls? }
+ * Body: { conversation_id?, user_message?, messages? }
+ *
+ * New mode (conversation-aware): provide conversation_id + user_message
+ * Legacy mode (stateless): provide messages array
  */
 chatRouter.post("/", async (req, res) => {
   try {
-    const { messages } = req.body;
+    const { conversation_id, user_message, messages } = req.body;
 
+    // New conversation-aware mode
+    if (user_message !== undefined) {
+      const result = await chatWithConversation({
+        conversationId: conversation_id || null,
+        userMessage: user_message,
+        userId: req.user.id,
+        supabase: req.supabase,
+        accessToken: req.accessToken,
+      });
+
+      return res.json({
+        ok: true,
+        conversation_id: result.conversationId,
+        reply: result.reply,
+        message_type: result.messageType,
+        plan: result.plan || null,
+        pendingActions: result.pendingActions || null,
+        pendingToolCalls: result.pendingToolCalls || null,
+      });
+    }
+
+    // Legacy stateless mode (for backward compatibility)
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({
         ok: false,
-        error: "messages is required and must be a non-empty array",
+        error: "user_message or messages is required",
       });
     }
 
@@ -55,9 +81,6 @@ chatRouter.post("/", async (req, res) => {
 /**
  * POST /api/v2/chat/confirm
  * Body: { messages, pendingToolCalls, confirmedIds }
- *   messages         — the message array returned by /chat (without the tool_calls assistant msg)
- *   pendingToolCalls — the raw tool_calls array returned by /chat
- *   confirmedIds     — array of tool_call IDs the user approved
  */
 chatRouter.post("/confirm", async (req, res) => {
   try {
@@ -92,6 +115,53 @@ chatRouter.post("/confirm", async (req, res) => {
       error: error.message || "Confirm request failed",
     });
   }
+});
+
+/**
+ * POST /api/v2/chat/execute-plan
+ * Body: { conversation_id, plan_spec, plan_display, topic_id? }
+ * Confirms and starts executing a previously proposed plan.
+ */
+chatRouter.post("/execute-plan", async (req, res) => {
+  try {
+    const { conversation_id, plan_spec, plan_display, topic_id } = req.body;
+
+    if (!conversation_id || !plan_spec) {
+      return res.status(400).json({
+        ok: false,
+        error: "conversation_id and plan_spec are required",
+      });
+    }
+
+    const result = await confirmAndExecutePlan({
+      conversationId: conversation_id,
+      planSpec: plan_spec,
+      planDisplay: plan_display || {},
+      topicId: topic_id || null,
+      userId: req.user.id,
+      supabase: req.supabase,
+    });
+
+    res.json({
+      ok: true,
+      task_id: result.taskId,
+      status: result.status,
+    });
+  } catch (error) {
+    console.error("Execute plan error:", error);
+    res.status(500).json({
+      ok: false,
+      error: error.message || "Plan execution failed",
+    });
+  }
+});
+
+/**
+ * GET /api/v2/chat/templates
+ * Returns available plan templates.
+ */
+chatRouter.get("/templates", (req, res) => {
+  res.json({ ok: true, templates: PLAN_TEMPLATES });
 });
 
 export default chatRouter;

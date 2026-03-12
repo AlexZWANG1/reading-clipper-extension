@@ -21,6 +21,21 @@ function formatDate(value) {
   return date.toLocaleString('zh-CN');
 }
 
+function inferDiscoverSourceType(input) {
+  const value = String(input || '').trim();
+  if (!value) return 'website_url';
+
+  const looksLikeUrl = /^(https?:\/\/|www\.)/i.test(value)
+    || /^[a-z0-9.-]+\.[a-z]{2,}(\/.*)?$/i.test(value);
+  if (!looksLikeUrl) return 'nl_query';
+
+  const lowered = value.toLowerCase();
+  if (/(rss|atom|feed|\.xml|\?feed=|format=rss|format=atom)/.test(lowered)) {
+    return 'feed_url';
+  }
+  return 'website_url';
+}
+
 export default function RssPage() {
   const navigate = useNavigate();
   const { showToast } = useUIStore();
@@ -37,7 +52,7 @@ export default function RssPage() {
   const [manualTitle, setManualTitle] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const [discoverType, setDiscoverType] = useState('website_url');
+  const [discoverType, setDiscoverType] = useState('auto');
   const [discoverInput, setDiscoverInput] = useState('');
   const [discovering, setDiscovering] = useState(false);
   const [discoverCandidates, setDiscoverCandidates] = useState([]);
@@ -62,13 +77,19 @@ export default function RssPage() {
     if (creating) return;
     setCreating(true);
     try {
-      await createSubscription(payload);
-      showToast('订阅已添加', 'success');
+      const result = await createSubscription(payload);
+      if (result?.sync_result?.ok === false) {
+        showToast('订阅已创建，但首次同步失败，可稍后手动同步。', 'warning');
+      } else if (result?.created === false) {
+        showToast('该订阅已存在，已更新到列表。', 'info');
+      } else {
+        showToast('订阅已添加。', 'success');
+      }
       setManualFeedUrl('');
       setManualTitle('');
       await fetchSubscriptions();
     } catch (error) {
-      showToast(error.message || '添加订阅失败', 'error');
+      showToast(error.message || 'Add subscription failed', 'error');
     } finally {
       setCreating(false);
     }
@@ -91,10 +112,13 @@ export default function RssPage() {
       showToast('请输入查询内容', 'error');
       return;
     }
+    const sourceType = discoverType === 'auto'
+      ? inferDiscoverSourceType(discoverInput)
+      : discoverType;
     setDiscovering(true);
     try {
       const result = await rssApi.discover({
-        source_type: discoverType,
+        source_type: sourceType,
         value: discoverInput.trim(),
         limit: 10,
       });
@@ -234,9 +258,10 @@ export default function RssPage() {
               onChange={(e) => setDiscoverType(e.target.value)}
               className="input"
             >
-              <option value="website_url">网站 URL</option>
+              <option value="auto">Auto</option>
+              <option value="website_url">Website URL</option>
               <option value="feed_url">Feed URL</option>
-              <option value="nl_query">关键词</option>
+              <option value="nl_query">Keyword</option>
             </select>
             <input
               value={discoverInput}

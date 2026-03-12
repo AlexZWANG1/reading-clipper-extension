@@ -293,12 +293,13 @@ function TopicsSidebar({
           <button
             onClick={() => setIsCreatingTopic(true)}
             disabled={isCreatingTopic}
-            className="btn btn-primary p-1.5 rounded-lg transition-colors hover:bg-opacity-80 disabled:opacity-50"
+            className="btn btn-primary inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-opacity-80 disabled:opacity-50"
             style={{ background: 'var(--interactive-primary)', color: 'white' }}
             aria-label="Create topic"
             title="新建 Topic"
           >
             <Plus className="w-4 h-4" />
+            新建 Topic
           </button>
         </div>
 

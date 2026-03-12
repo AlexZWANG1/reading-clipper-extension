@@ -109,7 +109,7 @@ export const TOOL_DEFINITIONS = [
         type: "object",
         properties: {
           category: { type: "string", description: "Filter by source category" },
-          status: { type: "string", enum: ["active", "paused", "archived"], description: "Filter by source status" },
+          status: { type: "string", enum: ["active", "inactive", "archived"], description: "Filter by source status" },
         },
         required: [],
       },
@@ -184,6 +184,59 @@ export const TOOL_DEFINITIONS = [
     task_auto: true,
     task_phases: [],
     task_capability: "knowledge_read",
+  },
+
+  // ── Task-oriented tools (used by plan executor + chat) ────
+  {
+    type: "function",
+    function: {
+      name: "fetch_rss",
+      description:
+        "Fetch items from one or more RSS feeds. Returns a list of articles with title, URL, summary, and publish date. Use this to collect fresh content from RSS sources.",
+      parameters: {
+        type: "object",
+        properties: {
+          feeds: {
+            type: "array",
+            items: { type: "string" },
+            description: "Array of RSS feed URLs to fetch",
+          },
+          max_items: { type: "number", description: "Maximum items to return (default 20)" },
+          keywords: {
+            type: "array",
+            items: { type: "string" },
+            description: "Optional: filter items by keywords (title/summary must contain at least one)",
+          },
+        },
+        required: ["feeds"],
+      },
+    },
+    side_effect: "read_only",
+    task_auto: true,
+    task_phases: ["collect"],
+    task_capability: "content_fetch",
+  },
+  {
+    type: "function",
+    function: {
+      name: "ingest_url",
+      description:
+        "Ingest a URL into the user's knowledge base. Extracts content, creates a material record, and triggers chunking + embedding. Returns the material ID.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "The URL to ingest" },
+          title: { type: "string", description: "Optional: override the article title" },
+          topic_id: { type: "string", description: "Optional: associate with a topic" },
+        },
+        required: ["url"],
+      },
+    },
+    side_effect: "write",
+    confirm_template: "摄入 URL: {url}",
+    task_auto: true,
+    task_phases: ["materialize"],
+    task_capability: "content_ingest",
   },
 
   // ── Write tools (cards + board mutations) ─────────

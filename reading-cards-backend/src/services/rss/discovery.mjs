@@ -48,6 +48,98 @@ function dedupeCandidates(candidates, limit) {
   return result;
 }
 
+function decodeDuckDuckGoResultUrl(href) {
+  if (!href) return null;
+
+  try {
+    const parsed = new URL(href, 'https://duckduckgo.com');
+    const redirected = parsed.searchParams.get('uddg');
+    if (redirected) {
+      return normalizeUrl(decodeURIComponent(redirected));
+    }
+
+    if (['http:', 'https:'].includes(parsed.protocol)) {
+      return normalizeUrl(parsed.toString());
+    }
+  } catch {
+    // ignore parsing errors
+  }
+
+  return normalizeUrl(href);
+}
+
+function extractSearchResultUrls(html, limit = 8) {
+  const urls = [];
+  const seen = new Set();
+  const patterns = [
+    /<a\b[^>]*class=['"][^'"]*result__a[^'"]*['"][^>]*href=['"]([^'"]+)['"][^>]*>/gi,
+    /<a\b[^>]*href=['"]([^'"]+)['"][^>]*>/gi,
+  ];
+
+  for (const pattern of patterns) {
+    let match = pattern.exec(html);
+    while (match) {
+      const targetUrl = decodeDuckDuckGoResultUrl(match[1]);
+      if (targetUrl) {
+        try {
+          const host = new URL(targetUrl).hostname.toLowerCase();
+          const isSearchEngineHost = host.includes('duckduckgo.com')
+            || host.includes('google.com')
+            || host.includes('bing.com')
+            || host.includes('yahoo.com');
+          if (!isSearchEngineHost && !seen.has(targetUrl)) {
+            seen.add(targetUrl);
+            urls.push(targetUrl);
+            if (urls.length >= limit) return urls;
+          }
+        } catch {
+          // ignore malformed URL
+        }
+      }
+      match = pattern.exec(html);
+    }
+  }
+
+  return urls;
+}
+
+async function discoverFromWebSearch(rawQuery, limit = 10) {
+  const normalizedQuery = normalizeQuery(rawQuery);
+  if (!normalizedQuery) return [];
+
+  const query = `${normalizedQuery} rss feed`;
+  const searchUrl = `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+
+  let html = '';
+  try {
+    html = await fetchHtml(searchUrl);
+  } catch {
+    return [];
+  }
+
+  const websiteUrls = extractSearchResultUrls(html, 6);
+  if (!websiteUrls.length) return [];
+
+  const candidates = [];
+  const discovered = await Promise.allSettled(
+    websiteUrls.map((url) => discoverFromWebsite(url, 2))
+  );
+
+  for (const result of discovered) {
+    if (result.status !== 'fulfilled') continue;
+    for (const candidate of result.value || []) {
+      candidates.push({
+        ...candidate,
+        source: 'query_web_search',
+        score: Math.min((candidate.score || 0.7) + 0.03, 0.98),
+      });
+    }
+  }
+
+  candidates.sort((a, b) => b.score - a.score);
+  return dedupeCandidates(candidates, limit);
+}
+
 async function loadFeedMetadata(feedUrl, source = 'feed_url') {
   try {
     const normalized = normalizeFeedUrl(feedUrl);
@@ -248,6 +340,14 @@ export async function discoverFromQuery(supabase, userId, rawQuery, limit = 10) 
     }
   }
 
+  // Expand by querying public web search and auto-discovering feeds from top sites.
+  if (localCandidates.length < limit) {
+    const webCandidates = await discoverFromWebSearch(rawQuery, limit);
+    for (const candidate of webCandidates) {
+      localCandidates.push(candidate);
+    }
+  }
+
   localCandidates.sort((a, b) => b.score - a.score);
   return dedupeCandidates(localCandidates, limit);
 }
@@ -305,3 +405,8 @@ export async function discoverFeeds({
     cached: false,
   };
 }
+
+export const __rssDiscoveryTestables = {
+  decodeDuckDuckGoResultUrl,
+  extractSearchResultUrls,
+};

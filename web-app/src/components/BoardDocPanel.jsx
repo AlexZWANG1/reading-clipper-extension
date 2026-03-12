@@ -1,5 +1,16 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Loader2, ChevronRight, ChevronDown, AlertCircle, ExternalLink } from 'lucide-react';
+﻿import { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  Loader2,
+  ChevronRight,
+  ChevronDown,
+  AlertCircle,
+  ExternalLink,
+  Plus,
+  Pencil,
+  Trash2,
+  Check,
+  X,
+} from 'lucide-react';
 import { boardsApi } from '../lib/api';
 
 const STATE_STYLES = {
@@ -24,9 +35,9 @@ const STATE_STYLES = {
 };
 
 const RELATION_STYLES = {
-  supports: { label: '支持', color: 'var(--workbench-green)', bg: 'rgba(31,157,103,0.10)', icon: '↑' },
-  refutes: { label: '反驳', color: 'var(--workbench-red)', bg: 'rgba(195,74,60,0.10)', icon: '↓' },
-  neutral: { label: '中立', color: 'var(--workbench-text-muted)', bg: 'rgba(130,121,106,0.10)', icon: '—' },
+  supports: { label: '支持', color: 'var(--workbench-green)', bg: 'rgba(31,157,103,0.10)', icon: '↗' },
+  refutes: { label: '反驳', color: 'var(--workbench-red)', bg: 'rgba(195,74,60,0.10)', icon: '↘' },
+  neutral: { label: '中立', color: 'var(--workbench-text-muted)', bg: 'rgba(130,121,106,0.10)', icon: '·' },
 };
 
 function normalizeConfidencePercent(value) {
@@ -38,23 +49,27 @@ function normalizeConfidencePercent(value) {
 
 function buildTree(nodes, edges) {
   const edgeRelMap = {};
+  const evidenceEdgeMap = {};
   (edges || []).forEach((edge) => {
     edgeRelMap[edge.target_node_id] = edge.relation_type || 'neutral';
+    evidenceEdgeMap[edge.target_node_id] = edge;
   });
 
-  const childrenMap = {};
   const nodeMap = {};
+  const childrenMap = {};
+  const parentMap = {};
   const hasParent = new Set();
 
-  nodes.forEach((node) => {
+  (nodes || []).forEach((node) => {
     nodeMap[node.id] = { ...node, edgeRelation: edgeRelMap[node.id] };
     if (!childrenMap[node.id]) childrenMap[node.id] = [];
+    if (!parentMap[node.id]) parentMap[node.id] = [];
   });
 
-  nodes.forEach((node) => {
+  (nodes || []).forEach((node) => {
     if (node.parent_id && nodeMap[node.parent_id]) {
-      if (!childrenMap[node.parent_id]) childrenMap[node.parent_id] = [];
       childrenMap[node.parent_id].push(node.id);
+      parentMap[node.id].push(node.parent_id);
       hasParent.add(node.id);
     }
   });
@@ -62,259 +77,295 @@ function buildTree(nodes, edges) {
   (edges || []).forEach((edge) => {
     const source = edge.source_node_id;
     const target = edge.target_node_id;
-    if (nodeMap[source] && nodeMap[target] && !hasParent.has(target)) {
-      if (!childrenMap[source]) childrenMap[source] = [];
+    if (!nodeMap[source] || !nodeMap[target]) return;
+
+    if (!childrenMap[source].includes(target)) {
       childrenMap[source].push(target);
-      hasParent.add(target);
     }
+    if (!parentMap[target].includes(source)) {
+      parentMap[target].push(source);
+    }
+    hasParent.add(target);
   });
 
-  const roots = nodes.filter((node) => !hasParent.has(node.id));
-  return { roots, childrenMap, nodeMap };
+  const roots = (nodes || []).filter((node) => !hasParent.has(node.id));
+  return { roots, childrenMap, parentMap, nodeMap, evidenceEdgeMap };
 }
 
-function QuestionDoc({ nodeId, nodeMap, childrenMap, depth = 0 }) {
-  const [expanded, setExpanded] = useState(true);
-  const node = nodeMap[nodeId];
-  if (!node) return null;
+function collectBranchIds(nodeId, childrenMap, parentMap) {
+  const branch = new Set([nodeId]);
 
-  const children = childrenMap[nodeId] || [];
-  const hasChildren = children.length > 0;
-  const text = node.content?.text || '未命名问题';
-  const isRoot = depth === 0;
+  const walkDown = (startId) => {
+    const children = childrenMap[startId] || [];
+    children.forEach((childId) => {
+      if (branch.has(childId)) return;
+      branch.add(childId);
+      walkDown(childId);
+    });
+  };
 
-  return (
-    <div style={{ marginTop: depth > 0 ? 8 : 0 }}>
-      <button
-        onClick={() => hasChildren && setExpanded(!expanded)}
-        className="flex items-start gap-2 w-full text-left group"
-        style={{
-          padding: isRoot ? '10px 10px' : '8px 10px',
-          background: 'var(--workbench-card)',
-          border: '1px solid var(--workbench-border)',
-          borderRadius: 10,
-          boxShadow: isRoot ? '0 4px 12px rgba(30,26,18,0.07)' : 'none',
-        }}
-      >
-        <div
-          className="shrink-0 rounded-sm"
-          style={{
-            width: 3,
-            minHeight: isRoot ? 20 : 16,
-            alignSelf: 'stretch',
-            background: isRoot ? 'var(--workbench-blue)' : 'rgba(47,128,255,0.36)',
-            marginTop: 2,
-          }}
-        />
-        <div className="flex-1 min-w-0 flex items-start gap-1.5">
-          {hasChildren && (
-            expanded
-              ? <ChevronDown size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--workbench-text-muted)' }} />
-              : <ChevronRight size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--workbench-text-muted)' }} />
-          )}
-          <span
-            className={`leading-snug ${isRoot ? 'text-[14px] font-bold' : 'text-[13px] font-semibold'}`}
-            style={{ color: 'var(--workbench-text)' }}
-          >
-            {text}
-          </span>
-          {node.status === 'resolved' && (
-            <span
-              className="text-[10px] px-1.5 py-0.5 rounded-full border shrink-0 ml-1"
-              style={{ background: 'rgba(31,157,103,0.10)', color: 'var(--workbench-green)', borderColor: 'rgba(31,157,103,0.30)' }}
-            >
-              已解决
-            </span>
-          )}
-          {node.status === 'blocked' && (
-            <span
-              className="text-[10px] px-1.5 py-0.5 rounded-full border shrink-0 ml-1"
-              style={{ background: 'rgba(195,74,60,0.10)', color: 'var(--workbench-red)', borderColor: 'rgba(195,74,60,0.30)' }}
-            >
-              受阻
-            </span>
-          )}
-        </div>
-      </button>
+  const walkUp = (startId) => {
+    const parents = parentMap[startId] || [];
+    parents.forEach((parentId) => {
+      if (branch.has(parentId)) return;
+      branch.add(parentId);
+      walkUp(parentId);
+    });
+  };
 
-      {expanded && hasChildren && (
-        <div style={{ marginLeft: 12 }}>
-          {children.map((childId) => (
-            <DocNode key={childId} nodeId={childId} nodeMap={nodeMap} childrenMap={childrenMap} depth={depth + 1} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  walkDown(nodeId);
+  walkUp(nodeId);
+  return Array.from(branch);
 }
 
-function HypothesisDoc({ nodeId, nodeMap, childrenMap, depth = 0 }) {
-  const [expanded, setExpanded] = useState(true);
-  const node = nodeMap[nodeId];
-  if (!node) return null;
-
-  const children = childrenMap[nodeId] || [];
-  const hasChildren = children.length > 0;
-  const claim = node.claim || node.content?.text || '未命名假说';
-  const state = STATE_STYLES[node.hypo_state] || STATE_STYLES.pending;
-  const confidence = normalizeConfidencePercent(node.confidence);
-
-  return (
-    <div style={{ marginTop: 6 }}>
-      <button
-        onClick={() => hasChildren && setExpanded(!expanded)}
-        className="w-full text-left rounded-lg transition-colors"
-        style={{
-          padding: '8px 10px',
-          background: 'var(--workbench-card)',
-          border: '1px solid var(--workbench-border)',
-          borderLeft: `3px solid ${state.border}`,
-          boxShadow: '0 4px 10px rgba(30,26,18,0.06)',
-        }}
-      >
-        <div className="flex items-center gap-2 mb-1">
-          <span
-            className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider rounded-full border px-1.5 py-0.5"
-            style={{ color: state.color, background: state.bg, borderColor: state.border }}
-          >
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: state.border }} />
-            {state.label}
-          </span>
-          {confidence > 0 && (
-            <span className="text-[10px] tabular-nums font-medium" style={{ color: 'var(--workbench-text-muted)' }}>
-              置信度 {confidence}%
-            </span>
-          )}
-          {hasChildren && (
-            <span className="ml-auto shrink-0">
-              {expanded
-                ? <ChevronDown size={12} style={{ color: state.color }} />
-                : <ChevronRight size={12} style={{ color: state.color }} />
-              }
-            </span>
-          )}
-        </div>
-        <p className="text-[13px] leading-relaxed" style={{ color: 'var(--workbench-text-soft)' }}>
-          {claim}
-        </p>
-      </button>
-
-      {expanded && hasChildren && (
-        <div style={{ marginLeft: 8, marginTop: 4 }}>
-          {children.map((childId) => (
-            <DocNode key={childId} nodeId={childId} nodeMap={nodeMap} childrenMap={childrenMap} depth={depth + 1} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function EvidenceDoc({ nodeId, nodeMap }) {
-  const node = nodeMap[nodeId];
-  if (!node) return null;
-
-  const relation = RELATION_STYLES[node.edgeRelation] || RELATION_STYLES.neutral;
-  const text = node.content?.text || node.card?.summary || '证据';
-  const sourceName = node.card?.source?.name || (() => {
-    if (!node.card?.source_url) return '';
-    try {
-      return new URL(node.card.source_url).hostname.replace('www.', '');
-    } catch {
-      return '';
-    }
-  })();
-  const sourceUrl = node.card?.source_url || '';
-
-  return (
-    <div
-      className="flex items-start gap-2 rounded-lg border"
-      style={{
-        padding: '6px 8px',
-        marginTop: 3,
-        background: 'var(--workbench-card)',
-        borderColor: 'var(--workbench-border)',
-        borderLeft: `2px solid ${relation.color}`,
-      }}
-    >
-      <span
-        className="text-[10px] font-bold shrink-0 rounded-full border px-1.5 py-0.5 mt-px"
-        style={{ color: relation.color, background: relation.bg, borderColor: relation.color }}
-      >
-        {relation.icon} {relation.label}
-      </span>
-
-      <div className="flex-1 min-w-0">
-        <p className="text-[12px] leading-snug line-clamp-3" style={{ color: 'var(--workbench-text-soft)' }}>
-          {text}
-        </p>
-        {sourceName && (
-          <div className="flex items-center gap-1 mt-1">
-            {sourceUrl ? (
-              <a
-                href={sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[10px] truncate transition-colors hover:underline flex items-center gap-0.5"
-                style={{ color: 'var(--workbench-blue-ink)' }}
-                onClick={(event) => event.stopPropagation()}
-              >
-                <ExternalLink size={9} className="shrink-0" />
-                {sourceName}
-              </a>
-            ) : (
-              <span className="text-[10px] truncate" style={{ color: 'var(--workbench-text-muted)' }}>{sourceName}</span>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function DocNode({ nodeId, nodeMap, childrenMap, depth = 0 }) {
-  const node = nodeMap[nodeId];
-  if (!node) return null;
-
-  if (node.node_type === 'question') {
-    return <QuestionDoc nodeId={nodeId} nodeMap={nodeMap} childrenMap={childrenMap} depth={depth} />;
+function parseDraggedCard(event) {
+  try {
+    const raw = event.dataTransfer.getData('application/json');
+    if (!raw) return null;
+    const card = JSON.parse(raw);
+    return card?.id ? card : null;
+  } catch {
+    return null;
   }
-  if (node.node_type === 'hypothesis') {
-    return <HypothesisDoc nodeId={nodeId} nodeMap={nodeMap} childrenMap={childrenMap} depth={depth} />;
-  }
-  if (node.node_type === 'evidence') {
-    return <EvidenceDoc nodeId={nodeId} nodeMap={nodeMap} />;
-  }
-  return null;
 }
 
-function BoardDocPanel({ topicId }) {
+function BoardDocPanel({
+  topicId,
+  selectedNodeId = null,
+  focusedNodeIds = [],
+  boardRefreshToken = 0,
+  onSelectNode,
+  onBoardMutated,
+}) {
   const [loading, setLoading] = useState(true);
   const [boardData, setBoardData] = useState(null);
   const [error, setError] = useState(null);
+  const [expandedMap, setExpandedMap] = useState({});
+  const [editingNodeId, setEditingNodeId] = useState(null);
+  const [editingValue, setEditingValue] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [dragOverHypothesisId, setDragOverHypothesisId] = useState(null);
+  const [confidenceDrafts, setConfidenceDrafts] = useState({});
+  const skipNextRefreshRef = useMemo(() => ({ current: false }), []);
+  const loadRequestSeqRef = useMemo(() => ({ current: 0 }), []);
 
   const loadBoard = useCallback(async () => {
     if (!topicId) return;
+    const requestId = loadRequestSeqRef.current + 1;
+    loadRequestSeqRef.current = requestId;
     setLoading(true);
     setError(null);
     try {
       const { board } = await boardsApi.getTopicBoard(topicId);
+      if (requestId !== loadRequestSeqRef.current) return;
       setBoardData(board);
     } catch (err) {
-      setError(err.message || '加载失败');
+      if (requestId === loadRequestSeqRef.current) {
+        setError(err.message || '加载失败');
+      }
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestSeqRef.current) {
+        setLoading(false);
+      }
     }
-  }, [topicId]);
+  }, [topicId, loadRequestSeqRef]);
 
   useEffect(() => {
+    if (skipNextRefreshRef.current) {
+      skipNextRefreshRef.current = false;
+      return;
+    }
     loadBoard();
-  }, [loadBoard]);
+  }, [loadBoard, boardRefreshToken, skipNextRefreshRef]);
+
+  useEffect(() => {
+    setConfidenceDrafts({});
+  }, [topicId, boardRefreshToken]);
 
   const tree = useMemo(() => {
     if (!boardData?.nodes?.length) return null;
-    return buildTree(boardData.nodes, boardData.edges);
+    return buildTree(boardData.nodes, boardData.edges || []);
   }, [boardData]);
+
+  const focusedSet = useMemo(() => new Set(focusedNodeIds || []), [focusedNodeIds]);
+
+  const toggleExpanded = useCallback((nodeId) => {
+    setExpandedMap((prev) => ({
+      ...prev,
+      [nodeId]: !(prev[nodeId] ?? true),
+    }));
+  }, []);
+
+  const triggerSync = useCallback(async () => {
+    await loadBoard();
+    skipNextRefreshRef.current = true;
+    onBoardMutated?.();
+  }, [loadBoard, onBoardMutated, skipNextRefreshRef]);
+
+  const handleSelect = useCallback((nodeId) => {
+    if (!tree) return;
+    if (nodeId === selectedNodeId) {
+      onSelectNode?.(null, []);
+      return;
+    }
+    const branchIds = collectBranchIds(nodeId, tree.childrenMap, tree.parentMap);
+    onSelectNode?.(nodeId, branchIds);
+  }, [onSelectNode, selectedNodeId, tree]);
+
+  const handleDeleteNode = useCallback(async (nodeId) => {
+    if (!boardData?.id) return;
+    try {
+      await boardsApi.deleteNode(boardData.id, nodeId);
+      setEditingNodeId(null);
+      await triggerSync();
+    } catch {
+      // no-op
+    }
+  }, [boardData?.id, triggerSync]);
+
+  const handleCreateChild = useCallback(async (parentId, nodeType) => {
+    if (!boardData?.id) return;
+    const payload = {
+      node_type: nodeType,
+      parent_id: parentId,
+    };
+    if (nodeType === 'question') {
+      payload.content = { text: '' };
+      payload.status = 'open';
+      payload.priority = 'normal';
+    } else if (nodeType === 'hypothesis') {
+      payload.claim = '';
+      payload.hypo_state = 'pending';
+      payload.confidence = 0;
+    }
+
+    try {
+      const result = await boardsApi.createNode(boardData.id, payload);
+      await triggerSync();
+      if (result?.node?.id) {
+        handleSelect(result.node.id);
+      }
+    } catch {
+      // no-op
+    }
+  }, [boardData?.id, handleSelect, triggerSync]);
+
+  const handleCreateEvidence = useCallback(async (hypothesisId, card = null) => {
+    if (!boardData?.id) return;
+
+    try {
+      const nodeResult = await boardsApi.createNode(boardData.id, {
+        node_type: 'evidence',
+        card_id: card?.id || undefined,
+        content: { text: card?.summary || card?.raw_snippet || '' },
+        evidence_type: card?.fact_or_view === 'view' ? 'view' : 'fact',
+        strength: 3,
+      });
+      const evidenceNodeId = nodeResult?.node?.id;
+      if (!evidenceNodeId) return;
+
+      await boardsApi.createEdge(boardData.id, {
+        source_node_id: hypothesisId,
+        target_node_id: evidenceNodeId,
+        relation_type: 'supports',
+      });
+
+      await triggerSync();
+      handleSelect(evidenceNodeId);
+    } catch {
+      // no-op
+    }
+  }, [boardData?.id, handleSelect, triggerSync]);
+
+  const handleDropToHypothesis = useCallback(async (event, hypothesisId) => {
+    event.preventDefault();
+    setDragOverHypothesisId(null);
+    const card = parseDraggedCard(event);
+    if (!card) return;
+    await handleCreateEvidence(hypothesisId, card);
+  }, [handleCreateEvidence]);
+
+  const handleNodeUpdate = useCallback(async (nodeId, updates) => {
+    if (!boardData?.id) return;
+    try {
+      await boardsApi.updateNode(boardData.id, nodeId, updates);
+      await triggerSync();
+    } catch {
+      // no-op
+    }
+  }, [boardData?.id, triggerSync]);
+
+  const handleEvidenceRelationUpdate = useCallback(async (evidenceNodeId, relationType) => {
+    if (!boardData?.id || !tree?.evidenceEdgeMap?.[evidenceNodeId]) return;
+    const edgeId = tree.evidenceEdgeMap[evidenceNodeId].id;
+    try {
+      await boardsApi.updateEdge(boardData.id, edgeId, { relation_type: relationType });
+      await triggerSync();
+    } catch {
+      // no-op
+    }
+  }, [boardData?.id, tree?.evidenceEdgeMap, triggerSync]);
+
+  const getConfidenceValue = useCallback((nodeId, fallback) => {
+    const draft = confidenceDrafts[nodeId];
+    return Number.isFinite(draft) ? draft : fallback;
+  }, [confidenceDrafts]);
+
+  const handleConfidenceDraftChange = useCallback((nodeId, value) => {
+    if (!Number.isFinite(value)) return;
+    setConfidenceDrafts((prev) => (prev[nodeId] === value ? prev : { ...prev, [nodeId]: value }));
+  }, []);
+
+  const commitConfidenceDraft = useCallback(async (nodeId, committedValue) => {
+    const draft = confidenceDrafts[nodeId];
+    if (!Number.isFinite(draft) || draft === committedValue) return;
+
+    setConfidenceDrafts((prev) => {
+      if (!(nodeId in prev)) return prev;
+      const next = { ...prev };
+      delete next[nodeId];
+      return next;
+    });
+
+    await handleNodeUpdate(nodeId, { confidence: draft / 100 });
+  }, [confidenceDrafts, handleNodeUpdate]);
+
+  const startEdit = useCallback((node) => {
+    if (!node) return;
+    if (node.node_type === 'question') {
+      setEditingValue(node.content?.text || '');
+    } else {
+      setEditingValue(node.claim || node.content?.text || '');
+    }
+    setEditingNodeId(node.id);
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    setEditingNodeId(null);
+    setEditingValue('');
+  }, []);
+
+  const saveEdit = useCallback(async (node) => {
+    if (!node || !editingNodeId) return;
+    const text = editingValue.trim();
+    if (!text) {
+      cancelEdit();
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      if (node.node_type === 'question') {
+        await handleNodeUpdate(node.id, { content: { ...(node.content || {}), text } });
+      } else if (node.node_type === 'hypothesis') {
+        await handleNodeUpdate(node.id, { claim: text });
+      }
+      setEditingNodeId(null);
+      setEditingValue('');
+    } finally {
+      setSubmitting(false);
+    }
+  }, [cancelEdit, editingNodeId, editingValue, handleNodeUpdate]);
 
   if (loading) {
     return (
@@ -343,11 +394,11 @@ function BoardDocPanel({ topicId }) {
           <rect x="8" y="24" width="16" height="3" rx="1.5" fill="var(--workbench-text-muted)" opacity="0.2" />
         </svg>
         <p className="text-xs text-center" style={{ color: 'var(--workbench-text-muted)' }}>
-          尚无假说文档
+          暂无假说文档
           <br />
-          在论证板中创建问题和假说后
+          在论证板创建问题与假说后
           <br />
-          将在此显示结构化大纲
+          这里会自动同步为结构化文档
         </p>
       </div>
     );
@@ -356,6 +407,476 @@ function BoardDocPanel({ topicId }) {
   const questionCount = boardData.nodes.filter((node) => node.node_type === 'question').length;
   const hypoCount = boardData.nodes.filter((node) => node.node_type === 'hypothesis').length;
   const evidenceCount = boardData.nodes.filter((node) => node.node_type === 'evidence').length;
+
+  const renderNode = (nodeId, depth = 0) => {
+    const node = tree.nodeMap[nodeId];
+    if (!node) return null;
+
+    const children = tree.childrenMap[nodeId] || [];
+    const hasChildren = children.length > 0;
+    const expanded = expandedMap[nodeId] ?? true;
+
+    const isSelected = selectedNodeId === nodeId;
+    const inBranch = isSelected || focusedSet.has(nodeId);
+    const showCollapsedStack = !expanded && hasChildren;
+    const baseBorderColor = isSelected ? 'var(--workbench-blue)' : inBranch ? 'rgba(47,128,255,0.30)' : 'var(--workbench-border)';
+
+    const baseStyle = {
+      background: 'var(--workbench-card)',
+      borderStyle: 'solid',
+      borderWidth: 1,
+      borderTopColor: baseBorderColor,
+      borderRightColor: baseBorderColor,
+      borderBottomColor: baseBorderColor,
+      borderLeftColor: baseBorderColor,
+      boxShadow: isSelected ? '0 0 0 2px rgba(47,128,255,0.14)' : '0 1px 2px rgba(30,26,18,0.06)',
+      opacity: focusedSet.size > 0 && !inBranch ? 0.45 : 1,
+    };
+
+    const stackLayers = showCollapsedStack ? (
+      <>
+        <div
+          aria-hidden
+          className="pointer-events-none absolute"
+          style={{
+            zIndex: -1,
+            left: 4,
+            right: 4,
+            top: 4,
+            bottom: -4,
+            borderRadius: 9,
+            background: 'var(--workbench-card)',
+            border: '1px solid rgba(130,121,106,0.2)',
+          }}
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute"
+          style={{
+            zIndex: -2,
+            left: 8,
+            right: 8,
+            top: 8,
+            bottom: -8,
+            borderRadius: 8,
+            background: 'rgba(247,243,235,0.88)',
+            border: '1px solid rgba(130,121,106,0.16)',
+          }}
+        />
+      </>
+    ) : null;
+
+    if (node.node_type === 'question') {
+      const text = node.content?.text || '未命名问题';
+
+      return (
+        <div key={nodeId} className="relative" style={{ marginTop: depth > 0 ? 8 : 0 }}>
+          {stackLayers}
+          <div
+            className="relative z-10 rounded-lg px-2.5 py-2 cursor-pointer"
+            style={baseStyle}
+            onClick={() => handleSelect(nodeId)}
+          >
+            <div className="flex items-start gap-2">
+              {hasChildren ? (
+                <button
+                  type="button"
+                  className="mt-0.5"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    toggleExpanded(nodeId);
+                  }}
+                  style={{ color: 'var(--workbench-text-muted)' }}
+                >
+                  {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+              ) : (
+                <span className="mt-0.5 w-[14px]" />
+              )}
+
+              <div className="flex-1 min-w-0">
+                {editingNodeId === nodeId ? (
+                  <textarea
+                    value={editingValue}
+                    onChange={(event) => setEditingValue(event.target.value)}
+                    rows={2}
+                    className="w-full text-[12px] rounded-md p-2 resize-none focus:outline-none"
+                    style={{ border: '1px solid var(--workbench-border)', background: 'var(--workbench-card-soft)', color: 'var(--workbench-text)' }}
+                    onClick={(event) => event.stopPropagation()}
+                  />
+                ) : (
+                  <p className="text-[13px] font-semibold leading-snug" style={{ color: 'var(--workbench-text)' }}>{text}</p>
+                )}
+
+                <div className="mt-1.5 flex items-center gap-1">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full border" style={{ borderColor: 'rgba(47,128,255,0.28)', color: 'var(--workbench-blue-ink)', background: 'rgba(47,128,255,0.10)' }}>
+                    Q
+                  </span>
+
+                  {editingNodeId === nodeId ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={submitting}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          saveEdit(node);
+                        }}
+                        className="p-1 rounded"
+                        style={{ color: 'var(--workbench-green)' }}
+                      >
+                        <Check size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={submitting}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          cancelEdit();
+                        }}
+                        className="p-1 rounded"
+                        style={{ color: 'var(--workbench-text-muted)' }}
+                      >
+                        <X size={12} />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="p-1 rounded"
+                        style={{ color: 'var(--workbench-text-muted)' }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          startEdit(node);
+                        }}
+                        title="编辑"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className="p-1 rounded"
+                        style={{ color: 'var(--workbench-text-muted)' }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleCreateChild(nodeId, 'question');
+                        }}
+                        title="新增子问题"
+                      >
+                        <Plus size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className="px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                        style={{ color: 'var(--workbench-blue-ink)', background: 'rgba(47,128,255,0.08)' }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleCreateChild(nodeId, 'hypothesis');
+                        }}
+                        title="新增假说"
+                      >
+                        +H
+                      </button>
+                      <button
+                        type="button"
+                        className="p-1 rounded"
+                        style={{ color: 'var(--workbench-text-muted)' }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleDeleteNode(nodeId);
+                        }}
+                        title="删除"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {expanded && hasChildren && (
+            <div style={{ marginLeft: 12 }}>
+              {children.map((childId) => renderNode(childId, depth + 1))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (node.node_type === 'hypothesis') {
+      const claim = node.claim || node.content?.text || '未命名假说';
+      const state = STATE_STYLES[node.hypo_state] || STATE_STYLES.pending;
+      const confidence = normalizeConfidencePercent(node.confidence);
+      const confidenceValue = getConfidenceValue(nodeId, confidence);
+
+      return (
+        <div key={nodeId} className="relative" style={{ marginTop: 6 }}>
+          {stackLayers}
+          <div
+            className="relative z-10 rounded-lg px-2.5 py-2 cursor-pointer"
+            style={{
+              ...baseStyle,
+              borderLeftWidth: 3,
+              borderLeftColor: state.border,
+              background: dragOverHypothesisId === nodeId ? 'rgba(47,128,255,0.08)' : baseStyle.background,
+            }}
+            onClick={() => handleSelect(nodeId)}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragOverHypothesisId(nodeId);
+            }}
+            onDragLeave={() => {
+              if (dragOverHypothesisId === nodeId) setDragOverHypothesisId(null);
+            }}
+            onDrop={(event) => handleDropToHypothesis(event, nodeId)}
+          >
+            <div className="flex items-start gap-2">
+              {hasChildren ? (
+                <button
+                  type="button"
+                  className="mt-0.5"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    toggleExpanded(nodeId);
+                  }}
+                  style={{ color: 'var(--workbench-text-muted)' }}
+                >
+                  {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+              ) : (
+                <span className="mt-0.5 w-[14px]" />
+              )}
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border" style={{ background: state.bg, color: state.color, borderColor: state.border }}>
+                    {state.label}
+                  </span>
+                  <select
+                    value={node.hypo_state || 'pending'}
+                    onChange={(event) => handleNodeUpdate(nodeId, { hypo_state: event.target.value })}
+                    className="text-[10px] px-1 rounded border"
+                    style={{ borderColor: 'var(--workbench-border)', color: 'var(--workbench-text-soft)', background: 'var(--workbench-card)' }}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <option value="pending">待验证</option>
+                    <option value="validated">已验证</option>
+                    <option value="falsified">已证伪</option>
+                  </select>
+                  <span className="text-[10px] ml-auto" style={{ color: 'var(--workbench-text-muted)' }}>{confidenceValue}%</span>
+                </div>
+
+                {editingNodeId === nodeId ? (
+                  <textarea
+                    value={editingValue}
+                    onChange={(event) => setEditingValue(event.target.value)}
+                    rows={2}
+                    className="w-full text-[12px] rounded-md p-2 resize-none focus:outline-none"
+                    style={{ border: '1px solid var(--workbench-border)', background: 'var(--workbench-card-soft)', color: 'var(--workbench-text)' }}
+                    onClick={(event) => event.stopPropagation()}
+                  />
+                ) : (
+                  <p className="text-[12.5px] leading-snug" style={{ color: 'var(--workbench-text-soft)' }}>{claim}</p>
+                )}
+
+                <div className="mt-1.5 flex items-center gap-1">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    value={confidenceValue}
+                    className="flex-1 h-1.5"
+                    style={{ accentColor: 'var(--workbench-blue)' }}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={(event) => {
+                      const value = Number.parseInt(event.target.value, 10);
+                      handleConfidenceDraftChange(nodeId, value);
+                    }}
+                    onMouseUp={() => commitConfidenceDraft(nodeId, confidence)}
+                    onTouchEnd={() => commitConfidenceDraft(nodeId, confidence)}
+                    onBlur={() => commitConfidenceDraft(nodeId, confidence)}
+                    onKeyUp={(event) => {
+                      if (event.key.startsWith('Arrow') || event.key === 'Home' || event.key === 'End' || event.key === 'PageUp' || event.key === 'PageDown') {
+                        commitConfidenceDraft(nodeId, confidence);
+                      }
+                    }}
+                  />
+
+                  {editingNodeId === nodeId ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={submitting}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          saveEdit(node);
+                        }}
+                        className="p-1 rounded"
+                        style={{ color: 'var(--workbench-green)' }}
+                      >
+                        <Check size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={submitting}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          cancelEdit();
+                        }}
+                        className="p-1 rounded"
+                        style={{ color: 'var(--workbench-text-muted)' }}
+                      >
+                        <X size={12} />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="p-1 rounded"
+                        style={{ color: 'var(--workbench-text-muted)' }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          startEdit(node);
+                        }}
+                        title="编辑"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className="px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                        style={{ color: 'var(--workbench-blue-ink)', background: 'rgba(47,128,255,0.08)' }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleCreateChild(nodeId, 'hypothesis');
+                        }}
+                        title="新增子假说"
+                      >
+                        +H
+                      </button>
+                      <button
+                        type="button"
+                        className="px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                        style={{ color: 'var(--workbench-green)', background: 'rgba(31,157,103,0.10)' }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleCreateEvidence(nodeId, null);
+                        }}
+                        title="新增证据"
+                      >
+                        +FACT
+                      </button>
+                      <button
+                        type="button"
+                        className="p-1 rounded"
+                        style={{ color: 'var(--workbench-text-muted)' }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleDeleteNode(nodeId);
+                        }}
+                        title="删除"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {expanded && hasChildren && (
+            <div style={{ marginLeft: 10, marginTop: 4 }}>
+              {children.map((childId) => renderNode(childId, depth + 1))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const relation = RELATION_STYLES[node.edgeRelation] || RELATION_STYLES.neutral;
+    const summaryText = (node.content?.text || node.card?.summary || '证据').replace(/\s+/g, ' ').trim();
+
+    let sourceName = node.card?.source?.name || '';
+    if (!sourceName && node.card?.source_url) {
+      try {
+        sourceName = new URL(node.card.source_url).hostname.replace('www.', '');
+      } catch {
+        sourceName = '';
+      }
+    }
+
+    return (
+      <div key={nodeId} style={{ marginTop: 4 }}>
+        <div
+          className="rounded-lg px-2.5 py-2 cursor-pointer"
+          style={{
+            ...baseStyle,
+            borderLeftWidth: 2,
+            borderLeftColor: relation.color,
+          }}
+          onClick={() => handleSelect(nodeId)}
+        >
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full border font-semibold" style={{ color: relation.color, borderColor: relation.color, background: relation.bg }}>
+              {relation.icon} {relation.label}
+            </span>
+            <select
+              value={node.edgeRelation || 'neutral'}
+              onChange={(event) => handleEvidenceRelationUpdate(nodeId, event.target.value)}
+              className="text-[10px] px-1 rounded border"
+              style={{ borderColor: 'var(--workbench-border)', color: 'var(--workbench-text-soft)', background: 'var(--workbench-card)' }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <option value="supports">支持</option>
+              <option value="refutes">反驳</option>
+              <option value="neutral">中立</option>
+            </select>
+            <span className="text-[10px] ml-auto px-1.5 py-0.5 rounded" style={{ background: 'var(--workbench-card-soft)', color: 'var(--workbench-text-muted)' }}>
+              FACT
+            </span>
+          </div>
+
+          <p className="text-[12px] leading-snug line-clamp-1" style={{ color: 'var(--workbench-text-soft)' }}>
+            {summaryText || '证据'}
+          </p>
+
+          <div className="mt-1 flex items-center gap-1 text-[10px]" style={{ color: 'var(--workbench-text-muted)' }}>
+            <span className="truncate">{sourceName || '未标注来源'}</span>
+            {node.card?.source_url && (
+              <a
+                href={node.card.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-auto"
+                style={{ color: 'var(--workbench-blue-ink)' }}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <ExternalLink size={10} />
+              </a>
+            )}
+            <button
+              type="button"
+              className="p-0.5 rounded"
+              style={{ color: 'var(--workbench-text-muted)' }}
+              onClick={(event) => {
+                event.stopPropagation();
+                handleDeleteNode(nodeId);
+              }}
+              title="删除"
+            >
+              <Trash2 size={10} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -375,15 +896,7 @@ function BoardDocPanel({ topicId }) {
       </div>
 
       <div className="p-4 space-y-2">
-        {tree.roots.map((root) => (
-          <DocNode
-            key={root.id}
-            nodeId={root.id}
-            nodeMap={tree.nodeMap}
-            childrenMap={tree.childrenMap}
-            depth={0}
-          />
-        ))}
+        {tree.roots.map((root) => renderNode(root.id, 0))}
       </div>
     </div>
   );

@@ -38,6 +38,19 @@ function parseTags(value) {
   return String(value).split(',').map((v) => v.trim()).filter(Boolean);
 }
 
+function looksLikeFeedUrl(value) {
+  const normalized = normalizeFeedUrl(value);
+  if (!normalized) return false;
+
+  try {
+    const url = new URL(normalized);
+    const hint = `${url.pathname || ''}${url.search || ''}`.toLowerCase();
+    return /(?:rss|atom|feed|\.xml|\.rdf)/.test(hint);
+  } catch {
+    return false;
+  }
+}
+
 function respondError(res, error, fallbackStatus = 500, fallbackCode = 'rss_error') {
   if (error instanceof RssSyncConflictError) {
     return res.status(409).json({ ok: false, error: error.message });
@@ -47,7 +60,14 @@ function respondError(res, error, fallbackStatus = 500, fallbackCode = 'rss_erro
   if (message === 'subscription_not_found') {
     return res.status(404).json({ ok: false, error: 'subscription_not_found' });
   }
-  if (message === 'invalid_input' || message === 'invalid_website_url' || message.startsWith('invalid_opml')) {
+  if (
+    message === 'invalid_input'
+    || message === 'invalid_website_url'
+    || message === 'invalid_feed_url'
+    || message === 'source_type_and_value_required'
+    || message === 'unsupported_source_type'
+    || message.startsWith('invalid_opml')
+  ) {
     return res.status(400).json({ ok: false, error: message });
   }
 
@@ -127,8 +147,8 @@ router.post('/subscriptions', async (req, res) => {
       sync_on_create = false,
     } = req.body || {};
 
-    const normalizedFeedUrl = normalizeFeedUrl(feed_url);
-    if (!normalizedFeedUrl) {
+    const normalizedInputFeedUrl = normalizeFeedUrl(feed_url);
+    if (!normalizedInputFeedUrl) {
       return res.status(400).json({ ok: false, error: 'invalid_feed_url' });
     }
 
@@ -144,34 +164,43 @@ router.post('/subscriptions', async (req, res) => {
       }
     }
 
-    let finalTitle = title?.trim();
-    let finalDescription = description || null;
-    let finalSiteUrl = site_url || null;
-    let finalLanguage = language || null;
+    let discoveryCandidate = null;
 
-    if (!finalTitle) {
-      const discovery = await discoverFeeds({
+    const feedDiscovery = await discoverFeeds({
+      supabase: req.supabase,
+      userId: req.user.id,
+      sourceType: 'feed_url',
+      value: normalizedInputFeedUrl,
+      limit: 1,
+      useCache: false,
+    }).catch(() => ({ candidates: [] }));
+    discoveryCandidate = feedDiscovery?.candidates?.[0] || null;
+
+    // If user pasted a website homepage instead of feed URL, try site autodiscovery.
+    if (!discoveryCandidate && !looksLikeFeedUrl(normalizedInputFeedUrl)) {
+      const websiteDiscovery = await discoverFeeds({
         supabase: req.supabase,
         userId: req.user.id,
-        sourceType: 'feed_url',
-        value: normalizedFeedUrl,
+        sourceType: 'website_url',
+        value: normalizedInputFeedUrl,
         limit: 1,
-        useCache: false,
+        useCache: true,
       }).catch(() => ({ candidates: [] }));
-
-      const candidate = discovery?.candidates?.[0];
-      finalTitle = candidate?.title || normalizedFeedUrl;
-      finalDescription = finalDescription || candidate?.description || null;
-      finalSiteUrl = finalSiteUrl || candidate?.site_url || null;
-      finalLanguage = finalLanguage || candidate?.language || null;
+      discoveryCandidate = websiteDiscovery?.candidates?.[0] || null;
     }
+
+    const resolvedFeedUrl = discoveryCandidate?.feed_url || normalizedInputFeedUrl;
+    let finalTitle = title?.trim() || discoveryCandidate?.title || resolvedFeedUrl;
+    let finalDescription = description || discoveryCandidate?.description || null;
+    let finalSiteUrl = site_url || discoveryCandidate?.site_url || null;
+    let finalLanguage = language || discoveryCandidate?.language || null;
 
     const result = await createSubscription(req.supabase, req.user.id, {
       source_id: source_id || null,
       title: finalTitle,
       site_url: finalSiteUrl,
-      feed_url: normalizedFeedUrl,
-      feed_url_normalized: normalizedFeedUrl,
+      feed_url: resolvedFeedUrl,
+      feed_url_normalized: resolvedFeedUrl,
       description: finalDescription,
       language: finalLanguage,
       region: region || null,
@@ -185,20 +214,40 @@ router.post('/subscriptions', async (req, res) => {
     });
 
     let syncResult = null;
+    let syncError = null;
     if (sync_on_create) {
-      syncResult = await syncSubscription({
-        supabase: req.supabase,
-        userId: req.user.id,
-        subscriptionId: result.subscription.id,
-        force: true,
-      });
+      try {
+        syncResult = await syncSubscription({
+          supabase: req.supabase,
+          userId: req.user.id,
+          subscriptionId: result.subscription.id,
+          force: true,
+        });
+      } catch (error) {
+        syncError = error?.message || 'initial_sync_failed';
+        syncResult = {
+          ok: false,
+          subscription_id: result.subscription.id,
+          error: syncError,
+        };
+        console.warn(
+          `[rss] initial sync failed for ${result.subscription.id}: ${syncError}`
+        );
+      }
     }
+
+    const latestSubscription = await getSubscriptionById(
+      req.supabase,
+      req.user.id,
+      result.subscription.id
+    ).catch(() => result.subscription);
 
     res.json({
       ok: true,
-      subscription: result.subscription,
+      subscription: latestSubscription,
       created: result.created,
       sync_result: syncResult,
+      sync_error: syncError,
     });
   } catch (error) {
     respondError(res, error, 500, 'create_subscription_failed');
