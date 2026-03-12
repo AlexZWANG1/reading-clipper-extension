@@ -1,18 +1,17 @@
 import express from 'express';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '../../config/supabase.mjs';
 import { requireAuth } from '../../middleware/auth.mjs';
 
 const router = express.Router();
 
-// Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = supabaseAdmin;
 
 // Sidecar config
 const SIDECAR_URL = process.env.SIDECAR_URL || 'http://127.0.0.1:8100';
-const SIDECAR_API_KEY = process.env.SIDECAR_API_KEY || 'rc-sidecar-2026';
+const SIDECAR_API_KEY = process.env.SIDECAR_API_KEY;
+if (!SIDECAR_API_KEY) {
+  console.warn('[search] SIDECAR_API_KEY not set — sidecar calls will fail');
+}
 
 async function searchChunksHybridWithFallback({
   queryEmbedding,

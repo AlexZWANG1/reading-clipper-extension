@@ -1,13 +1,10 @@
 import express from 'express';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '../../config/supabase.mjs';
 import { requireAuth } from '../../middleware/auth.mjs';
 
 const router = express.Router();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = supabaseAdmin;
 
 /**
  * POST /v2/highlights

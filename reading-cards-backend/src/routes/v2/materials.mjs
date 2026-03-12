@@ -1,18 +1,17 @@
 import express from 'express';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '../../config/supabase.mjs';
 import { requireAuth } from '../../middleware/auth.mjs';
 
 const router = express.Router();
 
-// Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = supabaseAdmin;
 
 // Sidecar config
 const SIDECAR_URL = process.env.SIDECAR_URL || 'http://127.0.0.1:8100';
-const SIDECAR_API_KEY = process.env.SIDECAR_API_KEY || 'rc-sidecar-2026';
+const SIDECAR_API_KEY = process.env.SIDECAR_API_KEY;
+if (!SIDECAR_API_KEY) {
+  console.warn('[materials] SIDECAR_API_KEY not set — sidecar calls will fail');
+}
 
 // Content Fetch Service config
 const CONTENT_FETCH_URL = process.env.CONTENT_FETCH_URL || 'http://127.0.0.1:8200';
@@ -137,7 +136,8 @@ router.post('/ingest', requireAuth, async (req, res) => {
           ingestion_error: err.message,
         })
         .eq('id', material.id)
-        .then();
+        .then(() => {})
+        .catch((updateErr) => console.error('[materials] failed to update material status:', updateErr.message));
     });
 
     res.json({

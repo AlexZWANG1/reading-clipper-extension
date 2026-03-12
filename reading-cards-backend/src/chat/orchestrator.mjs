@@ -588,7 +588,7 @@ export async function chatWithConversation({ conversationId, userMessage, userId
       if (isNewConversation) {
         generateConversationTitle(userMessage, userId, supabase)
           .then((t) => updateConversation(adminSb, userId, convId, { title: t }))
-          .catch(() => {});
+          .catch((err) => console.error('[orchestrator] auto-title failed:', err.message));
       }
 
       return {
@@ -633,7 +633,7 @@ export async function chatWithConversation({ conversationId, userMessage, userId
   if (isNewConversation) {
     generateConversationTitle(userMessage, userId, supabase)
       .then((t) => updateConversation(adminSb, userId, convId, { title: t }))
-      .catch(() => {});
+      .catch((err) => console.error('[orchestrator] auto-title failed:', err.message));
   }
 
   return {

@@ -91,7 +91,8 @@ export async function ingestUrl(supabase, userId, opts) {
       .from('materials')
       .update({ ingestion_status: 'failed', ingestion_error: err.message })
       .eq('id', material.id)
-      .then();
+      .then(() => {})
+      .catch((updateErr) => console.error('[ingestion] failed to update material status:', updateErr.message));
   });
 
   return { material_id: material.id, status: 'pending', title: material.title };
@@ -138,7 +139,8 @@ export async function ingestText(supabase, userId, opts) {
       .from('materials')
       .update({ ingestion_status: 'failed', ingestion_error: err.message })
       .eq('id', material.id)
-      .then();
+      .then(() => {})
+      .catch((updateErr) => console.error('[ingestion] failed to update material status:', updateErr.message));
   });
 
   return { material_id: material.id, status: 'pending', title: material.title };
