@@ -1,25 +1,6 @@
 import { useMemo } from 'react';
 import { Clock } from 'lucide-react';
-
-// Topic 颜色系统（与 CardsPage 保持一致）
-const TOPIC_COLORS = [
-  { bg: 'rgba(99,102,241,0.12)', text: '#6366F1', border: 'rgba(99,102,241,0.3)' },
-  { bg: 'rgba(52,211,153,0.12)', text: '#34D399', border: 'rgba(52,211,153,0.3)' },
-  { bg: 'rgba(251,191,36,0.12)', text: '#FBBF24', border: 'rgba(251,191,36,0.3)' },
-  { bg: 'rgba(251,113,133,0.12)', text: '#FB7185', border: 'rgba(251,113,133,0.3)' },
-  { bg: 'rgba(34,211,238,0.12)', text: '#22D3EE', border: 'rgba(34,211,238,0.3)' },
-  { bg: 'rgba(167,139,250,0.12)', text: '#A78BFA', border: 'rgba(167,139,250,0.3)' },
-  { bg: 'rgba(248,113,113,0.12)', text: '#F87171', border: 'rgba(248,113,113,0.3)' },
-  { bg: 'rgba(74,222,128,0.12)', text: '#4ADE80', border: 'rgba(74,222,128,0.3)' },
-  { bg: 'rgba(251,146,60,0.12)', text: '#FB923C', border: 'rgba(251,146,60,0.3)' },
-  { bg: 'rgba(147,197,253,0.12)', text: '#93C5FD', border: 'rgba(147,197,253,0.3)' },
-];
-
-function getTopicColor(topicTitle) {
-  if (!topicTitle) return TOPIC_COLORS[0];
-  const hash = topicTitle.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return TOPIC_COLORS[hash % TOPIC_COLORS.length];
-}
+import { getTopicColor } from '../lib/ui-utils';
 
 // 时间格式化工具函数
 function formatRelativeTime(date) {

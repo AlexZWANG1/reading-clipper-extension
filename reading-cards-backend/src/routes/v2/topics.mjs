@@ -84,6 +84,14 @@ router.post("/", async (req, res) => {
       });
     }
 
+    if (title.trim().length > 200) {
+      return res.status(400).json({ ok: false, error: "title_too_long", message: "标题不能超过200字符" });
+    }
+
+    if (color && !/^#[0-9a-fA-F]{6}$/.test(color)) {
+      return res.status(400).json({ ok: false, error: "invalid_color", message: "颜色格式必须为 #RRGGBB" });
+    }
+
     const topic = await createTopic(req.supabase, req.user.id, {
       title: title.trim(),
       description,

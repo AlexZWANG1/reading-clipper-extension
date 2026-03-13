@@ -1,6 +1,7 @@
 import { useEffect, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore, useUIStore } from './lib/store';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // 页面组件
 import LoginPage from './pages/LoginPage';
@@ -81,7 +82,7 @@ function App() {
   }, [init]);
 
   return (
-    <>
+    <ErrorBoundary>
       <Routes>
         {/* 公开路由 */}
         <Route
@@ -131,7 +132,7 @@ function App() {
 
       {/* 全局 Toast */}
       {toast && <Toast message={toast.message} type={toast.type} />}
-    </>
+    </ErrorBoundary>
   );
 }
 

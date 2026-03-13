@@ -282,6 +282,13 @@ router.patch("/:id", async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
 
+    // Validate allowed fields
+    const ALLOWED_FIELDS = ['summary', 'key_points', 'raw_snippet', 'note', 'source_name', 'source_url', 'topic_id', 'topic_title', 'title', 'fact_or_view', 'image_url', 'is_deleted'];
+    const invalidFields = Object.keys(updates).filter(k => !ALLOWED_FIELDS.includes(k));
+    if (invalidFields.length > 0) {
+      return res.status(400).json({ ok: false, error: `Invalid fields: ${invalidFields.join(', ')}` });
+    }
+
     const updatedCard = await updateCard(req.supabase, req.user.id, id, updates);
 
     if (!updatedCard) {

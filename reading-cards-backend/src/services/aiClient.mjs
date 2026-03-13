@@ -204,7 +204,7 @@ export async function callChatAPI(config, messages, options = {}) {
 
   // 代理模式：统一使用 OpenAI 格式
   if (runtimeMode === "proxy") {
-    console.log(`[callChatAPI] 代理模式: ${chatEndpoint}, model: ${payload.model}`);
+    if (process.env.LOG_LEVEL === 'debug') console.log(`[callChatAPI] 代理模式: ${chatEndpoint}, model: ${payload.model}`);
 
     const response = await fetch(chatEndpoint, {
       method: "POST",
@@ -219,7 +219,7 @@ export async function callChatAPI(config, messages, options = {}) {
     }
 
     const result = await response.json();
-    console.log("[callChatAPI] 代理响应成功");
+    if (process.env.LOG_LEVEL === 'debug') console.log("[callChatAPI] 代理响应成功");
     return result;
   }
 
@@ -257,7 +257,7 @@ export async function callChatAPI(config, messages, options = {}) {
   }
 
   // 直连模式：OpenAI / Custom
-  console.log("[callChatAPI] 直连模式:", chatEndpoint, "model:", payload.model);
+  if (process.env.LOG_LEVEL === 'debug') console.log("[callChatAPI] 直连模式:", chatEndpoint, "model:", payload.model);
   const response = await fetch(chatEndpoint, {
     method: "POST",
     headers,
@@ -271,7 +271,7 @@ export async function callChatAPI(config, messages, options = {}) {
   }
 
   const result = await response.json();
-  console.log("[callChatAPI] 直连响应成功");
+  if (process.env.LOG_LEVEL === 'debug') console.log("[callChatAPI] 直连响应成功");
   return result;
 }
 

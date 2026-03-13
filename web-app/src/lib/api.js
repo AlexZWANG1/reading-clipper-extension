@@ -36,12 +36,26 @@ async function request(endpoint, options = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  // Add 30s timeout unless caller provides their own signal
+  const timeoutMs = options.timeout || 30000;
+  let controller;
+  let signal = options.signal;
+  if (!signal) {
+    controller = new AbortController();
+    signal = controller.signal;
+    setTimeout(() => controller.abort(), timeoutMs);
+  }
+
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
     headers,
+    signal,
   });
 
-  const data = await response.json().catch(() => ({}));
+  const data = await response.json().catch((err) => {
+    console.warn(`[api] Failed to parse JSON from ${endpoint}:`, err.message);
+    return {};
+  });
 
   if (!response.ok) {
     throw new ApiError(
