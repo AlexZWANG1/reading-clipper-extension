@@ -191,3 +191,28 @@ describe('Trust Invariant: TOOL_MAP completeness', () => {
     assert.equal(getToolSideEffect('nonexistent_tool'), 'read_only');
   });
 });
+
+describe('Trust Invariant: no external API tools (Spec §10.2)', () => {
+  // The AI cannot access external data beyond user's imported materials.
+  // This test prevents accidental addition of web search or external API tools.
+  const FORBIDDEN_PATTERNS = /^(web_search|browse_url|call_api|http_request|external_)/i;
+
+  it('no tool name should match forbidden external API patterns', () => {
+    const violations = TOOL_DEFINITIONS
+      .filter(t => FORBIDDEN_PATTERNS.test(t.function.name))
+      .map(t => t.function.name);
+    assert.deepStrictEqual(violations, [],
+      `External API tools found: ${violations.join(', ')}. Spec §10.2 forbids external data access.`);
+  });
+
+  it('fetch_rss and ingest_url are user-initiated, not external API access', () => {
+    // These tools exist but are gated behind the ingest group (user must request them)
+    const ingestGroup = getGroupDefinition('ingest');
+    assert.ok(ingestGroup.includes('fetch_rss'), 'fetch_rss should be in ingest group');
+    assert.ok(ingestGroup.includes('ingest_url'), 'ingest_url should be in ingest group');
+    // They must NOT be in explore group
+    const exploreGroup = getGroupDefinition('explore');
+    assert.ok(!exploreGroup.includes('fetch_rss'), 'fetch_rss must not be in explore group');
+    assert.ok(!exploreGroup.includes('ingest_url'), 'ingest_url must not be in explore group');
+  });
+});
