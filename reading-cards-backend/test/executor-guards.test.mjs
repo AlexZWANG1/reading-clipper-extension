@@ -42,6 +42,16 @@ describe('Executor: destructive tool guard (Spec §12)', () => {
       'BLOCKED_IN_PLAN check must come BEFORE executeTool call');
   });
 
+  it('planner system prompt must state no-deletion rule', () => {
+    const plannerSource = readFileSync(
+      new URL('../src/chat/planner.mjs', import.meta.url), 'utf-8'
+    );
+    assert.ok(
+      plannerSource.includes('不能删除'),
+      'Planner prompt must explicitly forbid deletion in research plans'
+    );
+  });
+
   it('guard must throw an error (not silently skip)', () => {
     // Extract the code around the BLOCKED_IN_PLAN check
     const guardSection = source.slice(
