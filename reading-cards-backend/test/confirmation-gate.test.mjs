@@ -41,6 +41,23 @@ describe('confirmation gate regression', () => {
     );
   });
 
+  it('plan generation error must be persisted to conversation', () => {
+    // When plan generation fails, the error must be saved to conversation
+    // so the user can see what happened (not silently swallowed)
+    const planCatchBlock = source.slice(
+      source.indexOf('Plan generation failed'),
+      source.indexOf('Fall through')
+    );
+    assert.ok(
+      planCatchBlock.includes('addMessage'),
+      'Plan generation catch block must persist error via addMessage'
+    );
+    assert.ok(
+      planCatchBlock.includes('message_type') && planCatchBlock.includes('error'),
+      'Persisted plan error must have message_type: "error"'
+    );
+  });
+
   it('chat mode must force explore group in BOTH chat() and chatWithConversation()', () => {
     // Both functions must use the same pattern to enforce chat mode = explore only
     const chatModePattern = /mode\s*===\s*['"]chat['"]\s*\?\s*['"]explore['"]/g;

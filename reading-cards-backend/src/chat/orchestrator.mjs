@@ -652,6 +652,17 @@ export async function chatWithConversation({ conversationId, userMessage, userId
       };
     } catch (err) {
       console.error("Plan generation failed, returning AI response as text:", err);
+      // Persist error to conversation so user sees what happened
+      try {
+        await addMessage(adminSb, convId, {
+          role: "assistant",
+          content: `计划生成失败: ${err.message}`,
+          message_type: "error",
+          metadata: { error: err.message },
+        });
+      } catch (msgErr) {
+        console.error("Failed to persist plan error:", msgErr);
+      }
       // Fall through — use the AI's original text response
     }
   }
