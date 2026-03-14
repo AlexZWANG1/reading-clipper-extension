@@ -157,13 +157,18 @@ export async function chat({ messages, userId, supabase, accessToken, onToolCall
       });
 
       if (planToolResult) {
-        const parsed = JSON.parse(planToolResult.content);
-        return {
-          reply: '',
-          messages: currentMessages,
-          planRequest: { intent: parsed.intent },
-          toolCallLog,
-        };
+        try {
+          const parsed = JSON.parse(planToolResult.content);
+          return {
+            reply: '',
+            messages: currentMessages,
+            planRequest: { intent: parsed.intent },
+            toolCallLog,
+          };
+        } catch {
+          // Content was parsed successfully at line 154 — this should never happen,
+          // but if it does, fall through to normal response handling
+        }
       }
 
       // Handle draft ID extraction from propose_board_changes
