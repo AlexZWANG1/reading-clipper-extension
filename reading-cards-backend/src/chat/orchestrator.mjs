@@ -126,7 +126,7 @@ export async function chat({ messages, userId, supabase, accessToken, onToolCall
             tool: tc.function.name,
             args,
             result_summary: summarizeResult(rawResult),
-            status: result.error ? "error" : "completed",
+            status: rawResult.error ? "error" : "completed",
           };
           toolCallLog.push(logEntry);
           if (onToolCall) onToolCall(logEntry);

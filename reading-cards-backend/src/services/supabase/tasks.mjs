@@ -290,6 +290,7 @@ export async function releaseTaskLock(supabase, taskId) {
     .update({
       is_running: false,
       running_run_id: null,
+      locked_at: null,
       last_run_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
