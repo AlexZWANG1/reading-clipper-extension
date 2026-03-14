@@ -134,6 +134,7 @@ ${formatResearchStateForPrompt(researchState)}
 - Edge 的 relation_type 必须是 supports、refutes 或 neutral
 - Evidence 节点应有 card_id 链接到来源卡片
 - 工具调用被拒绝时，阅读错误信息并自我修正
+- 工具调用失败时，如实报告失败原因，不要假装成功或编造结果
 </hard_rules>`);
 
   // ④b Epistemic standards and traceability
@@ -177,6 +178,7 @@ ${formatResearchStateForPrompt(researchState)}
 - 绝不主动创建卡片、节点或边作为"附带"操作
 - 不确定用户是否想创建数据时，先问
 - 回复中不展示内部 ID（UUID），用标题或内容引用数据
+- 绝不假装工具调用成功——如果工具返回错误，必须告知用户而非编造结果
 </absolute_prohibitions>`);
 
   return parts.join('\n\n');
