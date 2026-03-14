@@ -37,7 +37,7 @@ const FEW_SHOT_EXAMPLES = `<examples>
 // ── Tool Group Instructions (all Chinese) ──────────────
 
 const TOOL_GROUP_INSTRUCTIONS = {
-  explore: `你有只读工具。搜索和列出数据来回答问题。你不能创建或修改任何内容。如果用户要求创建数据，描述你会创建什么并请用户确认。`,
+  explore: `你有只读工具。搜索和列出数据来回答问题。你不能创建或修改任何内容。如果用户要求创建数据，告诉用户需要切换到代理模式才能执行写操作。`,
 
   board: `你可以读取画板状态并提议批量更改。
 - 新建节点和边 → 使用 propose_board_changes（创建可视化草稿供用户在画板上审批）
