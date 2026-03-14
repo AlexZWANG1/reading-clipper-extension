@@ -1,53 +1,15 @@
 // ========= Plan Generator =========
-// Classifies user intent and generates structured execution plans.
-// Normal Q&A → returns null (orchestrator handles directly).
-// Task-type → returns { planSpec, planDisplay }.
+// Generates structured execution plans from user intent.
+// Called when the AI invokes the request_plan tool.
+// Returns { planSpec, planDisplay }.
 
 import { createAIClientConfig, callChatAPI } from "../services/aiClient.mjs";
 import { listTopicsWithCardCount } from "../services/supabase/topics.mjs";
-
-// ── Intent Classification (heuristic + AI fallback) ──
-
-const TASK_KEYWORDS = [
-  "每天", "每周", "定期", "跟踪", "追踪", "监控", "调研",
-  "收集", "整理", "分析", "深度", "对比", "自动",
-  "track", "monitor", "research", "collect", "analyze",
-  "investigate", "survey", "compile", "digest",
-];
-
-/**
- * Classify whether a user message is a task-type request or normal Q&A.
- * Returns "task" or "chat".
- */
-export function classifyIntent(message) {
-  const text = message.toLowerCase();
-  const matchCount = TASK_KEYWORDS.filter((kw) => text.includes(kw)).length;
-  // 2+ keyword matches → likely a task
-  if (matchCount >= 2) return "task";
-  // 1 keyword + message length > 30 chars → likely a task
-  if (matchCount >= 1 && text.length > 30) return "task";
-  return "chat";
-}
+import { TOOL_DEFINITIONS } from "./tools.mjs";
 
 // ── Plan Generation ──
 
-const PLAN_SYSTEM_PROMPT = `You are a research task planner for Verity, an evidence-driven research workbench.
-
-Given a user's research intent, produce TWO outputs as a single JSON object:
-
-1. "plan_spec" — the machine-executable plan
-2. "plan_display" — the human-readable explanation
-
-Available tools you can use in steps:
-- fetch_rss: Fetch items from RSS feeds. Input: { feeds: [url, ...], max_items: number }
-- semantic_search: Search user's ingested documents. Input: { query: string, limit: number }
-- search_cards: Search user's existing cards. Input: { query: string }
-- ingest_url: Ingest a URL into the knowledge base. Input: { url: string, title: string }
-- create_card: Create a knowledge card. Input: { topic_title: string, summary: string, key_points: [...] }
-- list_cards: List user's cards. Input: { topic_id?: string }
-- list_topics: List user's topics. Input: {}
-
-Output JSON schema:
+const PLAN_OUTPUT_SCHEMA = `Output JSON schema:
 {
   "plan_spec": {
     "intent_summary": "one-line summary of what the user wants",
@@ -81,26 +43,57 @@ Output JSON schema:
       { "step_id": "step_1", "explanation": "human-readable explanation (Chinese)" }
     ]
   }
-}
+}`;
 
-Rules:
-- Step IDs must be sequential: step_1, step_2, ...
-- Each step must use exactly one tool
-- Steps are executed in order; later steps can reference earlier step results
-- Always include a final summarization step (create_card or a dedicated summary)
-- Prefer Chinese for all user-facing text
-- For RSS feeds, suggest relevant feeds based on the topic
-- Keep plans between 3-8 steps
-- Output valid JSON only, no markdown fences`;
+function buildPlanSystemPrompt() {
+  const toolDescriptions = TOOL_DEFINITIONS
+    .filter(t => t.task_auto)
+    .map(t => {
+      const params = Object.keys(t.function.parameters?.properties || {}).join(', ');
+      return `- ${t.function.name}: ${t.function.description.slice(0, 100)}... Params: {${params}}`;
+    })
+    .join('\n');
+
+  return `You are a research task planner for Verity, an evidence-driven research workbench.
+
+Given a user's research intent, produce TWO outputs as a single JSON object:
+
+1. "plan_spec" — the machine-executable plan
+2. "plan_display" — the human-readable explanation
+
+可用工具（可在步骤中使用）:
+${toolDescriptions}
+
+重要：优先使用用户已有的 RSS 源和信息来源，不要编造 URL。如果用户没有相关信息源，在计划中说明需要用户提供。
+
+${PLAN_OUTPUT_SCHEMA}
+
+规则:
+- 步骤 ID 必须递增: step_1, step_2, ...
+- 每步只用一个工具
+- 后续步骤可以引用前序步骤结果（$ref:step_id）
+- 最后一步应生成总结
+- 用户可见文本用中文
+- 计划 3-8 步
+- 只输出 JSON`;
+}
 
 /**
  * Generate a structured execution plan from user intent.
  * @param {string} intent - User's natural language intent
  * @param {string} userId
  * @param {Object} supabase
- * @returns {{ planSpec: Object, planDisplay: Object }}
+ * @param {Object} [options]
+ * @param {string|null} [options.conversationSummary] - Recent conversation context summary
+ * @param {Array} [options.userSources] - User's information sources
+ * @param {Object|null} [options.researchState] - Current research state (hypotheses, evidence, blind spots)
+ * @returns {{ planSpec: Object, planDisplay: Object, suggestedTopicId: string|null, title: string }}
  */
-export async function generatePlan(intent, userId, supabase) {
+export async function generatePlan(intent, userId, supabase, {
+  conversationSummary = null,
+  userSources = [],
+  researchState = null,
+} = {}) {
   // Fetch existing topics for context
   let existingTopics = [];
   try {
@@ -109,12 +102,35 @@ export async function generatePlan(intent, userId, supabase) {
 
   const topicNames = existingTopics.map((t) => `${t.title} (${t.card_count || 0} cards)`).join(", ");
 
+  // Build rich context for planner
+  const contextParts = [];
+  contextParts.push(`用户已有主题: [${topicNames || '无'}]`);
+
+  if (userSources.length > 0) {
+    const sourceList = userSources
+      .filter(s => s.status === 'active')
+      .slice(0, 10)
+      .map(s => `- ${s.name}${s.rss_url ? ` (RSS: ${s.rss_url})` : ''}${s.url ? ` (${s.url})` : ''}`)
+      .join('\n');
+    contextParts.push(`用户已有信息源:\n${sourceList}`);
+  }
+
+  if (conversationSummary) {
+    contextParts.push(`最近对话上下文:\n${conversationSummary}`);
+  }
+
+  if (researchState && researchState.total_hypotheses > 0) {
+    contextParts.push(`当前研究状态: 假说 ${researchState.total_hypotheses} 个, 证据 ${researchState.total_evidence} 个, 盲点 ${researchState.blind_spots} 个`);
+  }
+
+  contextParts.push(`研究意图:\n${intent}`);
+
   const aiConfig = await createAIClientConfig(userId, supabase);
   const messages = [
-    { role: "system", content: PLAN_SYSTEM_PROMPT },
+    { role: "system", content: buildPlanSystemPrompt() },
     {
       role: "user",
-      content: `User's existing topics: [${topicNames || "none"}]\n\nResearch intent:\n${intent}`,
+      content: contextParts.join('\n\n'),
     },
   ];
 
