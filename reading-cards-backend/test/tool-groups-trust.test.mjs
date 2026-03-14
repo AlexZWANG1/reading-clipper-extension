@@ -192,6 +192,28 @@ describe('Trust Invariant: TOOL_MAP completeness', () => {
   });
 });
 
+describe('Trust Invariant: destructive tools must not be plan-auto (Spec §12)', () => {
+  it('no destructive tool should have task_auto: true', () => {
+    const violations = TOOL_DEFINITIONS
+      .filter(t => t.side_effect === 'destructive' && t.task_auto === true)
+      .map(t => t.function.name);
+    assert.deepStrictEqual(violations, [],
+      `Destructive tools with task_auto:true would allow plan-automated deletion: ${violations.join(', ')}`);
+  });
+
+  it('all write tools used in plans must be creation-only', () => {
+    // Write tools that are task_auto must be "creation" tools (create_card, ingest_url),
+    // not mutation tools (update/delete)
+    const autoWriteTools = TOOL_DEFINITIONS
+      .filter(t => t.side_effect === 'write' && t.task_auto === true)
+      .map(t => t.function.name);
+    for (const name of autoWriteTools) {
+      assert.ok(!name.includes('delete') && !name.includes('update'),
+        `${name} is a write+task_auto tool — must not be a delete/update operation`);
+    }
+  });
+});
+
 describe('Trust Invariant: no external API tools (Spec §10.2)', () => {
   // The AI cannot access external data beyond user's imported materials.
   // This test prevents accidental addition of web search or external API tools.
