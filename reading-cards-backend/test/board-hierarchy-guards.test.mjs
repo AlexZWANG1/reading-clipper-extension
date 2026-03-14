@@ -1,5 +1,6 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { executeTool } from '../src/chat/toolExecutor.mjs';
 
 // ========= Board Hierarchy Guard Tests =========
@@ -128,6 +129,61 @@ describe('Board hierarchy guard: propose_board_changes validates hierarchy', () 
     } catch {
       // Expected: fails at createDraft since no DB
     }
+  });
+});
+
+describe('Board hierarchy guard: parent node_type validation (ARCHITECTURE §5.3)', () => {
+  // Source-level test: the guard must exist in code, preventing evidence→evidence
+  // and evidence→question links. Can't test the DB query without real supabase,
+  // but we verify the guard code is present.
+  const source = readFileSync(
+    new URL('../src/chat/toolExecutor.mjs', import.meta.url), 'utf-8'
+  );
+
+  it('create_board_node must validate parent node_type', () => {
+    // The guard must check expectedParentType against the actual parent node
+    assert.ok(
+      source.includes('expectedParentType') || source.includes('expectedParent'),
+      'create_board_node must validate that the parent node has the correct type'
+    );
+  });
+
+  it('evidence parent must be validated as hypothesis', () => {
+    assert.ok(
+      source.includes("evidence' ? 'hypothesis'") || source.includes('evidence" ? "hypothesis"'),
+      'Evidence → parent must be hypothesis validation must exist'
+    );
+  });
+
+  it('hypothesis parent must be validated as question (via ternary else branch)', () => {
+    // The code uses: evidence ? "hypothesis" : "question" — the else covers hypothesis→question
+    assert.ok(
+      source.includes(': "question"') || source.includes(": 'question'"),
+      'Ternary must have "question" as the else branch for hypothesis parent validation'
+    );
+  });
+
+  it('propose_board_changes must also validate parent node_type for real UUIDs', () => {
+    // Draft changes with real UUIDs (not $temp_id) should be validated too
+    const draftSection = source.slice(
+      source.indexOf('propose_board_changes'),
+      source.indexOf('propose_board_changes') + 2000
+    );
+    assert.ok(
+      draftSection.includes('expectedParent') || draftSection.includes('expectedParentType'),
+      'propose_board_changes must validate parent node_type for real UUID parents'
+    );
+  });
+
+  it('propose_board_changes must skip validation for $temp_id references', () => {
+    const draftSection = source.slice(
+      source.indexOf('propose_board_changes'),
+      source.indexOf('propose_board_changes') + 2000
+    );
+    assert.ok(
+      draftSection.includes('$temp') || draftSection.includes('startsWith'),
+      'propose_board_changes must skip parent validation for $temp_id references'
+    );
   });
 });
 

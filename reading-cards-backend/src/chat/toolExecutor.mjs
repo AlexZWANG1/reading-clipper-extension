@@ -176,7 +176,7 @@ export async function executeTool(name, args, ctx) {
 
     // ── Board mutations (write) — with methodology guards ──
     case "create_board_node": {
-      // Methodology guard: enforce Q→H→E hierarchy
+      // Methodology guard: enforce Q→H→E hierarchy (ARCHITECTURE §5.3)
       if (args.node_type === "evidence" && !args.parent_id) {
         return {
           error: "methodology_violation",
@@ -190,6 +190,27 @@ export async function executeTool(name, args, ctx) {
           message: "Hypothesis nodes must have parent_id pointing to a question node.",
           suggestion: "Call get_board first to find the relevant question, then create hypothesis with parent_id set.",
         };
+      }
+
+      // Validate parent node_type matches hierarchy (ARCHITECTURE §5.3)
+      if (args.parent_id && (args.node_type === "evidence" || args.node_type === "hypothesis")) {
+        const expectedParentType = args.node_type === "evidence" ? "hypothesis" : "question";
+        try {
+          const { data: parentNode } = await supabase
+            .from("board_nodes")
+            .select("node_type")
+            .eq("id", args.parent_id)
+            .single();
+          if (parentNode && parentNode.node_type !== expectedParentType) {
+            return {
+              error: "methodology_violation",
+              message: `${args.node_type} parent must be a ${expectedParentType}, but parent ${args.parent_id} is a ${parentNode.node_type}.`,
+              suggestion: `Find a ${expectedParentType} node to attach this ${args.node_type} to.`,
+            };
+          }
+        } catch {
+          // Non-blocking: if parent lookup fails (e.g., node not found), let the DB handle it
+        }
       }
 
       const nodeData = {
@@ -258,7 +279,7 @@ export async function executeTool(name, args, ctx) {
 
     // ── Draft tool (creates preview, not real data) ──
     case "propose_board_changes": {
-      // Methodology guard: validate Q→H→E hierarchy in proposed changes
+      // Methodology guard: validate Q→H→E hierarchy in proposed changes (ARCHITECTURE §5.3)
       const changes = args.changes || [];
       for (const change of changes) {
         if (change.action !== 'create_node') continue;
@@ -268,6 +289,24 @@ export async function executeTool(name, args, ctx) {
             message: `${change.node_type} nodes must have parent_id. Evidence → hypothesis, hypothesis → question.`,
             suggestion: "Call get_board first to find the parent node, then include parent_id (real UUID or $temp_id reference) in each hypothesis/evidence change.",
           };
+        }
+        // Validate parent node_type when parent_id is a real UUID (not a $temp_id reference)
+        if (change.parent_id && !String(change.parent_id).startsWith('$')
+            && (change.node_type === 'evidence' || change.node_type === 'hypothesis')) {
+          const expectedParent = change.node_type === 'evidence' ? 'hypothesis' : 'question';
+          try {
+            const { data: parentNode } = await supabase
+              .from("board_nodes").select("node_type").eq("id", change.parent_id).single();
+            if (parentNode && parentNode.node_type !== expectedParent) {
+              return {
+                error: "methodology_violation",
+                message: `${change.node_type} parent must be a ${expectedParent}, but parent ${change.parent_id} is a ${parentNode.node_type}.`,
+                suggestion: `Find a ${expectedParent} node to use as parent.`,
+              };
+            }
+          } catch {
+            // Non-blocking: parent lookup may fail for temp IDs or missing nodes
+          }
         }
       }
       try {
