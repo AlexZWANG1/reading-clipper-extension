@@ -48,6 +48,8 @@ import highlightsRouterV2 from "./routes/v2/highlights.mjs";
 import tasksRouterV2 from "./routes/v2/tasks.mjs";
 import rssRouterV2 from "./routes/v2/rss.mjs";
 import conversationsRouterV2 from "./routes/v2/conversations.mjs";
+import analyzeRouterV2 from "./routes/v2/analyze.mjs";
+import methodologyRouterV2 from "./routes/v2/methodology.mjs";
 import { startRssScheduler } from "./services/rss/scheduler.mjs";
 
 // ========= Express 应用配置 =========
@@ -128,11 +130,13 @@ app.use("/api/v2/boards", boardsRouterV2);
 app.use("/api/v2/ai", aiBoardsRouterV2);
 app.use("/api/v2/chat", chatRouterV2);
 app.use("/api/v2/materials", materialsRouterV2);
+app.use("/api/v2/materials", analyzeRouterV2);
 app.use("/api/v2/search", searchRouterV2);
 app.use("/api/v2/highlights", highlightsRouterV2);
 app.use("/api/v2/tasks", tasksRouterV2);
 app.use("/api/v2/rss", rssRouterV2);
 app.use("/api/v2/conversations", conversationsRouterV2);
+app.use("/api/v2/methodology", methodologyRouterV2);
 
 // ========= 错误处理 =========
 app.use((err, req, res, next) => {
