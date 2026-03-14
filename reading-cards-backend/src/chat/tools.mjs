@@ -447,6 +447,29 @@ export const TOOL_DEFINITIONS = [
     task_phases: [],
     task_capability: "knowledge_read",
   },
+
+  // ── Meta tool (plan request) ──
+  {
+    type: "function",
+    function: {
+      name: "request_plan",
+      description: "当用户描述的任务需要 4 步以上、涉及多个数据源、或需要定期执行时，调用此工具请求生成执行计划。不要自己尝试逐步执行多步骤任务。返回: {plan_requested: true}",
+      parameters: {
+        type: "object",
+        properties: {
+          intent: {
+            type: "string",
+            description: "用一段话描述用户想要完成的任务，包含关键细节（数据源、筛选条件、输出格式等）"
+          }
+        },
+        required: ["intent"]
+      }
+    },
+    side_effect: "read_only",
+    task_auto: false,
+    task_phases: [],
+    task_capability: "meta",
+  },
 ];
 
 // Quick lookup map: tool name → full definition (including side_effect)

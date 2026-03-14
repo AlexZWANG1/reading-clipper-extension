@@ -90,19 +90,6 @@ export async function chat({ messages, userId, supabase, accessToken, onToolCall
     const assistantMsg = choice.message;
     currentMessages.push(assistantMsg);
 
-    // Check if AI is requesting a plan (via _plan_request JSON)
-    if (!assistantMsg.tool_calls && assistantMsg.content) {
-      const planRequest = extractPlanRequest(assistantMsg.content);
-      if (planRequest) {
-        return {
-          reply: assistantMsg.content,
-          messages: currentMessages,
-          planRequest: planRequest,
-          toolCallLog,
-        };
-      }
-    }
-
     const toolCalls = assistantMsg.tool_calls;
     if (!toolCalls || toolCalls.length === 0) {
       return { reply: assistantMsg.content || "", messages: currentMessages, toolCallLog, draftId };
@@ -159,6 +146,24 @@ export async function chat({ messages, userId, supabase, accessToken, onToolCall
           toolCallLog.push(logEntry);
           if (onToolCall) onToolCall(logEntry);
         }
+      }
+
+      // Check if any tool result is a plan request
+      const planToolResult = autoResults.find(tr => {
+        try {
+          const parsed = JSON.parse(tr.content);
+          return parsed.plan_requested === true;
+        } catch { return false; }
+      });
+
+      if (planToolResult) {
+        const parsed = JSON.parse(planToolResult.content);
+        return {
+          reply: '',
+          messages: currentMessages,
+          planRequest: { intent: parsed.intent },
+          toolCallLog,
+        };
       }
 
       // Handle draft ID extraction from propose_board_changes
@@ -472,25 +477,6 @@ function callWithTools(aiConfig, messages, scopedTools) {
 }
 
 /**
- * Extract a _plan_request from AI response content.
- * AI responds with ```json {"_plan_request": true, "intent": "..."} ``` when it wants a plan.
- */
-function extractPlanRequest(content) {
-  if (!content) return null;
-  // Try to find JSON with _plan_request
-  const jsonMatch = content.match(/```json\s*(\{[\s\S]*?\})\s*```/) ||
-                    content.match(/(\{"_plan_request"\s*:\s*true[\s\S]*?\})/);
-  if (!jsonMatch) return null;
-  try {
-    const parsed = JSON.parse(jsonMatch[1]);
-    if (parsed._plan_request && parsed.intent) {
-      return { intent: parsed.intent };
-    }
-  } catch {}
-  return null;
-}
-
-/**
  * Summarize a tool result for display.
  */
 function summarizeToolResult(tool, result) {
@@ -628,10 +614,16 @@ export async function chatWithConversation({ conversationId, userMessage, userId
   // Check if AI requested a plan
   if (result.planRequest) {
     try {
+      const { listSources } = await import("../services/supabase/sources.mjs");
+      const userSources = await listSources(supabase, userId, {}).catch(() => []);
+      const planConversationSummary = conversationSummary
+        || chatMessages.slice(-6).map(m => `${m.role}: ${m.content.slice(0, 80)}`).join('\n');
+
       const { planSpec, planDisplay, suggestedTopicId, title } = await generatePlan(
         result.planRequest.intent,
         userId,
-        supabase
+        supabase,
+        { conversationSummary: planConversationSummary, userSources, researchState }
       );
 
       const planMessage = formatPlanProposalMessage(planDisplay, planSpec);
@@ -778,8 +770,18 @@ export async function confirmAndExecutePlan({ conversationId, planSpec, planDisp
     planSpec,
     conversationId,
     supabase: adminSb,
-  }).catch((err) => {
-    console.error("[executor] Plan execution failed:", err);
+  }).catch(async (err) => {
+    console.error('[executor] Plan execution failed:', err);
+    try {
+      await addMessage(adminSb, conversationId, {
+        role: 'assistant',
+        content: `执行计划失败: ${err.message}`,
+        message_type: 'error',
+        metadata: { task_id: task.id },
+      });
+    } catch (msgErr) {
+      console.error('[executor] Failed to write error message:', msgErr);
+    }
   });
 
   return { taskId: task.id, status: "running" };

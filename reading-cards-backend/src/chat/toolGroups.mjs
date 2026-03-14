@@ -11,7 +11,7 @@ const TOOL_GROUPS = {
   explore: [
     'semantic_search', 'search_cards', 'list_cards', 'get_card',
     'list_topics', 'list_sources', 'list_boards', 'get_board',
-    'list_documents', 'get_document',
+    'list_documents', 'get_document', 'request_plan',
   ],
 
   // Board-focused tools — includes propose_board_changes (draft, not direct mutation)
@@ -20,18 +20,19 @@ const TOOL_GROUPS = {
     'search_cards', 'semantic_search', 'get_card', 'list_cards',
     'list_topics', 'list_boards',
     'update_board_node', 'delete_board_node', 'delete_board_edge',
+    'request_plan',
   ],
 
   // Card creation context
   cards: [
     'create_card', 'search_cards', 'list_cards', 'get_card',
-    'semantic_search', 'list_topics',
+    'semantic_search', 'list_topics', 'request_plan',
   ],
 
   // Content ingestion context
   ingest: [
     'ingest_url', 'fetch_rss', 'semantic_search', 'search_cards',
-    'list_cards', 'list_topics',
+    'list_cards', 'list_topics', 'request_plan',
   ],
 
   // All tools — only used during plan execution
@@ -51,7 +52,7 @@ const GROUP_PATTERNS = [
   },
   {
     group: 'ingest',
-    pattern: /摄入|ingest|rss|feed|url|订阅|subscri|抓取|fetch|导入|import/i,
+    pattern: /摄入|ingest|导入.*(?:url|链接|文章)|import.*(?:url|article)|订阅|subscri|rss|feed/i,
   },
 ];
 
@@ -72,7 +73,10 @@ const GROUP_PATTERNS = [
 export function inferToolGroup(userMessage, surfaceContext) {
   // Priority 1: Surface context drives tool selection
   if (surfaceContext?.surface === 'board') return 'board';
-  if (surfaceContext?.surface === 'reader') return 'cards';
+  if (surfaceContext?.surface === 'reader') {
+    const wantsCreate = /创建|保存|提取|制作|create|save|extract|摘录/i.test(userMessage);
+    return wantsCreate ? 'cards' : 'explore';
+  }
 
   // Priority 2: Keyword-based detection from user message
   if (userMessage) {
@@ -93,14 +97,13 @@ export function inferToolGroup(userMessage, surfaceContext) {
  */
 export function getToolsForGroup(groupName) {
   const allowedNames = TOOL_GROUPS[groupName];
-
-  // 'full' group → return all tools
   if (allowedNames === null || allowedNames === undefined) {
-    return TOOL_DEFINITIONS;
+    return TOOL_DEFINITIONS.map(t => ({ type: t.type, function: t.function }));
   }
-
   const allowedSet = new Set(allowedNames);
-  return TOOL_DEFINITIONS.filter(t => allowedSet.has(t.function.name));
+  return TOOL_DEFINITIONS
+    .filter(t => allowedSet.has(t.function.name))
+    .map(t => ({ type: t.type, function: t.function }));
 }
 
 /**

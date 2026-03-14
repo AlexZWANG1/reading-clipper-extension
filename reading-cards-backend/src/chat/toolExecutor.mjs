@@ -272,6 +272,11 @@ export async function executeTool(name, args, ctx) {
       }
     }
 
+    // ── Meta tool (plan request) ──
+    case "request_plan": {
+      return { plan_requested: true, intent: args.intent };
+    }
+
     default:
       return { error: `unknown_tool: ${name}` };
   }
