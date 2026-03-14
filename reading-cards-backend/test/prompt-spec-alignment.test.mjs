@@ -21,14 +21,39 @@ describe('Prompt structure: required XML sections', () => {
   const prompt = buildPrompt();
 
   for (const tag of [
-    'role', 'data_model', 'hard_rules', 'epistemic_standards',
-    'tool_usage_guide', 'available_actions', 'absolute_prohibitions',
+    'role', 'data_model', 'hard_rules', 'autonomy_scaling',
+    'epistemic_standards', 'tool_usage_guide', 'available_actions',
+    'absolute_prohibitions',
   ]) {
     it(`must contain <${tag}> section`, () => {
       assert.ok(prompt.includes(`<${tag}>`), `Missing <${tag}> section`);
       assert.ok(prompt.includes(`</${tag}>`), `Missing </${tag}> closing tag`);
     });
   }
+});
+
+describe('Prompt: AI Behavior Contract §10.1 — Autonomy Scaling', () => {
+  const prompt = buildPrompt();
+
+  it('must define autonomy levels from full to user-owned', () => {
+    assert.ok(prompt.includes('完全自主'), 'Must mention full autonomy for reading');
+    assert.ok(prompt.includes('用户确认'), 'Must require user confirmation for creation');
+    assert.ok(prompt.includes('明确批准'), 'Must require explicit approval for deletion');
+  });
+
+  it('must encourage proactive analysis as a positive capability', () => {
+    assert.ok(prompt.includes('主动分析') || prompt.includes('主动提供洞察'),
+      'Prompt must encourage proactive analysis, not just prohibit unauthorized actions');
+  });
+});
+
+describe('Prompt: AI Behavior Contract §10.5 — Proactive Analysis vs Passive Mutation', () => {
+  const prompt = buildPrompt();
+
+  it('must distinguish proactive analysis from data mutation', () => {
+    assert.ok(prompt.includes('主动分析') && prompt.includes('征得用户同意'),
+      'Prompt must say: proactively analyze yes, but ask before mutating');
+  });
 });
 
 describe('Prompt: AI Behavior Contract §10.3 — Epistemic Standards', () => {
