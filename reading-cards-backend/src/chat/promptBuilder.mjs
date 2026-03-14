@@ -242,7 +242,7 @@ function describeSurface(ctx) {
     case 'board':
       return '用户正在查看思维画板。优先使用 board 相关工具帮助用户分析和操作画板内容。';
     case 'reader':
-      return '用户正在阅读器中阅读材料。优先帮助用户理解内容、回答关于材料的问题。';
+      return '用户正在阅读器中阅读材料。优先帮助用户理解内容：这篇文章说了什么？提出了哪些论点？有什么证据支撑？用 semantic_search 搜索材料内容来回答。';
     case 'cards':
       return '用户正在卡片页面，浏览和管理知识卡片。';
     default:
