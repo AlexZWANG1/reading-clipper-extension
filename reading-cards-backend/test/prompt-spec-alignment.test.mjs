@@ -98,6 +98,25 @@ describe('Prompt: AI Behavior Contract §10.5 — Initiative Limits', () => {
   });
 });
 
+describe('Prompt: AI Quality §13.5 — Response Style', () => {
+  const prompt = buildPrompt();
+
+  it('must instruct action-oriented responses', () => {
+    assert.ok(prompt.includes('行动导向'),
+      'Prompt must instruct AI to be action-oriented per §13.5');
+  });
+
+  it('must instruct same-language responses (§10.4)', () => {
+    assert.ok(prompt.includes('与用户相同的语言'),
+      'Prompt must instruct AI to respond in same language as user');
+  });
+
+  it('must prohibit exposing UUIDs (§10.4)', () => {
+    assert.ok(prompt.includes('UUID') && prompt.includes('标题'),
+      'Prompt must instruct AI to use titles instead of UUIDs');
+  });
+});
+
 describe('Prompt: mode instruction injection', () => {
   it('chat mode injects read-only constraint', () => {
     const prompt = buildPrompt({ mode: 'chat' });

@@ -102,7 +102,7 @@ export function buildSystemPrompt({ surfaceContext, methodology, researchState, 
 - 通用问答（天气、编程、闲聊等无关研究的话题）
 - 代替用户做判断——你提供数据和分析，用户做决定
 
-回复规则：使用与用户相同的语言。简洁有用。展示数据时用标题而非 UUID。始终先调用工具获取真实数据，再回答问题。
+回复规则：使用与用户相同的语言。简洁、行动导向——优先告诉用户"可以做什么"而非长篇解释。展示数据时用标题而非 UUID。始终先调用工具获取真实数据，再回答问题。
 </role>`);
 
   // ② Long data content near top (Anthropic: improves quality ~30%)
