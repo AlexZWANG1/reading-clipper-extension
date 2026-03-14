@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { TOOL_DEFINITIONS, TOOL_MAP, getToolSideEffect } from '../src/chat/tools.mjs';
+import { TOOL_DEFINITIONS, TOOL_MAP, getToolSideEffect, buildConfirmMessage } from '../src/chat/tools.mjs';
 import { inferToolGroup, getToolsForGroup, getGroupDefinition, listGroups } from '../src/chat/toolGroups.mjs';
 
 // ========= Trust Invariant Tests =========
@@ -236,5 +236,37 @@ describe('Trust Invariant: no external API tools (Spec §10.2)', () => {
     const exploreGroup = getGroupDefinition('explore');
     assert.ok(!exploreGroup.includes('fetch_rss'), 'fetch_rss must not be in explore group');
     assert.ok(!exploreGroup.includes('ingest_url'), 'ingest_url must not be in explore group');
+  });
+});
+
+describe('Trust Invariant: every write/destructive tool has confirm_template', () => {
+  it('all write tools must have a confirm_template', () => {
+    const writeTools = TOOL_DEFINITIONS.filter(t => t.side_effect === 'write');
+    for (const t of writeTools) {
+      assert.ok(t.confirm_template,
+        `Write tool "${t.function.name}" must have a confirm_template for user confirmation`);
+    }
+  });
+
+  it('all destructive tools must have a confirm_template', () => {
+    const destructiveTools = TOOL_DEFINITIONS.filter(t => t.side_effect === 'destructive');
+    for (const t of destructiveTools) {
+      assert.ok(t.confirm_template,
+        `Destructive tool "${t.function.name}" must have a confirm_template for user confirmation`);
+    }
+  });
+
+  it('buildConfirmMessage interpolates args correctly', () => {
+    const msg = buildConfirmMessage('create_card', {
+      topic_title: '测试主题',
+      summary: '这是一个测试摘要',
+    });
+    assert.ok(msg.includes('测试主题'), 'Should interpolate topic_title');
+    assert.ok(msg.includes('测试摘要'), 'Should interpolate summary');
+  });
+
+  it('buildConfirmMessage falls back for unknown tools', () => {
+    const msg = buildConfirmMessage('unknown_tool', {});
+    assert.ok(msg.includes('unknown_tool'), 'Should include tool name in fallback');
   });
 });
