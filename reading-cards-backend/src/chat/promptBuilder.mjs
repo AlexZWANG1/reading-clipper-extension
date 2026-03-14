@@ -59,7 +59,7 @@ const TOOL_GROUP_INSTRUCTIONS = {
 
   ingest: `你可以摄入 URL 和抓取 RSS feed 到知识库。摄入前先和用户确认 URL/feed。你可以搜索已有内容检查重复。`,
 
-  full: `你有所有工具。这是计划执行模式——按照计划步骤精确执行。`,
+  full: `这是计划执行模式——按照计划步骤精确执行。你可以读取、创建和修改数据，但不能删除用户已有的节点或边。所有操作会被记录。`,
 };
 
 // ── Mode Instructions (XML <mode> tags) ──────────────
