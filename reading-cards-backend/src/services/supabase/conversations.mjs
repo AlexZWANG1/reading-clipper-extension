@@ -95,14 +95,16 @@ export async function addMessage(supabase, conversationId, { role, content, mess
 }
 
 /**
- * List messages for a conversation, chronological order.
+ * List messages for a conversation, newest-first order.
+ * The caller receives newest messages first; downstream functions
+ * (buildHistoryWithinBudget) handle chronological reordering.
  */
 export async function listMessages(supabase, conversationId, { limit = 200 } = {}) {
   const { data, error } = await supabase
     .from("chat_messages")
     .select("*")
     .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw new Error(`获取消息失败: ${error.message}`);
   return data || [];
