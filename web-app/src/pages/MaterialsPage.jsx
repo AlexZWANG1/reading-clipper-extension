@@ -38,6 +38,7 @@ export default function MaterialsPage() {
   const [uploadTitle, setUploadTitle] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const loadRequestRef = useRef(0);
 
   const loadMaterials = useCallback(async () => {
@@ -64,6 +65,62 @@ export default function MaterialsPage() {
       loadRequestRef.current += 1;
     };
   }, [loadMaterials]);
+
+  // Status polling for pending/processing materials
+  useEffect(() => {
+    const pendingIds = materials
+      .filter(m => ['pending', 'processing'].includes(m.ingestion_status))
+      .map(m => m.id);
+
+    if (pendingIds.length === 0) return;
+
+    const interval = setInterval(async () => {
+      let changed = false;
+      const updated = [...materials];
+      for (const id of pendingIds) {
+        try {
+          const latest = await materialsApi.get(id);
+          const idx = updated.findIndex(m => m.id === id);
+          if (idx >= 0 && updated[idx].ingestion_status !== latest.ingestion_status) {
+            updated[idx] = latest;
+            changed = true;
+          }
+        } catch {}
+      }
+      if (changed) setMaterials(updated);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [materials]);
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    if (file.size > 50 * 1024 * 1024) {
+      showToast('文件大小不能超过 50MB', 'error');
+      return;
+    }
+    try {
+      await materialsApi.upload(file, topicId || undefined);
+      showToast('文件上传成功，正在后台处理...', 'success');
+      loadMaterials();
+    } catch (error) {
+      console.error('Drop upload failed:', error);
+      showToast('上传失败：' + (error.message || '未知错误'), 'error');
+    }
+  };
 
   const filteredMaterials = materials.filter(m =>
     !searchQuery ||
@@ -113,10 +170,21 @@ export default function MaterialsPage() {
         payload.source_type = 'text';
         payload.text = uploadText.trim();
       } else if (uploadType === 'file') {
-        const text = await uploadFile.text();
-        payload.source_type = 'file';
-        payload.text = text;
-        payload.file_path = uploadFile.name;
+        // Client-side size validation
+        if (uploadFile.size > 50 * 1024 * 1024) {
+          showToast('文件大小不能超过 50MB', 'error');
+          return;
+        }
+        // Use FormData upload for binary files (PDF, DOCX, etc.)
+        await materialsApi.upload(uploadFile, topicId || undefined);
+        setUploadSuccess(true);
+        setTimeout(() => {
+          setShowUploadModal(false);
+          setUploadSuccess(false);
+          resetUploadForm();
+          loadMaterials();
+        }, 1200);
+        return; // Skip the shared ingest path below
       }
 
       await materialsApi.ingest(payload);
@@ -205,7 +273,17 @@ export default function MaterialsPage() {
           <p className="text-sm mt-1" style={{ color: 'var(--text-tertiary)' }}>使用浏览器插件保存整页内容</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div
+          className="space-y-2"
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          style={isDragOver ? {
+            outline: '2px dashed var(--interactive-primary)',
+            borderRadius: '8px',
+            background: 'rgba(37,99,235,0.04)',
+          } : undefined}
+        >
           {filteredMaterials.map((material) => (
             <MaterialItem
               key={material.id}
@@ -216,6 +294,11 @@ export default function MaterialsPage() {
               onClick={() => navigate(`/materials/${material.id}`)}
             />
           ))}
+          {isDragOver && (
+            <div className="text-center py-6 text-sm" style={{ color: 'var(--interactive-primary)' }}>
+              释放以上传文件
+            </div>
+          )}
         </div>
       )}
 
@@ -311,12 +394,12 @@ export default function MaterialsPage() {
                       name="material_upload_file"
                       aria-label="Material file upload"
                       type="file"
-                      accept=".txt,.md,.pdf"
+                      accept=".pdf,.docx,.pptx,.txt,.md"
                       onChange={(e) => setUploadFile(e.target.files[0])}
                       className="w-full px-3 py-2 rounded-lg text-sm"
                       style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)' }}
                     />
-                    <p className="text-xs mt-1.5" style={{ color: 'var(--text-tertiary)' }}>支持 TXT、Markdown、PDF</p>
+                    <p className="text-xs mt-1.5" style={{ color: 'var(--text-tertiary)' }}>支持 PDF、Word、PPT、TXT、Markdown</p>
                   </div>
                 )}
 

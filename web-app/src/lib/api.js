@@ -575,10 +575,15 @@ export const boardsApi = {
 // ========= Chat API =========
 export const chatApi = {
   // New conversation-aware mode
-  sendMessage: (conversationId, userMessage) =>
+  sendMessage: (conversationId, userMessage, { surfaceContext, mode } = {}) =>
     request('/v2/chat', {
       method: 'POST',
-      body: JSON.stringify({ conversation_id: conversationId, user_message: userMessage }),
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        user_message: userMessage,
+        surface_context: surfaceContext || null,
+        mode: mode || 'auto',
+      }),
     }),
   // Legacy stateless mode
   send: (messages) =>
@@ -641,6 +646,25 @@ export const materialsApi = {
     request(`/v2/materials/${id}`, {
       method: 'DELETE',
     }),
+  upload: async (file, topicId) => {
+    const token = getAccessToken();
+    const formData = new FormData();
+    formData.append('file', file);
+    if (topicId) formData.append('topic_id', topicId);
+
+    const response = await fetch(`${API_BASE}/v2/materials/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      // Do NOT set Content-Type — browser sets multipart boundary automatically
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new ApiError(data.error || 'Upload failed', response.status, data);
+    }
+    return response.json();
+  },
 };
 
 export const highlightsApi = {
