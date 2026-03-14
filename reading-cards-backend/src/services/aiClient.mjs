@@ -165,6 +165,11 @@ export async function createAIClientConfig(userId = null, supabaseClient = null)
   // 获取用户自定义端点（仅 custom provider）
   const customBaseUrl = provider === "custom" ? getUserCustomEndpoint(userSettings) : null;
 
+  // 获取模型的 context_window
+  const providerConfig = config.providers[provider];
+  const modelConfig = providerConfig?.models?.find(m => m.id === model || m.id === '*');
+  const contextWindow = modelConfig?.context_window || 128000;
+
   // 通过 aiRuntime 统一获取 API Key 和端点
   const apiKey = getApiKey(provider, userApiKey);
   const chatEndpoint = buildEndpoint(provider, "chat", customBaseUrl);
@@ -187,6 +192,7 @@ export async function createAIClientConfig(userId = null, supabaseClient = null)
     chatEndpoint,
     responsesEndpoint,
     filesEndpoint,
+    contextWindow,
     userSettings,
     runtimeMode: getRuntimeMode(),
   };
