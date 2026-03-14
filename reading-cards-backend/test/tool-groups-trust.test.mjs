@@ -83,6 +83,14 @@ describe('Trust Invariant: tool side_effect classification', () => {
   it('create_card must be classified as write', () => {
     assert.equal(getToolSideEffect('create_card'), 'write');
   });
+
+  it('delete_board_edge must be classified as destructive', () => {
+    assert.equal(getToolSideEffect('delete_board_edge'), 'destructive');
+  });
+
+  it('create_board_edge must be classified as write', () => {
+    assert.equal(getToolSideEffect('create_board_edge'), 'write');
+  });
 });
 
 describe('Trust Invariant: inferToolGroup defaults to safe fallback', () => {
@@ -153,6 +161,22 @@ describe('Trust Invariant: full group exposes all tools', () => {
     assert.equal(fullTools.length, TOOL_DEFINITIONS.length,
       'full group should expose every defined tool');
   });
+});
+
+describe('Trust Invariant: every tool in every group must exist in TOOL_DEFINITIONS', () => {
+  const allToolNames = new Set(TOOL_DEFINITIONS.map(t => t.function.name));
+  const groups = listGroups();
+
+  for (const group of groups) {
+    const toolNames = getGroupDefinition(group);
+    if (toolNames === null) continue; // 'full' group uses all tools
+    it(`all tools in "${group}" group must be defined in TOOL_DEFINITIONS`, () => {
+      const missing = toolNames.filter(name => !allToolNames.has(name));
+      assert.deepStrictEqual(missing, [],
+        `Group "${group}" references undefined tools: ${missing.join(', ')}`
+      );
+    });
+  }
 });
 
 describe('Trust Invariant: TOOL_MAP completeness', () => {

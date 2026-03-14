@@ -386,6 +386,26 @@ export const TOOL_DEFINITIONS = [
     task_capability: "structure_mutation",
   },
 
+  {
+    type: "function",
+    function: {
+      name: "delete_board_edge",
+      description: "Delete an edge (relationship) from a thinking board.",
+      parameters: {
+        type: "object",
+        properties: {
+          edge_id: { type: "string", description: "The edge ID to delete" },
+        },
+        required: ["edge_id"],
+      },
+    },
+    side_effect: "destructive",
+    confirm_template: "删除关系边",
+    task_auto: false,
+    task_phases: [],
+    task_capability: "structure_mutation",
+  },
+
   // ── Draft tools (auto-execute, creates preview not real data) ──
   {
     type: "function",
