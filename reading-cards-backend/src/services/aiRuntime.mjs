@@ -87,9 +87,9 @@ export function buildEndpoint(provider, endpointType, customBaseUrl = null) {
     }
   }
 
-  // OpenAI 官方端点
+  // OpenAI 端点（优先读 OPENAI_BASE_URL 环境变量）
   if (provider === "openai") {
-    const baseUrl = "https://api.openai.com/v1";
+    const baseUrl = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
     switch (endpointType) {
       case "chat":
         return `${baseUrl}/chat/completions`;
@@ -222,6 +222,54 @@ export function getRuntimeSummary() {
     hasOpenAIKey: !!getOpenAiKey(),
     hasAnthropicKey: !!getAnthropicKey(),
   };
+}
+
+// ========= Chat Completion 调用 =========
+
+/**
+ * Call chat completion API (OpenAI-compatible)
+ * @param {Array} messages - Chat messages array
+ * @param {Object} options - { model, temperature, max_tokens, json_mode }
+ * @returns {Object} Parsed JSON response (if json_mode) or { text: content }
+ */
+export async function callChatCompletion(messages, options = {}) {
+  const {
+    model = process.env.OPENAI_MODEL || 'gpt-5.4',
+    temperature = 0.3,
+    max_tokens = 4000,
+    json_mode = false,
+  } = options;
+
+  const endpoint = buildEndpoint('openai', 'chat');
+  const apiKey = getApiKey('openai');
+  const headers = buildHeaders('openai', apiKey);
+
+  const body = { model, messages, temperature, max_tokens };
+  if (json_mode) {
+    body.response_format = { type: 'json_object' };
+  }
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`AI call failed (${response.status}): ${text.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  let content = data.choices?.[0]?.message?.content || '';
+
+  if (json_mode) {
+    // Strip markdown fences if present
+    content = content.replace(/^```json\s*\n?/, '').replace(/\n?```\s*$/, '');
+    return JSON.parse(content);
+  }
+
+  return { text: content };
 }
 
 // 启动时验证配置
