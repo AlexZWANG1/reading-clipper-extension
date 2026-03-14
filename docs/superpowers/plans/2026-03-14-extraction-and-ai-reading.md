@@ -184,13 +184,25 @@ upload: async (file, topicId) => {
 },
 ```
 
-- [ ] **Step 2: Update `handleUpload` in MaterialsPage.jsx**
+- [ ] **Step 2: Update `handleUpload` and file input in MaterialsPage.jsx**
 
 Replace the existing `source_type: 'file'` branch inside `handleUpload` to call `materialsApi.upload(uploadFile)` instead of reading `uploadFile.text()` and posting JSON. The URL and text branches remain unchanged.
 
+Also update the file input `accept` attribute from `".txt,.md,.pdf"` to `".pdf,.docx,.pptx,.txt,.md"`.
+
+Add client-side file size validation before upload:
+```javascript
+if (uploadFile.size > 50 * 1024 * 1024) {
+  toast.error('File exceeds 50MB limit');
+  return;
+}
+```
+
+Add drag-and-drop support: wrap the materials list area with `onDragOver` (prevent default) and `onDrop` handlers that extract the dropped file and call `materialsApi.upload()`.
+
 - [ ] **Step 3: Add status polling for pending materials**
 
-Add a `useEffect` that polls `materialsApi.get(id)` every 5 seconds for any material in `pending`/`processing` status, updating the list when status changes to `completed`.
+Add a `useEffect` that polls `materialsApi.get(id)` every 5 seconds for materials in `pending`/`processing` status. Filter `materials` state for those with `ingestion_status` of `pending` or `processing`. For each, set up a `setInterval` polling their status. Clear intervals on unmount or when status changes to `completed`/`failed`.
 
 - [ ] **Step 4: Build and verify**
 
@@ -410,7 +422,7 @@ router.post('/:id/analyze', requireAuth, async (req, res) => {
       // Fallback: if no chunks from search, use text_content
       let context;
       if (chunks.length > 0) {
-        context = chunks.map((c, i) => `[Passage ${i + 1}]\n${c.content}`).join('\n\n');
+        context = chunks.map((c, i) => `[Passage ${i + 1}, chunk_id: ${c.id}]\n${c.content}`).join('\n\n');
       } else {
         const text = material.text_content || '';
         context = text.slice(0, MAX_CONTEXT_CHARS);
@@ -418,7 +430,7 @@ router.post('/:id/analyze', requireAuth, async (req, res) => {
 
       const result = await callChatCompletion([
         { role: 'system', content: 'You are a reading assistant. Answer based on the article. Respond in valid JSON.' },
-        { role: 'user', content: `Answer this question based on the article content below.\nCite specific passages by including exact quotes.\nIf the article doesn\'t address this, say so.\nRespond in the same language as the question.\n\nJSON format: { "answer": "...", "sources": [{ "quote": "exact text" }] }\n\nQuestion: ${question}\n\nArticle passages:\n${context}` },
+        { role: 'user', content: `Answer this question based on the article content below.\nCite specific passages by including exact quotes.\nIf the article doesn\'t address this, say so.\nRespond in the same language as the question.\n\nJSON format: { "answer": "...", "sources": [{ "chunk_id": "id if available", "quote": "exact text" }] }\n\nQuestion: ${question}\n\nArticle passages:\n${context}` },
       ], { json_mode: true, max_tokens: 2000 });
 
       return res.json({ mode: 'qa', result });
@@ -432,12 +444,16 @@ router.post('/:id/analyze', requireAuth, async (req, res) => {
 export default router;
 ```
 
-- [ ] **Step 2: Mount the route in the router index**
+- [ ] **Step 2: Mount the route in server.mjs**
 
-Find where v2 routes are mounted and add:
+In `reading-cards-backend/src/server.mjs`, add the import at the top (after the other v2 route imports):
 ```javascript
-import analyzeRouter from './analyze.mjs';
-router.use('/materials', analyzeRouter);
+import analyzeRouterV2 from "./routes/v2/analyze.mjs";
+```
+
+Then add the route mount after the existing materials route (after line `app.use("/api/v2/materials", materialsRouterV2);`):
+```javascript
+app.use("/api/v2/materials", analyzeRouterV2);
 ```
 
 - [ ] **Step 3: Test the endpoint**
@@ -464,22 +480,49 @@ git commit -m "feat: add /analyze endpoint for AI summary and Q&A"
 
 **Files:**
 - Create: `web-app/src/components/Reader/AIPanel.jsx`
+- Modify: `web-app/src/lib/api.js`
 
-- [ ] **Step 1: Build the AI Panel component**
+- [ ] **Step 1: Add `materialsApi.analyze` to api.js**
 
-Component that receives `materialId` as prop. Has two sections:
-- **Insights**: A "Generate Insights" button → calls `/analyze` with `mode: 'summary'` → renders summary, key_points (with clickable quotes), questions
-- **Ask**: Text input + submit → calls `/analyze` with `mode: 'qa'` → renders answer with source quotes
+```javascript
+analyze: async (id, mode, question) => {
+  const token = getAccessToken();
+  const response = await fetch(`${API_BASE}/v2/materials/${id}/analyze`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ mode, question }),
+    signal: AbortSignal.timeout(60000),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new ApiError(data.error || 'Analysis failed', response.status, data);
+  }
+  return response.json();
+},
+```
+
+- [ ] **Step 2: Build the AI Panel component**
+
+Component signature: `AIPanel({ materialId, onHighlightQuote })`
+
+Key state: `insights` (null), `qaHistory` ([]), `loading` (false), `error` (null)
+
+Two sections:
+- **Insights**: A "Generate Insights" button → calls `materialsApi.analyze(materialId, 'summary')` → renders summary, key_points (with clickable quotes), questions
+- **Ask**: Text input + submit → calls `materialsApi.analyze(materialId, 'qa', question)` → renders answer with source quotes
 
 Each quote is clickable and calls `onHighlightQuote(quoteText)` callback to highlight in the article.
 
-Shows loading spinner during AI calls (can take 10-30s). Shows error state with retry button on failure. Uses 60s fetch timeout.
+Shows loading spinner during AI calls (can take 10-30s). Shows error state with retry button on failure.
 
-- [ ] **Step 2: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add web-app/src/components/Reader/AIPanel.jsx
-git commit -m "feat: add AIPanel component for reader sidebar"
+git add web-app/src/components/Reader/AIPanel.jsx web-app/src/lib/api.js
+git commit -m "feat: add AIPanel component and analyze API for reader sidebar"
 ```
 
 ---
@@ -487,37 +530,26 @@ git commit -m "feat: add AIPanel component for reader sidebar"
 ### Task 7: Integrate AIPanel into MaterialReaderPage
 
 **Files:**
-- Modify: `web-app/src/lib/api.js`
 - Modify: `web-app/src/pages/MaterialReaderPage.jsx`
 
-- [ ] **Step 1: Add `materialsApi.analyze` to api.js**
-
-```javascript
-analyze: (id, mode, question) => request(`/v2/materials/${id}/analyze`, {
-  method: 'POST',
-  body: JSON.stringify({ mode, question }),
-  timeout: 60000,
-}),
-```
-
-- [ ] **Step 2: Add AI panel toggle to MaterialReaderPage header**
+- [ ] **Step 1: Add AI panel toggle to MaterialReaderPage header**
 
 Add a "AI" button next to the Focus Lens button in the header. Clicking toggles `showAIPanel` state.
 
-- [ ] **Step 3: Render AIPanel in the right sidebar area**
+- [ ] **Step 2: Render AIPanel in the right sidebar area**
 
 When `showAIPanel` is true, render `<AIPanel>` alongside or replacing `<CardsSidebar>`. Wire `onHighlightQuote` to set card highlights (reuse existing `cardHighlights` / `activeCardHighlightId` state).
 
-- [ ] **Step 4: Build and verify**
+- [ ] **Step 3: Build and verify**
 
 ```bash
 cd web-app && npx vite build
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add web-app/src/lib/api.js web-app/src/pages/MaterialReaderPage.jsx
+git add web-app/src/pages/MaterialReaderPage.jsx
 git commit -m "feat: integrate AI panel into material reader"
 ```
 
