@@ -574,7 +574,7 @@ export async function chatWithConversation({ conversationId, userMessage, userId
     loadUserMethodology(supabase, userId).catch(() => null),
     topicId ? getResearchState(supabase, topicId).catch(() => null) : null,
   ]);
-  const toolGroup = inferToolGroup(userMessage, surfaceContext);
+  const toolGroup = mode === 'chat' ? 'explore' : inferToolGroup(userMessage, surfaceContext);
 
   const systemPrompt = buildSystemPrompt({ surfaceContext, methodology, researchState, toolGroup, mode });
   const scopedTools = getToolsForGroup(toolGroup);

@@ -27,4 +27,14 @@ describe('confirmation gate regression', () => {
       'write tools should always require confirmation regardless of draft tools'
     );
   });
+
+  it('chat mode must force explore group in BOTH chat() and chatWithConversation()', () => {
+    // Both functions must use the same pattern to enforce chat mode = explore only
+    const chatModePattern = /mode\s*===\s*['"]chat['"]\s*\?\s*['"]explore['"]/g;
+    const matches = source.match(chatModePattern);
+    assert.ok(
+      matches && matches.length >= 2,
+      `Both chat() and chatWithConversation() must enforce mode==='chat' → 'explore'. Found ${matches?.length || 0} occurrences, expected ≥2`
+    );
+  });
 });

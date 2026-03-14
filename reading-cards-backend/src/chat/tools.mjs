@@ -264,16 +264,16 @@ export const TOOL_DEFINITIONS = [
           },
           summary: {
             type: "string",
-            description: "A concise 1-3 sentence summary of the card content.",
+            description: "A concise 1-3 sentence summary of what the source says. Must paraphrase the source material, not your own analysis or inference.",
           },
           key_points: {
             type: "array",
             items: { type: "string" },
-            description: "List of key takeaways or bullet points (2-5 items).",
+            description: "Key takeaways from the source material (2-5 items). Each point must derive from what the source says, not your reasoning about it.",
           },
           raw_snippet: {
             type: "string",
-            description: "The original text snippet or quote this card is based on.",
+            description: "MUST be an exact substring copied from the source material. Do not paraphrase, summarize, or rewrite. This is the verbatim quote the card is based on.",
           },
           note: {
             type: "string",
