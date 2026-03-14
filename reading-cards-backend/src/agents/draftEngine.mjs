@@ -148,9 +148,18 @@ export async function commitDraft(supabase, draftId, acceptedIndices = null) {
 }
 
 /**
- * Reject a draft.
+ * Reject a draft. Verifies draft exists and is pending.
  */
 export async function rejectDraft(supabase, draftId) {
+  const { data: draft, error: fetchErr } = await supabase
+    .from('board_drafts')
+    .select('id, status')
+    .eq('id', draftId)
+    .single();
+
+  if (fetchErr || !draft) throw new Error('Draft not found');
+  if (draft.status !== 'pending') throw new Error(`Draft is ${draft.status}, not pending`);
+
   const { error } = await supabase
     .from('board_drafts')
     .update({ status: 'rejected', resolved_at: new Date().toISOString() })
