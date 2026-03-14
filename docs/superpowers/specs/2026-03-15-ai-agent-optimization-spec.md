@@ -4,6 +4,7 @@
 > **Status**: Draft
 > **Scope**: Backend AI agent system — bug fixes, context management, prompt engineering, tool system, plan system, AI client resilience
 > **Depends on**: `2026-03-14-ai-agent-redesign-spec.md` (current architecture this optimizes)
+> **Blocks**: `docs/RESEARCH-RUN-SPEC.md` (Research Run feature depends on a reliable agent layer)
 > **Reference**: `C:\Users\Admin\.claude\plans\optimized-wondering-penguin.md` (deep analysis document)
 
 ---
@@ -59,9 +60,9 @@ These 4 items must be fixed first. Each is independent and can be done in parall
 // After:
 .order("created_at", { ascending: false })
 .limit(limit);
-// Then in the caller:
-const history = (await listMessages(...)).reverse();
 ```
+
+The caller does NOT reverse — messages stay in newest-first order. The new `buildHistoryWithinBudget()` (§3.1) expects newest-first input and handles chronological reordering internally.
 
 **Validation**: Write a test with >50 messages; verify the newest messages are returned.
 
@@ -96,13 +97,17 @@ if (autoToolCalls.length > 0) {
 
 // If write tools exist, pause for confirmation
 if (writeToolCalls.length > 0) {
-  const pending = writeToolCalls.map(tc => ({
-    id: tc.id,
-    name: tc.function.name,
-    args: JSON.parse(tc.function.arguments || '{}'),
-    side_effect: getToolSideEffect(tc.function.name),
-    confirm_message: buildConfirmMessage(tc.function.name, args),
-  }));
+  const pending = writeToolCalls.map(tc => {
+    let parsedArgs = {};
+    try { parsedArgs = JSON.parse(tc.function.arguments || '{}'); } catch {}
+    return {
+      id: tc.id,
+      name: tc.function.name,
+      args: parsedArgs,
+      side_effect: getToolSideEffect(tc.function.name),
+      confirm_message: buildConfirmMessage(tc.function.name, parsedArgs),
+    };
+  });
   return {
     reply: '',
     messages: currentMessages,
@@ -250,10 +255,10 @@ export function calculateBudget(contextWindow, systemPromptTokens, toolDefinitio
  * Takes newest messages first, stops when budget is exhausted.
  * Prepends conversation summary if available.
  *
- * @param {Array} messages - All messages, newest first (from DB)
+ * @param {Array} messages - All messages, newest-first (from DB after P0-1 fix)
  * @param {number} budget - Token budget for history
  * @param {string|null} conversationSummary - Summary of older conversation
- * @returns {Array} messages in chronological order, fitting within budget
+ * @returns {Array} messages in chronological order (oldest-first), fitting within budget
  */
 export function buildHistoryWithinBudget(messages, budget, conversationSummary = null) {
   let remaining = budget;
@@ -453,7 +458,44 @@ if (textMessageCount > 20 && summaryAge > 10) {
 当前研究状态、用户可能的下一步意图。
 ```
 
+**Implementation**:
+
+```js
+async function generateConversationSummary(supabase, convId, history, userId, supabaseClient) {
+  try {
+    const aiConfig = await createAIClientConfig(userId, supabaseClient);
+    const recentTexts = history
+      .filter(m => m.message_type === 'text' && (m.role === 'user' || m.role === 'assistant'))
+      .slice(-20)
+      .map(m => `${m.role}: ${m.content.slice(0, 200)}`)
+      .join('\n');
+
+    const messages = [
+      {
+        role: 'system',
+        content: '根据以下对话历史，生成一段简洁的上下文摘要（3-5句话）。包含：讨论了什么主题、做了哪些关键操作、当前研究状态、用户可能的下一步意图。只输出摘要文本。',
+      },
+      { role: 'user', content: recentTexts },
+    ];
+
+    const response = await callChatAPI(aiConfig, messages, { temperature: 0.3, max_tokens: 300 });
+    const summary = response.choices?.[0]?.message?.content?.trim();
+    if (!summary) return;
+
+    await addMessage(supabase, convId, {
+      role: 'system',
+      content: summary,
+      message_type: 'conversation_summary',
+    });
+  } catch (err) {
+    console.error('[orchestrator] Summary generation failed:', err.message);
+  }
+}
+```
+
 **Storage**: `message_type: "conversation_summary"` in the conversation.
+
+**DB Migration Required**: Add `'conversation_summary'` to the `chat_messages.message_type` CHECK constraint (see §9.1).
 
 **Loading**: Summary is always included at the top of history (within the `buildHistoryWithinBudget` function).
 
@@ -473,7 +515,8 @@ export async function chat({ messages, userId, supabase, ... }) {
     aiConfig.contextWindow, systemPromptTokens, toolDefTokens
   );
 
-  // messages are already newest-first from the fixed listMessages
+  // messages are newest-first from DB (P0-1 fix); buildHistoryWithinBudget
+  // iterates from newest, selects within budget, returns chronological order
   const budgetedMessages = buildHistoryWithinBudget(messages, historyBudget, conversationSummary);
 
   const fullMessages = [{ role: 'system', content: systemPrompt }, ...budgetedMessages];
@@ -1009,7 +1052,37 @@ function safeStringify(obj, maxChars = 3000) {
 }
 ```
 
-### 6.7 Task Lock Timeout
+### 6.7 Executor Failure Notification + Task Lock Timeout
+
+**Issue #25: fire-and-forget has no failure notification**
+
+**File**: `chat/orchestrator.mjs:587-594`
+
+The `.catch()` on `executePlan()` only does `console.error`. The user never sees the failure.
+
+**Fix**: Write an error message to the conversation and update the task status:
+
+```js
+executePlan({ task, planSpec, conversationId, supabase: adminSb })
+  .catch(async (err) => {
+    console.error('[executor] Plan execution failed:', err);
+    // Notify user via conversation message
+    try {
+      await addMessage(adminSb, conversationId, {
+        role: 'assistant',
+        content: `执行计划失败: ${err.message}`,
+        message_type: 'error',
+        metadata: { task_id: task.id },
+      });
+    } catch (msgErr) {
+      console.error('[executor] Failed to write error message:', msgErr);
+    }
+  });
+```
+
+The executor's own try/catch already handles per-step failures and writes `plan_complete` with results. This fix covers the top-level crash case that the existing code misses.
+
+### 6.7b Task Lock Timeout
 
 **File**: `services/supabase/tasks.mjs`
 
@@ -1021,7 +1094,7 @@ export async function acquireTaskLock(supabase, taskId, runId) {
   // Try normal lock acquisition
   const { data, error } = await supabase
     .from('tasks')
-    .update({ is_running: true, current_run_id: runId, locked_at: now })
+    .update({ is_running: true, running_run_id: runId, locked_at: now })
     .eq('id', taskId)
     .eq('is_running', false)
     .select()
@@ -1032,7 +1105,7 @@ export async function acquireTaskLock(supabase, taskId, runId) {
   // If locked, check if lock is stale (>30 minutes)
   const { data: staleData } = await supabase
     .from('tasks')
-    .update({ is_running: true, current_run_id: runId, locked_at: now })
+    .update({ is_running: true, running_run_id: runId, locked_at: now })
     .eq('id', taskId)
     .eq('is_running', true)
     .lt('locked_at', thirtyMinutesAgo)
@@ -1070,13 +1143,18 @@ Replace the Anthropic direct mode handler to properly translate tool_use blocks:
 
 ```js
 if (provider === 'anthropic') {
+  // Extract system message (Anthropic requires it as a top-level field, not in messages)
+  const systemMessage = payload.messages.find(m => m.role === 'system');
+  const nonSystemMessages = payload.messages.filter(m => m.role !== 'system');
+
   // Translate messages: OpenAI format → Anthropic format
-  const anthropicMessages = translateToAnthropicFormat(payload.messages);
+  const anthropicMessages = translateToAnthropicFormat(nonSystemMessages);
 
   // Build Anthropic-specific payload
   const anthropicPayload = {
     model: payload.model,
     max_tokens: options.max_tokens || 4096,
+    ...(systemMessage ? { system: systemMessage.content } : {}),
     messages: anthropicMessages,
   };
 
@@ -1132,10 +1210,9 @@ if (provider === 'anthropic') {
 }
 
 // Helper: translate OpenAI tool result messages to Anthropic format
+// Note: system messages are already extracted before calling this function
 function translateToAnthropicFormat(messages) {
-  return messages
-    .filter(m => m.role !== 'system') // Anthropic uses system param, not message
-    .map(m => {
+  return messages.map(m => {
       if (m.role === 'tool') {
         return {
           role: 'user',
@@ -1247,7 +1324,7 @@ Mark `callChatCompletion` as deprecated. All callers should migrate to `callChat
 | 22 | $ref:step_id only resolves top-level values | executor.mjs:198 | §6.5 |
 | 23 | generateStepNote() per-step AI call (8 steps = 8 calls) | executor.mjs:216 | §6.4 |
 | 24 | JSON.stringify().slice() can truncate mid-JSON | executor.mjs:226 | §6.6 |
-| 25 | fire-and-forget execution no failure notification | orchestrator.mjs:587 | §6.7 |
+| 25 | fire-and-forget execution no failure notification | orchestrator.mjs:587 | §6.7 (first half) |
 | 26 | Task lock no timeout cleanup | tasks.mjs:255 | §6.7 |
 | 27 | fetch() no timeout | aiClient.mjs | §7.2 |
 | 28 | callChatCompletion and callChatAPI overlap | aiRuntime.mjs:235 | §7.4 |
@@ -1267,12 +1344,59 @@ Mark `callChatCompletion` as deprecated. All callers should migrate to `callChat
 | 37 | Mixed tool_calls: read_only also paused for confirmation | orchestrator.mjs | §2 P0-2 |
 | 38 | models.config.json missing context_window | config | §3.2 |
 | 39 | createAIClientConfig() called per step note | executor.mjs:218 | §6.8 |
-| 40 | suggestedTopicId matches only first keyword | planner.mjs:145 | — |
+| 40 | suggestedTopicId matches only first keyword | planner.mjs:145 | Deferred |
 | 41 | Prompt mixes Chinese and English | promptBuilder.mjs | §4.1 |
 
 ---
 
-## 9. Implementation Order
+## 9. Required DB Migrations
+
+### 9.1 Migration: `chat_messages.message_type` CHECK constraint
+
+Add `'conversation_summary'` to the allowed values:
+
+```sql
+ALTER TABLE chat_messages DROP CONSTRAINT IF EXISTS chat_messages_message_type_check;
+ALTER TABLE chat_messages ADD CONSTRAINT chat_messages_message_type_check
+  CHECK (message_type IN ('text', 'tool_calls', 'plan_proposal', 'plan_confirmed', 'step_progress', 'plan_complete', 'error', 'conversation_summary'));
+```
+
+### 9.2 Migration: `tasks` table — add `locked_at` column
+
+```sql
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ;
+```
+
+The existing `running_run_id` column is used as `running_run_id` in the spec — use the existing column name `running_run_id` in the implementation (no rename needed).
+
+### 9.3 Environment variable
+
+Add to `.env.example`:
+```
+API_KEY_ENCRYPTION_SECRET=  # 32 bytes hex string for AES-256-GCM encryption of user API keys
+```
+
+---
+
+## 10. Relationship to Research Run
+
+This optimization spec is a **prerequisite** for the Research Run feature (`docs/RESEARCH-RUN-SPEC.md`). Research Run is a 6-phase AI research pipeline (Reading → Decomposition → Evidence Mapping → Hypothesis Formation → Gap Analysis → Synthesis) that will execute multi-step, long-running AI plans with heavy tool use.
+
+The following optimizations directly enable Research Run:
+
+| This Spec | Research Run Dependency |
+|-----------|----------------------|
+| §3 Context Layer (token budget, summaries) | Research Run phases generate many tool calls across long conversations; token budget prevents context overflow |
+| §5 Tool descriptions + `request_plan` tool | Research Run triggers complex plans; the AI must reliably select `request_plan` over ad-hoc tool chains |
+| §6 Plan system (planner context, executor fixes) | Research Run phases map directly to plan steps; planner needs topic/board context to generate accurate plans |
+| §6.6–6.7 Executor resilience (lock timeout, failure notification) | Research Run phases are long-running; stale locks and silent failures would corrupt research state |
+| §7 AI Client (timeouts, Anthropic tool_calls) | Research Run makes many sequential API calls; missing timeouts risk hanging the entire pipeline |
+
+**Design constraint**: All optimizations in this spec must preserve backward compatibility with the Research Run data model (topics, cards, thinking boards, materials, documents, sources). No schema changes beyond those listed in §9.
+
+---
+
+## 11. Implementation Order
 
 ### Phase 1: P0 Bug & Security Fixes (parallel, no dependencies)
 1. Fix listMessages sort direction
@@ -1310,7 +1434,7 @@ Mark `callChatCompletion` as deprecated. All callers should migrate to `callChat
 
 ---
 
-## 10. Files Changed Summary
+## 12. Files Changed Summary
 
 | File | Change Type | Phase |
 |------|-------------|-------|
@@ -1327,10 +1451,12 @@ Mark `callChatCompletion` as deprecated. All callers should migrate to `callChat
 | `config/models.config.json` | Add: context_window field | 2 |
 | `services/aiRuntime.mjs` | Deprecate: callChatCompletion | 5 |
 | **NEW** `chat/contextBudget.mjs` | New: token estimation, budget, sliding window | 2 |
+| **NEW** Supabase migration | Add `locked_at` to tasks, update message_type CHECK | 1,2 |
+| `.env.example` | Add `API_KEY_ENCRYPTION_SECRET` | 1 |
 
 ---
 
-## 11. What We're NOT Changing
+## 13. What We're NOT Changing
 
 - **Module structure**: orchestrator/promptBuilder/tools/toolGroups/toolExecutor/planner/executor separation stays
 - **4-layer tool safety**: side_effect + toolGroups + confirmation gate + methodology guards — this is excellent, keep as-is
