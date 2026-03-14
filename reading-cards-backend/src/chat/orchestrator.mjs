@@ -125,19 +125,20 @@ export async function chat({ messages, userId, supabase, accessToken, onToolCall
         let args = {};
         try { args = JSON.parse(tc.function.arguments || "{}"); } catch {}
         try {
-          const result = await executeTool(tc.function.name, args, {
+          const rawResult = await executeTool(tc.function.name, args, {
             supabase, userId, accessToken,
           });
+          const compressed = compressToolResult(tc.function.name, rawResult);
           autoResults.push({
             role: "tool",
             tool_call_id: tc.id,
-            content: JSON.stringify(result),
+            content: JSON.stringify(compressed),
           });
           const logEntry = {
             id: tc.id,
             tool: tc.function.name,
             args,
-            result_summary: summarizeResult(result),
+            result_summary: summarizeResult(rawResult),
             status: result.error ? "error" : "completed",
           };
           toolCallLog.push(logEntry);
@@ -376,6 +377,55 @@ export async function chatConfirm({ messages, pendingToolCalls, confirmedIds, us
 
 // ── Helpers ──────────────────────────────────────────
 
+function compressToolResult(toolName, result) {
+  if (!result || result.error) return result;
+
+  switch (toolName) {
+    case 'list_cards':
+    case 'search_cards':
+      return {
+        cards: result.cards?.map(c => ({
+          id: c.id, title: c.title, summary: c.summary?.slice(0, 100),
+          fact_or_view: c.fact_or_view, topic_id: c.topic_id,
+        })),
+        total: result.total || result.count,
+      };
+
+    case 'get_board':
+      return {
+        board: {
+          id: result.board?.id,
+          title: result.board?.title,
+          nodes: result.board?.nodes?.map(n => ({
+            id: n.id, node_type: n.node_type,
+            text: n.claim || n.content?.text,
+            parent_id: n.parent_id, status: n.status,
+          })),
+          edges: result.board?.edges?.map(e => ({
+            source: e.source_node_id, target: e.target_node_id,
+            relation: e.relation_type,
+          })),
+        },
+      };
+
+    case 'semantic_search':
+      return {
+        results: result.results?.map(r => ({
+          text: r.chunk_text?.slice(0, 200),
+          score: r.score,
+          source: r.source_title || r.material_id,
+        })),
+        total: result.total,
+      };
+
+    case 'list_topics':
+      return { topics: result.topics?.map(t => ({ id: t.id, title: t.title, card_count: t.card_count })) };
+
+    default:
+      return result;
+  }
+}
+
 function summarizeArgs(args) {
   if (!args) return '';
   const entries = Object.entries(args);
@@ -404,8 +454,9 @@ async function executeAllTools(toolCalls, ctx) {
       let args = {};
       try { args = JSON.parse(tc.function.arguments || "{}"); } catch { args = {}; }
       try {
-        const result = await executeTool(tc.function.name, args, ctx);
-        return { role: "tool", tool_call_id: tc.id, content: JSON.stringify(result) };
+        const rawResult = await executeTool(tc.function.name, args, ctx);
+        const compressed = compressToolResult(tc.function.name, rawResult);
+        return { role: "tool", tool_call_id: tc.id, content: JSON.stringify(compressed) };
       } catch (err) {
         return { role: "tool", tool_call_id: tc.id, content: JSON.stringify({ error: err.message }) };
       }
@@ -643,6 +694,18 @@ export async function chatWithConversation({ conversationId, userMessage, userId
       .catch((err) => console.error("[orchestrator] Auto-title failed:", err.message));
   }
 
+  // Async conversation summary trigger (non-blocking)
+  const textMessageCount = history.filter(m => m.message_type === 'text').length;
+  const existingSummary = history.find(m => m.message_type === 'conversation_summary');
+  const summaryAge = existingSummary
+    ? history.filter(m => m.message_type === 'text' && m.created_at > existingSummary.created_at).length
+    : Infinity;
+
+  if (textMessageCount > 20 && summaryAge > 10) {
+    generateConversationSummary(adminSb, convId, history, userId, supabase)
+      .catch(err => console.error('[orchestrator] Summary generation failed:', err.message));
+  }
+
   return {
     conversationId: convId,
     reply: result.reply,
@@ -653,6 +716,37 @@ export async function chatWithConversation({ conversationId, userMessage, userId
     pendingToolCalls: result.pendingToolCalls || null,
     draftId: result.draftId || null,
   };
+}
+
+async function generateConversationSummary(supabase, convId, history, userId, supabaseClient) {
+  try {
+    const aiConfig = await createAIClientConfig(userId, supabaseClient);
+    const recentTexts = history
+      .filter(m => m.message_type === 'text' && (m.role === 'user' || m.role === 'assistant'))
+      .slice(-20)
+      .map(m => `${m.role}: ${m.content.slice(0, 200)}`)
+      .join('\n');
+
+    const messages = [
+      {
+        role: 'system',
+        content: '根据以下对话历史，生成一段简洁的上下文摘要（3-5句话）。包含：讨论了什么主题、做了哪些关键操作、当前研究状态、用户可能的下一步意图。只输出摘要文本。',
+      },
+      { role: 'user', content: recentTexts },
+    ];
+
+    const response = await callChatAPI(aiConfig, messages, { temperature: 0.3, max_tokens: 300 });
+    const summary = response.choices?.[0]?.message?.content?.trim();
+    if (!summary) return;
+
+    await addMessage(supabase, convId, {
+      role: 'system',
+      content: summary,
+      message_type: 'conversation_summary',
+    });
+  } catch (err) {
+    console.error('[orchestrator] Summary generation failed:', err.message);
+  }
 }
 
 /**
