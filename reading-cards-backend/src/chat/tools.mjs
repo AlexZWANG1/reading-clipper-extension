@@ -14,7 +14,7 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "semantic_search",
       description:
-        "Semantic search across the user's ingested documents using vector similarity. This searches through all document chunks (from materials) and returns the most relevant passages based on meaning, not just keywords. Use this when the user asks questions about their documents or wants to find information across their knowledge base.",
+        "语义搜索用户已摄入的文档内容（基于向量相似度）。用于查找文档中的具体信息。返回: {results: [{chunk_text, score, source_title, material_id}], total: number}",
       parameters: {
         type: "object",
         properties: {
@@ -36,7 +36,7 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "search_cards",
       description:
-        "Search the user's reading cards by keyword. Returns cards whose summary, raw_snippet, or note match the query. Use this for finding specific cards, not for searching document content.",
+        "按关键词搜索用户的知识卡片。搜索范围是已提取的卡片摘要，不是原始文档。返回: {cards: [{id, title, summary, topic_id}], count: number}",
       parameters: {
         type: "object",
         properties: {
@@ -245,7 +245,7 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "create_card",
       description:
-        "Create a new reading card in the user's global card pool. Use this when the user asks to generate, create, or save a card. The card is associated with a topic (auto-created if needed). Returns the card with its ID, which can later be used as card_id when creating evidence nodes on boards.",
+        "从源材料（文章、论文、文档）中提取并保存知识卡片。仅在用户明确要求提取、保存或创建卡片时使用。不要用此工具存储你自己的分析、总结或回答——那些属于你的文字回复。返回: {card: {id, title, summary}, message: string}",
       parameters: {
         type: "object",
         properties: {
@@ -339,7 +339,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "write",
-    confirm_template: "更新节点 {node_id}",
+    confirm_template: "更新节点内容",
     task_auto: false,
     task_phases: ["synthesize"],
     task_capability: "structure_mutation",
@@ -358,7 +358,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "destructive",
-    confirm_template: "删除节点 {node_id}（含所有子节点）",
+    confirm_template: "删除节点及其所有子节点",
     task_auto: false,
     task_phases: [],
     task_capability: "structure_mutation",
@@ -392,7 +392,7 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "propose_board_changes",
       description:
-        "Propose a batch of related changes to a thinking board. Creates a visual draft for user review on the canvas. Use this INSTEAD of individual create_board_node/create_board_edge calls when making multiple related changes. Changes can reference each other using $temp_id syntax (e.g., parent_id: '$t1' references the node with temp_id: 't1').",
+        "提议对思维画板的批量更改，创建可视化草稿供用户在画板上审批。使用此工具代替逐个 create_board_node/create_board_edge 调用。changes 数组中每项：create_node 必须提供 action, node_type, text（hypothesis/evidence 还必须提供 parent_id）；create_edge 必须提供 action, source_node_id, target_node_id, relation_type。返回: {draft_id, changes_count, message}",
       parameters: {
         type: "object",
         properties: {
