@@ -2,6 +2,7 @@
 // 支持多提供商（OpenAI, Anthropic, 自定义）的统一AI客户端
 // 所有 AI 调用统一通过 aiRuntime 配置入口
 
+import crypto from 'node:crypto';
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -16,6 +17,8 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const MODELS_CONFIG_PATH = path.join(__dirname, "../config/models.config.json");
+
+const ENCRYPTION_KEY = process.env.API_KEY_ENCRYPTION_SECRET;
 
 // 加载模型配置
 let modelsConfigCache = null;
@@ -72,19 +75,35 @@ async function getUserSettings(userId, supabaseClient) {
   }
 }
 
-/**
- * 解密API Key（简单实现，生产环境应使用更安全的加密）
- * @param {string} encryptedKey - 加密的API Key
- * @returns {string} 解密后的API Key
- */
+function encryptApiKey(plainKey) {
+  if (!plainKey || !ENCRYPTION_KEY) return null;
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
+  let encrypted = cipher.update(plainKey, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  const tag = cipher.getAuthTag().toString('hex');
+  return `${iv.toString('hex')}:${tag}:${encrypted}`;
+}
+
 function decryptApiKey(encryptedKey) {
-  // TODO: 实现真正的解密逻辑
-  // 目前假设是base64编码（临时方案）
   if (!encryptedKey) return null;
+  if (!ENCRYPTION_KEY) {
+    // No encryption key configured — try base64 fallback
+    try { return Buffer.from(encryptedKey, 'base64').toString('utf-8'); } catch { return encryptedKey; }
+  }
   try {
-    return Buffer.from(encryptedKey, "base64").toString("utf-8");
+    const [ivHex, tagHex, data] = encryptedKey.split(':');
+    if (!ivHex || !tagHex || !data) {
+      // Fallback: try base64 for migration period
+      return Buffer.from(encryptedKey, 'base64').toString('utf-8');
+    }
+    const decipher = crypto.createDecipheriv('aes-256-gcm', Buffer.from(ENCRYPTION_KEY, 'hex'), Buffer.from(ivHex, 'hex'));
+    decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
+    let decrypted = decipher.update(data, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
   } catch {
-    return encryptedKey; // 如果解密失败，返回原值（可能是未加密的）
+    return null;
   }
 }
 
