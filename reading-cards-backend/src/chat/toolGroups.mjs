@@ -11,7 +11,7 @@ const TOOL_GROUPS = {
   explore: [
     'semantic_search', 'search_cards', 'list_cards', 'get_card',
     'list_topics', 'list_sources', 'list_boards', 'get_board',
-    'list_documents', 'get_document', 'request_plan',
+    'list_documents', 'get_document', 'get_board_health', 'request_plan',
   ],
 
   // Board-focused tools — includes propose_board_changes (draft, not direct mutation)
