@@ -537,6 +537,10 @@ export const useChatStore = create((set, get) => ({
   activePlan: null,   // { planSpec, planDisplay, suggestedTopicId } when plan proposed
   executing: false,   // true while plan is executing
   templates: [],
+  surfaceContext: null,
+  mode: localStorage.getItem('verity-chat-mode') || 'auto',
+  boardId: null,
+  boardInvalidateCounter: 0,
 
   // Set current conversation and load its messages
   loadConversation: async (conversationId) => {
@@ -583,39 +587,65 @@ export const useChatStore = create((set, get) => ({
     set((state) => ({ messages: [...state.messages, tempUserMsg] }));
 
     try {
-      const result = await chatApi.sendMessage(conversationId, text);
+      const result = await chatApi.sendMessage(conversationId, text, {
+        surfaceContext: get().surfaceContext,
+        mode: get().mode,
+      });
       const newConvId = result.conversation_id;
 
-      // Build assistant message
-      const assistantMsg = {
-        id: `resp-${Date.now()}`,
-        role: 'assistant',
-        content: result.reply,
-        message_type: result.message_type || 'text',
-        metadata: {},
-        created_at: new Date().toISOString(),
-      };
-
-      if (result.plan) {
-        assistantMsg.metadata = {
-          plan_spec: result.plan.planSpec,
-          plan_display: result.plan.planDisplay,
-          suggested_topic_id: result.plan.suggestedTopicId,
+      // Inject tool call log as a visible message (if any)
+      const toolLog = result.tool_call_log || [];
+      if (toolLog.length > 0) {
+        const toolLogMsg = {
+          id: `tools-${Date.now()}`,
+          role: 'assistant',
+          content: toolLog.map((tc) => `🔧 **${tc.tool}** → ${tc.result_summary}`).join('\n'),
+          message_type: 'tool_calls',
+          metadata: { tool_calls: toolLog },
+          created_at: new Date().toISOString(),
         };
+        set((state) => ({ messages: [...state.messages, toolLogMsg] }));
+      }
+
+      // Skip pushing empty assistant message when pendingActions are returned
+      // (the confirmation UI will handle display instead)
+      if (result.pendingActions?.length > 0) {
         set({
           conversationId: newConvId,
-          activePlan: result.plan,
           sending: false,
         });
       } else {
-        set({
-          conversationId: newConvId,
-          activePlan: null,
-          sending: false,
-        });
-      }
+        // Build assistant message
+        const assistantMsg = {
+          id: `resp-${Date.now()}`,
+          role: 'assistant',
+          content: result.reply,
+          message_type: result.message_type || 'text',
+          metadata: {},
+          created_at: new Date().toISOString(),
+        };
 
-      set((state) => ({ messages: [...state.messages, assistantMsg] }));
+        if (result.plan) {
+          assistantMsg.metadata = {
+            plan_spec: result.plan.planSpec,
+            plan_display: result.plan.planDisplay,
+            suggested_topic_id: result.plan.suggestedTopicId,
+          };
+          set({
+            conversationId: newConvId,
+            activePlan: result.plan,
+            sending: false,
+          });
+        } else {
+          set({
+            conversationId: newConvId,
+            activePlan: null,
+            sending: false,
+          });
+        }
+
+        set((state) => ({ messages: [...state.messages, assistantMsg] }));
+      }
 
       // Update conversations list
       const { touchConversation } = useConversationsStore.getState();
@@ -715,12 +745,24 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
+  setSurfaceContext: (ctx) => set({ surfaceContext: ctx }),
+
+  setMode: (mode) => {
+    localStorage.setItem('verity-chat-mode', mode);
+    set({ mode });
+  },
+
+  setBoardId: (id) => set({ boardId: id }),
+
+  invalidateBoard: () => set((s) => ({ boardInvalidateCounter: s.boardInvalidateCounter + 1 })),
+
   clear: () => set({
     conversationId: null,
     messages: [],
     sending: false,
     activePlan: null,
     executing: false,
+    surfaceContext: null,
   }),
 }));
 

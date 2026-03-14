@@ -43,7 +43,11 @@ async def _extract_with_docling(file_path: str) -> dict:
         return result
 
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, _convert)
+    # Timeout: Docling can OOM on large PDFs; fall back after 120s
+    result = await asyncio.wait_for(
+        loop.run_in_executor(None, _convert),
+        timeout=120,
+    )
 
     doc = result.document
     text = doc.export_to_markdown()

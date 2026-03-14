@@ -1,7 +1,6 @@
-'use client';
-
 import { useRef, useEffect, useState } from 'react';
 import DOMPurify from 'dompurify';
+import './reader.css';
 
 const SAVED_HIGHLIGHT_BG = {
   yellow: 'rgba(250, 204, 21, 0.35)',
@@ -325,14 +324,16 @@ export default function ReaderContent({
     if (isHtml) {
       html = DOMPurify.sanitize(content, {
         ALLOWED_TAGS: [
-          'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'mark',
+          'p', 'br', 'hr', 'strong', 'b', 'em', 'i', 'u', 's', 'mark',
           'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-          'ul', 'ol', 'li',
+          'ul', 'ol', 'li', 'dl', 'dt', 'dd',
           'blockquote', 'q', 'cite',
           'a', 'img', 'figure', 'figcaption', 'picture', 'source',
-          'code', 'pre',
-          'table', 'thead', 'tbody', 'tr', 'th', 'td',
+          'code', 'pre', 'kbd', 'samp', 'var',
+          'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'caption', 'colgroup', 'col',
           'div', 'span', 'article', 'section',
+          'sup', 'sub', 'abbr', 'time',
+          'details', 'summary',
         ],
         ALLOWED_ATTR: ['href', 'src', 'srcset', 'alt', 'title', 'target', 'class', 'loading', 'width', 'height'],
         ALLOW_DATA_ATTR: false,
@@ -561,201 +562,6 @@ export default function ReaderContent({
         </footer>
       )}
 
-      <style jsx>{`
-        /* Reader Container */
-        .reader-container {
-          max-width: 720px;
-          margin: 0 auto;
-          padding: 2rem 1.5rem;
-        }
-
-        /* Hero Image */
-        .reader-hero-image {
-          margin: 0 -1.5rem 2.5rem;
-          overflow: hidden;
-        }
-
-        /* Article Header */
-        .reader-header {
-          margin-bottom: 2.5rem;
-          padding-bottom: 1.5rem;
-          border-bottom: 1px solid #e5e7eb;
-        }
-
-        .reader-title {
-          font-size: 2.25rem;
-          font-weight: 800;
-          line-height: 1.2;
-          color: #111827;
-          margin-bottom: 1rem;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        }
-
-        .reader-meta {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.75rem;
-          font-size: 0.875rem;
-          color: #6b7280;
-        }
-
-        .reader-author {
-          font-weight: 600;
-          color: #374151;
-        }
-
-        .reader-site::before,
-        .reader-date::before {
-          content: '•';
-          margin-right: 0.75rem;
-          color: #d1d5db;
-        }
-
-        /* Article Prose */
-        :global(.reader-prose) {
-          font-family: Georgia, 'Times New Roman', serif;
-          font-size: 1.125rem;
-          line-height: 1.75;
-          color: #1f2937;
-        }
-
-        :global(.reader-prose p) {
-          margin-bottom: 1.5em;
-        }
-
-        :global(.reader-prose h1),
-        :global(.reader-prose h2),
-        :global(.reader-prose h3),
-        :global(.reader-prose h4) {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          font-weight: 700;
-          margin-top: 2em;
-          margin-bottom: 0.75em;
-          color: #111827;
-          line-height: 1.3;
-        }
-
-        :global(.reader-prose h1) { font-size: 2em; }
-        :global(.reader-prose h2) { font-size: 1.5em; }
-        :global(.reader-prose h3) { font-size: 1.25em; }
-        :global(.reader-prose h4) { font-size: 1.1em; }
-
-        :global(.reader-prose a) {
-          color: #4f46e5;
-          text-decoration: underline;
-          text-decoration-color: #c7d2fe;
-          transition: all 0.2s;
-        }
-
-        :global(.reader-prose a:hover) {
-          color: #4338ca;
-          text-decoration-color: #4f46e5;
-        }
-
-        :global(.reader-prose blockquote) {
-          border-left: 4px solid #e5e7eb;
-          padding-left: 1.5em;
-          margin: 2em 0;
-          color: #6b7280;
-          font-style: italic;
-        }
-
-        :global(.reader-prose img) {
-          max-width: 100%;
-          height: auto;
-          border-radius: 8px;
-          margin: 2em auto;
-          display: block;
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-
-        :global(.reader-prose figure) {
-          margin: 2.5em 0;
-        }
-
-        :global(.reader-prose figcaption) {
-          text-align: center;
-          font-size: 0.875em;
-          color: #6b7280;
-          margin-top: 0.75em;
-          font-style: italic;
-        }
-
-        :global(.reader-prose ul),
-        :global(.reader-prose ol) {
-          margin: 1.5em 0;
-          padding-left: 2em;
-        }
-
-        :global(.reader-prose li) {
-          margin-bottom: 0.5em;
-        }
-
-        :global(.reader-prose pre) {
-          background: #f3f4f6;
-          border-radius: 8px;
-          padding: 1.25em;
-          overflow-x: auto;
-          font-size: 0.875em;
-          line-height: 1.6;
-          margin: 2em 0;
-        }
-
-        :global(.reader-prose code) {
-          font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
-          background: #f3f4f6;
-          padding: 0.2em 0.4em;
-          border-radius: 3px;
-          font-size: 0.9em;
-        }
-
-        :global(.reader-prose pre code) {
-          background: none;
-          padding: 0;
-        }
-
-        :global(.reader-prose table) {
-          width: 100%;
-          border-collapse: collapse;
-          margin: 1.5em 0;
-          font-size: 0.9em;
-        }
-
-        :global(.reader-prose th),
-        :global(.reader-prose td) {
-          border: 1px solid #e5e7eb;
-          padding: 0.75em;
-          text-align: left;
-        }
-
-        :global(.reader-prose th) {
-          background: #f9fafb;
-          font-weight: 600;
-        }
-
-        /* Footer */
-        .reader-footer {
-          margin-top: 3rem;
-          padding-top: 2rem;
-          border-top: 1px solid #e5e7eb;
-          text-align: center;
-        }
-
-        /* Responsive */
-        @media (max-width: 640px) {
-          .reader-container {
-            padding: 1rem;
-          }
-
-          .reader-title {
-            font-size: 1.75rem;
-          }
-
-          :global(.reader-prose) {
-            font-size: 1rem;
-          }
-        }
-      `}</style>
     </article>
   );
 }

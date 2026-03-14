@@ -19,6 +19,8 @@ import {
     getFullBoard,
     getOrCreateBoardByTopic,
 } from "../../services/supabase/boards.mjs";
+import { listPendingDrafts, commitDraft, rejectDraft } from "../../agents/draftEngine.mjs";
+import { getResearchState, loadUserMethodology } from "../../agents/researchContext.mjs";
 
 const router = express.Router();
 
@@ -216,6 +218,123 @@ router.delete("/:boardId/edges/:edgeId", async (req, res) => {
         res.json({ ok: true });
     } catch (error) {
         console.error("删除边失败：", error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// ========= Board Health =========
+
+/**
+ * GET /api/v2/boards/:boardId/health
+ * Get research health state for the board's topic.
+ * Recomputes if stale (>5 min).
+ */
+router.get("/:boardId/health", async (req, res) => {
+    try {
+        const board = await getBoardById(req.supabase, req.params.boardId);
+        if (!board) {
+            return res.status(404).json({ ok: false, error: "画板不存在" });
+        }
+        if (!board.topic_id) {
+            return res.json({ ok: true, health: null, message: "画板未关联主题" });
+        }
+
+        let methodologyConfig = null;
+        try {
+            const methodology = await loadUserMethodology(req.supabase, req.user.id);
+            methodologyConfig = methodology?.config || null;
+        } catch { /* ignore */ }
+
+        const state = await getResearchState(req.supabase, board.topic_id, methodologyConfig);
+        res.json({ ok: true, health: state });
+    } catch (error) {
+        console.error("获取画板健康状态失败：", error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// ========= Board Drafts =========
+
+/**
+ * GET /api/v2/boards/:boardId/drafts
+ * List pending drafts for a board.
+ */
+router.get("/:boardId/drafts", async (req, res) => {
+    try {
+        const drafts = await listPendingDrafts(req.supabase, req.params.boardId);
+        res.json({ ok: true, drafts });
+    } catch (error) {
+        console.error("获取草稿列表失败：", error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+/**
+ * POST /api/v2/boards/:boardId/drafts/:draftId/commit
+ * Commit (accept) a draft — creates real nodes/edges.
+ * Body: { accepted_indices?: number[] } — optional partial acceptance
+ */
+router.post("/:boardId/drafts/:draftId/commit", async (req, res) => {
+    try {
+        const { accepted_indices } = req.body || {};
+        const result = await commitDraft(
+            req.supabase,
+            req.params.draftId,
+            accepted_indices || null
+        );
+        res.json({ ok: true, ...result });
+    } catch (error) {
+        console.error("提交草稿失败：", error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+/**
+ * POST /api/v2/boards/:boardId/drafts/:draftId/reject
+ * Reject a draft.
+ */
+router.post("/:boardId/drafts/:draftId/reject", async (req, res) => {
+    try {
+        await rejectDraft(req.supabase, req.params.draftId);
+        res.json({ ok: true });
+    } catch (error) {
+        console.error("拒绝草稿失败：", error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+/**
+ * POST /api/v2/boards/:boardId/quick-link
+ * One-click link a card as evidence to a hypothesis.
+ * Body: { card_id, hypothesis_id, relation_type? }
+ */
+router.post("/:boardId/quick-link", async (req, res) => {
+    try {
+        const { card_id, hypothesis_id, relation_type } = req.body || {};
+        if (!card_id || !hypothesis_id) {
+            return res.status(400).json({ ok: false, error: "card_id and hypothesis_id are required" });
+        }
+
+        // Create evidence node linked to the hypothesis
+        const node = await createNode(req.supabase, req.params.boardId, {
+            node_type: 'evidence',
+            parent_id: hypothesis_id,
+            card_id,
+            evidence_type: 'fact',
+            strength: 3,
+            content: { text: '' },
+        });
+
+        // Create edge from evidence to hypothesis
+        const edge = await createEdge(req.supabase, req.params.boardId, {
+            source_node_id: node.id,
+            target_node_id: hypothesis_id,
+            relation_type: relation_type || 'supports',
+        });
+
+        res.json({ ok: true, node, edge });
+    } catch (error) {
+        console.error("快速链接失败：", error);
         res.status(500).json({ ok: false, error: error.message });
     }
 });

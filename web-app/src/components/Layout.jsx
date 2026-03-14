@@ -18,6 +18,7 @@ import {
   Rss,
 } from 'lucide-react';
 import { useAuthStore, useUIStore } from '../lib/store';
+import GlobalChatPanel from './GlobalChatPanel';
 
 // 四组导航结构
 const navGroups = [
@@ -238,6 +239,8 @@ function Layout() {
           </div>
         )}
       </main>
+
+      <GlobalChatPanel />
     </div>
   );
 }

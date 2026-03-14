@@ -385,6 +385,68 @@ export const TOOL_DEFINITIONS = [
     task_phases: ["synthesize"],
     task_capability: "structure_mutation",
   },
+
+  // ── Draft tools (auto-execute, creates preview not real data) ──
+  {
+    type: "function",
+    function: {
+      name: "propose_board_changes",
+      description:
+        "Propose a batch of related changes to a thinking board. Creates a visual draft for user review on the canvas. Use this INSTEAD of individual create_board_node/create_board_edge calls when making multiple related changes. Changes can reference each other using $temp_id syntax (e.g., parent_id: '$t1' references the node with temp_id: 't1').",
+      parameters: {
+        type: "object",
+        properties: {
+          board_id: { type: "string", description: "The board ID" },
+          changes: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                action: { type: "string", enum: ["create_node", "create_edge"], description: "Action type" },
+                temp_id: { type: "string", description: "Temp ID for cross-referencing (e.g. 't1')" },
+                node_type: { type: "string", enum: ["question", "hypothesis", "evidence"], description: "Node type (for create_node)" },
+                text: { type: "string", description: "Node content text" },
+                parent_id: { type: "string", description: "Real UUID or $temp_id reference (e.g. '$t1')" },
+                card_id: { type: "string", description: "Card UUID for evidence nodes" },
+                source_node_id: { type: "string", description: "Source node for edges" },
+                target_node_id: { type: "string", description: "Target node for edges" },
+                relation_type: { type: "string", enum: ["supports", "refutes", "neutral"], description: "Edge relation type" },
+              },
+              required: ["action"],
+            },
+            description: "Array of change operations",
+          },
+          reasoning: { type: "string", description: "Why these changes are proposed" },
+        },
+        required: ["board_id", "changes", "reasoning"],
+      },
+    },
+    side_effect: "draft",
+    task_auto: false,
+    task_phases: ["synthesize"],
+    task_capability: "structure_mutation",
+  },
+
+  // ── Health tool (read-only) ──
+  {
+    type: "function",
+    function: {
+      name: "get_board_health",
+      description:
+        "Get the argument health status for a topic's thinking board. Returns per-hypothesis evidence balance (supports vs refutes), bias warnings, blind spots, and orphan card count. No AI call needed — pure data computation.",
+      parameters: {
+        type: "object",
+        properties: {
+          topic_id: { type: "string", description: "The topic ID to check health for" },
+        },
+        required: ["topic_id"],
+      },
+    },
+    side_effect: "read_only",
+    task_auto: true,
+    task_phases: [],
+    task_capability: "knowledge_read",
+  },
 ];
 
 // Quick lookup map: tool name → full definition (including side_effect)

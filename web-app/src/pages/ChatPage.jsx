@@ -6,6 +6,7 @@ import {
 import { chatApi } from '../lib/api';
 import { useUIStore, useChatStore, useConversationsStore } from '../lib/store';
 import ConversationSidebar from '../components/ConversationSidebar';
+import ChatMessage from '../components/ChatMessage';
 
 const QUICK_PROMPTS = [
   '帮我总结最近一周新增卡片的核心趋势',
@@ -16,6 +17,9 @@ const QUICK_PROMPTS = [
 function toFriendlyChatError(error) {
   const message = error?.message || '';
   const normalized = message.toLowerCase();
+  if (normalized.includes('aborted') || normalized.includes('abort') || normalized.includes('timeout')) {
+    return 'AI 响应超时，请稍后重试（复杂问题可能需要更长时间）';
+  }
   if (error?.status >= 500 || normalized.includes('fetch failed')) {
     return 'AI 服务暂时不可用，请检查后端服务与模型配置';
   }
@@ -33,7 +37,7 @@ function PlanProposalCard({ message, onExecute, onDismiss, executing }) {
   return (
     <div
       className="rounded-xl overflow-hidden"
-      style={{ background: 'var(--bg-elevated)', border: '1px solid var(--accent-500/0.3)' }}
+      style={{ background: 'var(--bg-elevated, var(--surface-1))', border: '1px solid var(--border-primary)' }}
     >
       <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border-primary)' }}>
         <div className="flex items-center gap-2 mb-1">
@@ -62,7 +66,7 @@ function PlanProposalCard({ message, onExecute, onDismiss, executing }) {
             <div key={step.id} className="flex items-start gap-2.5">
               <div
                 className="w-5 h-5 rounded-full flex items-center justify-center flex-none mt-0.5 text-[10px] font-bold"
-                style={{ background: 'var(--accent-500/0.1)', color: 'var(--accent-600)' }}
+                style={{ background: 'var(--accent-blue-subtle)', color: 'var(--accent-600)' }}
               >
                 {i + 1}
               </div>
@@ -195,7 +199,7 @@ function TemplateSelector({ templates, onSelect }) {
           <div
             key={t.id}
             className="rounded-xl transition-all cursor-pointer"
-            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-primary)' }}
+            style={{ background: 'var(--bg-elevated, var(--surface-1))', border: '1px solid var(--border-primary)' }}
           >
             <div
               onClick={() => setExpandedId(expandedId === t.id ? null : t.id)}
@@ -282,6 +286,8 @@ function ChatPage() {
     const text = input.trim();
     if (!text || sending) return;
     setInput('');
+    // Reset textarea height
+    if (inputRef.current) inputRef.current.style.height = 'auto';
 
     try {
       const result = await sendMessage(text);
@@ -355,7 +361,7 @@ function ChatPage() {
     <div className="flex h-[calc(100vh-7rem)] lg:h-[calc(100vh-3rem)]">
       {/* Conversation sidebar */}
       {sidebarVisible && (
-        <div className="w-56 flex-none hidden lg:block" style={{ background: 'var(--bg-elevated)' }}>
+        <div className="w-56 flex-none hidden lg:block" style={{ background: 'var(--bg-elevated, var(--surface-1))' }}>
           <ConversationSidebar />
         </div>
       )}
@@ -470,7 +476,7 @@ function ChatPage() {
                 if (msg.message_type === 'plan_confirmed') {
                   return (
                     <div key={msg.id || i} className="flex justify-end gap-3">
-                      <div className="px-3 py-1.5 rounded-xl text-xs" style={{ background: 'var(--accent-500/0.1)', color: 'var(--accent-600)' }}>
+                      <div className="px-3 py-1.5 rounded-xl text-xs" style={{ background: 'var(--accent-blue-subtle)', color: 'var(--accent-600)' }}>
                         已确认执行计划
                       </div>
                     </div>
@@ -486,14 +492,14 @@ function ChatPage() {
                       </div>
                     )}
                     <div
-                      className="max-w-[75%] rounded-xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap"
+                      className="max-w-[75%] rounded-xl px-3.5 py-2.5 text-sm leading-relaxed"
                       style={
                         msg.role === 'user'
                           ? { background: 'var(--interactive-primary)', color: '#fff' }
                           : { background: 'var(--bg-muted)', color: 'var(--text-primary)', border: '1px solid var(--border-primary)' }
                       }
                     >
-                      {msg.content}
+                      <ChatMessage content={msg.content} role={msg.role} />
                     </div>
                     {msg.role === 'user' && (
                       <div className="w-7 h-7 rounded-full flex-none flex items-center justify-center mt-0.5" style={{ background: 'var(--bg-muted)' }}>

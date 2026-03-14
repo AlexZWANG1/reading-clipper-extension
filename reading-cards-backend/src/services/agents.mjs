@@ -93,7 +93,7 @@ console.log("API Key 前 15 字符:", OPENAI_API_KEY ? OPENAI_API_KEY.substring(
 console.log("=========================================");
 
 // ========= 模型配置 =========
-const OPENAI_MODEL = "gpt-5.2"; // 用于所有 AI 任务（统一使用旗舰模型）
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5.2"; // 优先读环境变量
 
 /**
  * 调用纯文本卡片生成（使用 Responses API + inline instructions）

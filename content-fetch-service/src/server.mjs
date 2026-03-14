@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { extractUrl } from './extractors/urlExtractor.mjs';
+import { extractUrl, extractFromHtml } from './extractors/urlExtractor.mjs';
 import { extractDocument } from './extractors/docExtractor.mjs';
 
 dotenv.config();
@@ -64,6 +64,33 @@ app.post('/extract/document', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('[Content Fetch] Document extraction failed:', error);
+    res.status(500).json({
+      error: error.message,
+      extraction_status: 'failed'
+    });
+  }
+});
+
+// Extract from raw HTML (for browser extension — page already rendered)
+app.post('/extract/html', async (req, res) => {
+  try {
+    const { html, url } = req.body;
+
+    if (!html) {
+      return res.status(400).json({ error: 'html is required' });
+    }
+
+    console.log(`[Content Fetch] Extracting from raw HTML (${html.length} chars), url: ${url || 'none'}`);
+    const startTime = Date.now();
+
+    const result = await extractFromHtml(html, url || 'about:blank');
+
+    const duration = Date.now() - startTime;
+    console.log(`[Content Fetch] HTML extraction completed in ${duration}ms - Status: ${result.extraction_status}`);
+
+    res.json(result);
+  } catch (error) {
+    console.error('[Content Fetch] HTML extraction failed:', error);
     res.status(500).json({
       error: error.message,
       extraction_status: 'failed'

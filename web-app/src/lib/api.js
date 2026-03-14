@@ -603,10 +603,11 @@ export const boardsApi = {
 
 // ========= Chat API =========
 export const chatApi = {
-  // New conversation-aware mode
+  // New conversation-aware mode — 120s timeout (AI may need multiple tool rounds)
   sendMessage: (conversationId, userMessage, { surfaceContext, mode } = {}) =>
     request('/v2/chat', {
       method: 'POST',
+      timeout: 120000,
       body: JSON.stringify({
         conversation_id: conversationId,
         user_message: userMessage,

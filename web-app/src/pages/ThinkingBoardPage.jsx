@@ -21,9 +21,11 @@ import '@xyflow/react/dist/style.css';
 import dagre from 'dagre';
 import { ArrowLeft, Plus, ExternalLink, Loader2, LayoutGrid, GripVertical, Search, Target } from 'lucide-react';
 import { boardsApi } from '../lib/api';
-import { useUIStore, useCardsStore } from '../lib/store';
+import { useUIStore, useCardsStore, useChatStore } from '../lib/store';
 import AddCardSection from '../components/AddCardSection';
-import BoardChatPanel from '../components/BoardChatPanel';
+import HealthSidebar from '../components/HealthSidebar';
+import DraftNode from '../components/DraftNode';
+import DraftCommitBar from '../components/DraftCommitBar';
 
 // Custom nodes
 import QuestionNode from '../components/board/QuestionNode';
@@ -34,6 +36,7 @@ const nodeTypes = {
     questionNode: QuestionNode,
     hypothesisNode: HypothesisNode,
     evidenceNode: EvidenceNode,
+    draftNode: DraftNode,
 };
 
 const BOARD_PALETTE = {
@@ -198,11 +201,15 @@ function ThinkingBoardInner() {
     const { topicId } = useParams();
     const { showToast } = useUIStore();
     const { cards, fetchCards } = useCardsStore();
+    const { boardInvalidateCounter } = useChatStore();
 
     // Board state
     const [boardId, setBoardId] = useState(null);
     const [topic, setTopic] = useState(null);
     const [loading, setLoading] = useState(true);
+
+    // Draft state
+    const [pendingDraft, setPendingDraft] = useState(null);
 
     // Zoom & LOD state — mini only at extreme zoom-out to avoid hiding content
     const zoom = useStore(s => s.transform[2]);
@@ -396,6 +403,95 @@ function ThinkingBoardInner() {
         loadBoard();
     }, [loadBoard]);
 
+    // ========= Draft Fetching =========
+    const fetchDrafts = useCallback(async () => {
+        if (!boardId) return;
+        try {
+            const data = await boardsApi.getDrafts(boardId);
+            if (data.ok && data.drafts?.length > 0) {
+                setPendingDraft(data.drafts[0]); // max 1 pending draft per board
+            } else {
+                setPendingDraft(null);
+            }
+        } catch (err) {
+            console.error('Failed to fetch drafts:', err);
+        }
+    }, [boardId]);
+
+    useEffect(() => { fetchDrafts(); }, [fetchDrafts]);
+
+    // ========= Draft Handlers =========
+    const handleCommitAll = useCallback(async (draftId) => {
+        try {
+            await boardsApi.commitDraft(boardId, draftId);
+            setPendingDraft(null);
+            loadBoard(); // Reload board data
+        } catch (err) {
+            console.error('Commit draft failed:', err);
+            showToast('提交草稿失败', 'error');
+        }
+    }, [boardId, loadBoard, showToast]);
+
+    const handleRejectAll = useCallback(async (draftId) => {
+        try {
+            await boardsApi.rejectDraft(boardId, draftId);
+            setPendingDraft(null);
+        } catch (err) {
+            console.error('Reject draft failed:', err);
+            showToast('拒绝草稿失败', 'error');
+        }
+    }, [boardId, showToast]);
+
+    const handleReview = useCallback(() => {
+        // Scroll to the first draft node so user can review individually
+        if (!pendingDraft?.changes?.length) return;
+        const firstDraft = pendingDraft.changes.findIndex(c => c.action === 'add_node');
+        if (firstDraft >= 0) {
+            const nodeId = `draft-${firstDraft}`;
+            const node = nodes.find(n => n.id === nodeId);
+            if (node) {
+                setCenter(node.position.x + 100, node.position.y + 50, { zoom: 1.2, duration: 350 });
+            }
+        }
+    }, [pendingDraft, nodes, setCenter]);
+
+    const handleAcceptNode = useCallback(async (draftNodeId) => {
+        if (!pendingDraft) return;
+        const idx = parseInt(draftNodeId.replace('draft-', ''), 10);
+        try {
+            await boardsApi.commitDraft(boardId, pendingDraft.id, [idx]);
+            // Remove that change from local draft
+            const remaining = (pendingDraft.changes || []).filter((_, i) => i !== idx);
+            if (remaining.length === 0) {
+                setPendingDraft(null);
+            } else {
+                setPendingDraft({ ...pendingDraft, changes: remaining });
+            }
+            loadBoard();
+        } catch (err) {
+            console.error('Accept node failed:', err);
+            showToast('接受节点失败', 'error');
+        }
+    }, [boardId, pendingDraft, loadBoard, showToast]);
+
+    const handleRejectNode = useCallback(async (draftNodeId) => {
+        if (!pendingDraft) return;
+        const idx = parseInt(draftNodeId.replace('draft-', ''), 10);
+        // Remove from local draft display
+        const remaining = (pendingDraft.changes || []).filter((_, i) => i !== idx);
+        if (remaining.length === 0) {
+            // All rejected — reject the whole draft
+            try {
+                await boardsApi.rejectDraft(boardId, pendingDraft.id);
+            } catch (err) {
+                console.error('Reject draft failed:', err);
+            }
+            setPendingDraft(null);
+        } else {
+            setPendingDraft({ ...pendingDraft, changes: remaining });
+        }
+    }, [boardId, pendingDraft]);
+
     // ========= Node Action Callbacks =========
     // These get injected into node data so custom nodes can call them
 
@@ -578,7 +674,7 @@ function ThinkingBoardInner() {
 
     // ========= Inject callbacks into node data =========
     const nodesWithCallbacks = useMemo(() => {
-        return nodes.map(node => {
+        const mapped = nodes.map(node => {
             const childEdges = edges.filter(e => e.source === node.id && e.id.startsWith('parent-'));
             const childCount = childEdges.length;
 
@@ -632,7 +728,24 @@ function ThinkingBoardInner() {
             }
             return applyFocus(node);
         });
-    }, [nodes, edges, handleNodeUpdate, handleDeleteNode, createChildNode, handleEdgeUpdate, focusedChainIds]);
+
+        // Append draft nodes from pending draft
+        const draftNodes = (pendingDraft?.changes || [])
+            .filter(c => c.action === 'add_node')
+            .map((c, i) => ({
+                id: `draft-${i}`,
+                type: 'draftNode',
+                position: { x: 400 + i * 50, y: 500 + i * 80 },
+                data: {
+                    text: c.text || c.claim || '',
+                    node_type: c.node_type,
+                    onAccept: handleAcceptNode,
+                    onReject: handleRejectNode,
+                },
+            }));
+
+        return [...mapped, ...draftNodes];
+    }, [nodes, edges, handleNodeUpdate, handleDeleteNode, createChildNode, handleEdgeUpdate, focusedChainIds, pendingDraft, handleAcceptNode, handleRejectNode]);
 
     // ========= Energy Packets + Edge Focus Styling =========
     const styledEdges = useMemo(() => {
@@ -1081,6 +1194,7 @@ function ThinkingBoardInner() {
                             nodeColor={(n) => {
                                 if (n.type === 'questionNode') return BOARD_PALETTE.question;
                                 if (n.type === 'hypothesisNode') return BOARD_PALETTE.hypothesis;
+                                if (n.type === 'draftNode') return '#8B5CF6';
                                 return BOARD_PALETTE.evidence;
                             }}
                             maskColor="rgba(248,250,252,0.8)"
@@ -1089,11 +1203,25 @@ function ThinkingBoardInner() {
                                 border: '1px solid var(--stroke-0)',
                                 borderRadius: '12px',
                                 boxShadow: '0 10px 22px rgba(31, 27, 20, 0.14)',
+                                marginBottom: '60px',
                             }}
                         />
                     </ReactFlow>
                 )}
+
+                {/* Draft Commit Bar — overlays canvas when pending draft exists */}
+                <DraftCommitBar
+                    draft={pendingDraft}
+                    onCommitAll={handleCommitAll}
+                    onRejectAll={handleRejectAll}
+                    onReview={handleReview}
+                />
             </div>
+
+            {/* ========= Health Sidebar ========= */}
+            {boardId && (
+                <HealthSidebar boardId={boardId} invalidateCounter={boardInvalidateCounter} />
+            )}
 
             {/* ========= Sidebar ========= */}
             {sidebarOpen && (
@@ -1254,15 +1382,7 @@ function ThinkingBoardInner() {
                 </button>
             )}
 
-            {/* AI Chat Panel */}
-            {boardId && (
-                <BoardChatPanel
-                    boardId={boardId}
-                    topicId={topicId}
-                    topicTitle={topic?.title}
-                    onBoardMutated={loadBoard}
-                />
-            )}
+            {/* AI Chat Panel — now handled by GlobalChatPanel in Layout */}
         </div>
     );
 }

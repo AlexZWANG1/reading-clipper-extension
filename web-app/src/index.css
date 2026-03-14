@@ -52,6 +52,10 @@
   --error: #c33a30;
   --error-subtle: #fff1ef;
 
+  --ai-accent: #8B5CF6;
+  --ai-accent-subtle: rgba(139, 92, 246, 0.08);
+  --bg-elevated: var(--surface-1);
+
   --glow: 0 0 0 3px rgba(13, 110, 253, 0.16);
 
   --space-1: 4px;
@@ -138,6 +142,10 @@
     --warning-subtle: rgba(246, 162, 79, 0.15);
     --error: #f17a70;
     --error-subtle: rgba(241, 122, 112, 0.15);
+
+    --ai-accent: #A78BFA;
+    --ai-accent-subtle: rgba(167, 139, 250, 0.12);
+    --bg-elevated: var(--surface-1);
 
     --workbench-bg: #171410;
     --workbench-canvas: #1d1914;

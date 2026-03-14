@@ -1,0 +1,305 @@
+/* Reader Container */
+.reader-container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+/* Hero Image */
+.reader-hero-image {
+  margin: 0 -1.5rem 2.5rem;
+  overflow: hidden;
+}
+
+/* Article Header */
+.reader-header {
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.reader-title {
+  font-size: 2.25rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #111827;
+  margin-bottom: 1rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.reader-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.reader-author {
+  font-weight: 600;
+  color: #374151;
+}
+
+.reader-site::before,
+.reader-date::before {
+  content: '\00B7';
+  margin-right: 0.75rem;
+  color: #d1d5db;
+}
+
+/* Article Prose — the core reading experience */
+.reader-prose {
+  font-family: Georgia, 'Noto Serif SC', 'Times New Roman', serif;
+  font-size: 1.125rem;
+  line-height: 1.8;
+  color: #1f2937;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.reader-prose p {
+  margin-bottom: 1.5em;
+}
+
+.reader-prose h1,
+.reader-prose h2,
+.reader-prose h3,
+.reader-prose h4 {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-weight: 700;
+  margin-top: 2em;
+  margin-bottom: 0.75em;
+  color: #111827;
+  line-height: 1.3;
+}
+
+.reader-prose h1 { font-size: 2em; }
+.reader-prose h2 { font-size: 1.5em; }
+.reader-prose h3 { font-size: 1.25em; }
+.reader-prose h4 { font-size: 1.1em; }
+
+.reader-prose a {
+  color: #4f46e5;
+  text-decoration: underline;
+  text-decoration-color: #c7d2fe;
+  text-underline-offset: 2px;
+  transition: all 0.2s;
+}
+
+.reader-prose a:hover {
+  color: #4338ca;
+  text-decoration-color: #4f46e5;
+}
+
+.reader-prose strong,
+.reader-prose b {
+  font-weight: 700;
+  color: #111827;
+}
+
+.reader-prose em,
+.reader-prose i {
+  font-style: italic;
+}
+
+.reader-prose blockquote {
+  border-left: 4px solid #e5e7eb;
+  padding-left: 1.5em;
+  margin: 2em 0;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.reader-prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 2em auto;
+  display: block;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.reader-prose figure {
+  margin: 2.5em 0;
+}
+
+.reader-prose figcaption {
+  text-align: center;
+  font-size: 0.875em;
+  color: #6b7280;
+  margin-top: 0.75em;
+  font-style: italic;
+}
+
+.reader-prose ul,
+.reader-prose ol {
+  margin: 1.5em 0;
+  padding-left: 2em;
+}
+
+.reader-prose ul {
+  list-style-type: disc;
+}
+
+.reader-prose ol {
+  list-style-type: decimal;
+}
+
+.reader-prose li {
+  margin-bottom: 0.5em;
+}
+
+.reader-prose li > ul,
+.reader-prose li > ol {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.reader-prose pre {
+  background: #f8f9fa;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1.25em;
+  overflow-x: auto;
+  font-size: 0.875em;
+  line-height: 1.6;
+  margin: 2em 0;
+}
+
+.reader-prose code {
+  font-family: 'JetBrains Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+  background: #f3f4f6;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.reader-prose pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  border-radius: 0;
+}
+
+.reader-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5em 0;
+  font-size: 0.9em;
+}
+
+.reader-prose th,
+.reader-prose td {
+  border: 1px solid #e5e7eb;
+  padding: 0.75em;
+  text-align: left;
+}
+
+.reader-prose th {
+  background: #f9fafb;
+  font-weight: 600;
+}
+
+/* Nested divs from Readability output — ensure they don't break spacing */
+.reader-prose > div {
+  margin-bottom: 1.5em;
+}
+
+/* Handle empty paragraphs (often from article extraction) */
+.reader-prose p:empty {
+  display: none;
+}
+
+/* Ensure hr separators are styled */
+.reader-prose hr {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 2.5em 0;
+}
+
+/* Footer */
+.reader-footer {
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .reader-container {
+    padding: 1rem;
+  }
+
+  .reader-title {
+    font-size: 1.75rem;
+  }
+
+  .reader-prose {
+    font-size: 1rem;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .reader-title {
+    color: #f3f4f6;
+  }
+
+  .reader-meta {
+    color: #9ca3af;
+  }
+
+  .reader-author {
+    color: #d1d5db;
+  }
+
+  .reader-header {
+    border-color: #374151;
+  }
+
+  .reader-prose {
+    color: #e5e7eb;
+  }
+
+  .reader-prose h1,
+  .reader-prose h2,
+  .reader-prose h3,
+  .reader-prose h4,
+  .reader-prose strong,
+  .reader-prose b {
+    color: #f3f4f6;
+  }
+
+  .reader-prose a {
+    color: #818cf8;
+    text-decoration-color: #4338ca;
+  }
+
+  .reader-prose blockquote {
+    border-color: #374151;
+    color: #9ca3af;
+  }
+
+  .reader-prose pre {
+    background: #1f2937;
+    border-color: #374151;
+  }
+
+  .reader-prose code {
+    background: #1f2937;
+  }
+
+  .reader-prose th {
+    background: #1f2937;
+  }
+
+  .reader-prose th,
+  .reader-prose td {
+    border-color: #374151;
+  }
+
+  .reader-footer {
+    border-color: #374151;
+  }
+}

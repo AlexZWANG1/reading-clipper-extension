@@ -49,11 +49,49 @@ function clearSession() {
   });
 }
 
+const RECENT_IMPORTS_KEY = "recentImports";
+const MAX_RECENT_IMPORTS = 10;
+
+function saveRecentImport({ id, title, url }) {
+  chrome.storage.local.get([RECENT_IMPORTS_KEY], (result) => {
+    const imports = result[RECENT_IMPORTS_KEY] || [];
+    // Remove duplicate if exists
+    const filtered = imports.filter((item) => item.id !== id);
+    filtered.unshift({ id, title, url, timestamp: Date.now() });
+    // Keep only the most recent
+    chrome.storage.local.set({
+      [RECENT_IMPORTS_KEY]: filtered.slice(0, MAX_RECENT_IMPORTS),
+    });
+  });
+}
+
+function getRecentImports() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get([RECENT_IMPORTS_KEY], (result) => {
+      resolve(result[RECENT_IMPORTS_KEY] || []);
+    });
+  });
+}
+
+function findImportByUrl(url) {
+  return new Promise((resolve) => {
+    chrome.storage.local.get([RECENT_IMPORTS_KEY], (result) => {
+      const imports = result[RECENT_IMPORTS_KEY] || [];
+      resolve(imports.find((item) => item.url === url) || null);
+    });
+  });
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "reading-clipper-quick-card",
     title: "保存为阅读卡片",
     contexts: ["selection"],
+  });
+  chrome.contextMenus.create({
+    id: "reading-clipper-import-page",
+    title: "导入此页面到阅读器",
+    contexts: ["page"],
   });
 });
 
@@ -166,20 +204,118 @@ async function captureCard({ snippet, pageTitle, pageUrl, tabId }) {
   }
 }
 
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId !== "reading-clipper-quick-card") return;
+async function importToReader({ pageUrl, pageTitle, tabId }) {
+  if (!pageUrl) {
+    showToastInTab(tabId, "无法获取当前页面 URL", "error");
+    return;
+  }
 
-  const selectedText = info.selectionText || "";
+  showToastInTab(tabId, "正在抓取页面内容...", "info", 5000);
+
+  const { session } = await getSession();
+  if (!session?.access_token) {
+    showNotification("请先登录", "登录后才能导入页面到阅读器");
+    return;
+  }
+
+  // Step 1: Extract DOM HTML from the current tab
+  let pageHtml = null;
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => document.documentElement.outerHTML,
+    });
+    pageHtml = results?.[0]?.result;
+  } catch (err) {
+    console.error("DOM extraction failed", err);
+    // Fall back to URL-based extraction
+  }
+
+  const payload = pageHtml
+    ? { source_type: "html", html: pageHtml, url: pageUrl, title: pageTitle || undefined }
+    : { source_type: "url", url: pageUrl, title: pageTitle || undefined };
+
+  console.log(`[importToReader] Using ${payload.source_type} mode, content size: ${pageHtml?.length || 0}`);
+  showToastInTab(tabId, "正在导入到阅读器...", "info", 3000);
+
+  try {
+    const resp = await fetch(`${BACKEND_URL}/api/v2/materials/ingest`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!resp.ok) {
+      if (resp.status === 401) {
+        await clearSession();
+        showNotification("登录已失效", "请重新登录后再导入");
+        return;
+      }
+      const text = await resp.text().catch(() => "");
+      console.error("import failed", resp.status, text);
+      showToastInTab(tabId, "导入失败，请检查后端服务", "error");
+      return;
+    }
+
+    const data = await resp.json().catch(() => null);
+    if (data?.error) {
+      showToastInTab(tabId, `导入失败: ${data.error}`, "error");
+      return { ok: false, error: data.error };
+    }
+
+    const materialId = data?.material_id;
+    const materialTitle = data?.title || pageTitle || "文章";
+    const isDuplicate = data?.status === "duplicate";
+    const readerUrl = `http://localhost:5173/materials/${materialId}`;
+
+    if (isDuplicate) {
+      showToastInTab(tabId, `「${materialTitle}」已导入过，正在打开...`, "info", 2000);
+    } else {
+      showToastInTab(tabId, `「${materialTitle}」导入成功！`, "success", 2000);
+    }
+
+    // Save to recent imports for popup display
+    if (materialId) {
+      saveRecentImport({ id: materialId, title: materialTitle, url: pageUrl });
+    }
+
+    // Auto-open reader in new tab after short delay
+    if (materialId) {
+      setTimeout(() => {
+        chrome.tabs.create({ url: readerUrl, active: true });
+      }, isDuplicate ? 500 : 1500);
+    }
+
+    return { ok: true, material_id: materialId, title: materialTitle, isDuplicate };
+  } catch (error) {
+    console.error("import error", error);
+    showNotification("网络错误", "无法连接后端服务");
+    return { ok: false, error: error.message };
+  }
+}
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  const tabId = typeof tab?.id === "number" ? tab.id : null;
   const pageUrl = info.pageUrl || tab?.url || "";
   const pageTitle = tab?.title || "";
-  const tabId = typeof tab?.id === "number" ? tab.id : null;
 
-  await captureCard({
-    snippet: selectedText,
-    pageTitle,
-    pageUrl,
-    tabId,
-  });
+  if (info.menuItemId === "reading-clipper-quick-card") {
+    await captureCard({
+      snippet: info.selectionText || "",
+      pageTitle,
+      pageUrl,
+      tabId,
+    });
+    return;
+  }
+
+  if (info.menuItemId === "reading-clipper-import-page") {
+    await importToReader({ pageUrl, pageTitle, tabId });
+    return;
+  }
 });
 
 async function handleLogin(email, password) {
@@ -248,6 +384,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "GET_TOPICS") {
     fetchTopics()
       .then((topics) => sendResponse({ ok: true, topics }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message.type === "IMPORT_PAGE") {
+    importToReader({
+      pageUrl: message.url,
+      pageTitle: message.title,
+      tabId: message.tabId,
+    })
+      .then((result) => sendResponse(result || { ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message.type === "GET_RECENT_IMPORTS") {
+    getRecentImports()
+      .then((imports) => sendResponse({ ok: true, imports }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message.type === "CHECK_URL_IMPORTED") {
+    findImportByUrl(message.url)
+      .then((existing) => sendResponse({ ok: true, existing }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
   }

@@ -1,5 +1,6 @@
 // ========= Tool Executor =========
 // Dispatches AI tool calls to service-layer functions.
+// Includes methodology guards for board mutations.
 // Returns plain objects; the caller serialises to JSON for the LLM.
 
 import { searchCards, listCards, findCardById, addCard } from "../services/supabase/cards.mjs";
@@ -7,13 +8,15 @@ import { listTopicsWithCardCount } from "../services/supabase/topics.mjs";
 import {
   listBoards, getFullBoard,
   createNode, updateNode, deleteNode,
-  createEdge,
+  createEdge, deleteEdge,
 } from "../services/supabase/boards.mjs";
 import { listDocuments, getDocument } from "../services/supabase/documents.mjs";
 import { listSources } from "../services/supabase/sources.mjs";
 import { searchSemantic } from "../services/searchService.mjs";
 import { fetchRssItems } from "../tasks/fetchers/rss.mjs";
 import { ingestUrl } from "../services/ingestion.mjs";
+import { createDraft } from "../agents/draftEngine.mjs";
+import { getResearchState } from "../agents/researchContext.mjs";
 
 /**
  * Execute a single tool call.
@@ -158,8 +161,24 @@ export async function executeTool(name, args, ctx) {
       }
     }
 
-    // ── Board mutations (write) ──
+    // ── Board mutations (write) — with methodology guards ──
     case "create_board_node": {
+      // Methodology guard: enforce Q→H→E hierarchy
+      if (args.node_type === "evidence" && !args.parent_id) {
+        return {
+          error: "methodology_violation",
+          message: "Evidence nodes must have parent_id pointing to a hypothesis node.",
+          suggestion: "Call get_board first to find the relevant hypothesis, then create evidence with parent_id set.",
+        };
+      }
+      if (args.node_type === "hypothesis" && !args.parent_id) {
+        return {
+          error: "methodology_violation",
+          message: "Hypothesis nodes must have parent_id pointing to a question node.",
+          suggestion: "Call get_board first to find the relevant question, then create hypothesis with parent_id set.",
+        };
+      }
+
       const nodeData = {
         node_type: args.node_type,
         parent_id: args.parent_id || null,
@@ -204,12 +223,53 @@ export async function executeTool(name, args, ctx) {
     }
 
     case "create_board_edge": {
+      // Methodology guard: validate relation_type
+      if (!['supports', 'refutes', 'neutral'].includes(args.relation_type)) {
+        return {
+          error: "methodology_violation",
+          message: `relation_type must be supports, refutes, or neutral. Got "${args.relation_type}".`,
+        };
+      }
       const edge = await createEdge(supabase, args.board_id, {
         source_node_id: args.source_node_id,
         target_node_id: args.target_node_id,
         relation_type: args.relation_type,
       });
       return { edge, message: `已创建${args.relation_type}关系` };
+    }
+
+    case "delete_board_edge": {
+      await deleteEdge(supabase, args.edge_id);
+      return { success: true, message: "关系已删除" };
+    }
+
+    // ── Draft tool (creates preview, not real data) ──
+    case "propose_board_changes": {
+      try {
+        const draft = await createDraft(
+          supabase, userId, args.board_id,
+          args.changes || [], args.reasoning || ""
+        );
+        return {
+          draft_id: draft.id,
+          board_id: draft.board_id,
+          changes_count: (args.changes || []).length,
+          reasoning: args.reasoning,
+          message: `已草拟 ${(args.changes || []).length} 个更改，请在画板上查看并确认。`,
+        };
+      } catch (err) {
+        return { error: err.message };
+      }
+    }
+
+    // ── Health tool (read-only computation) ──
+    case "get_board_health": {
+      try {
+        const state = await getResearchState(supabase, args.topic_id);
+        return state;
+      } catch (err) {
+        return { error: err.message };
+      }
     }
 
     default:

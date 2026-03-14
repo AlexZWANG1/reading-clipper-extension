@@ -198,9 +198,29 @@ async function fetchWithPuppeteer(url, options) {
       });
     }
 
-    // Wait a bit for lazy-loaded images
+    // Wait for SPA content to render — check for meaningful text in common article containers
     await page.evaluate(() => {
-      return new Promise((resolve) => setTimeout(resolve, 1000));
+      return new Promise((resolve) => {
+        const selectors = ['article', 'main', '[role="main"]', '.post-content', '.article-content', '.entry-content', '#content'];
+        const hasContent = () => {
+          for (const sel of selectors) {
+            const el = document.querySelector(sel);
+            if (el && el.innerText && el.innerText.trim().length > 200) return true;
+          }
+          // Fallback: check body text length
+          return document.body.innerText.trim().length > 500;
+        };
+        if (hasContent()) return resolve();
+        // Poll for up to 3 seconds for SPA content to appear
+        let elapsed = 0;
+        const interval = setInterval(() => {
+          elapsed += 300;
+          if (hasContent() || elapsed >= 3000) {
+            clearInterval(interval);
+            resolve();
+          }
+        }, 300);
+      });
     });
 
     const html = await page.content();
@@ -214,13 +234,25 @@ async function fetchWithPuppeteer(url, options) {
  * Check if page needs JS rendering
  */
 function needsJsRendering(html) {
+  // Check if the page has very little visible text content (SPA shell)
+  // Strip script/style tags then check remaining text
+  const stripped = html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // If there's substantial text already, Readability can probably handle it
+  // even if JS frameworks are present (e.g., server-rendered WordPress/Next.js)
+  if (stripped.length > 2000) return false;
+
+  // Minimal text content + SPA indicators = needs JS rendering
   const indicators = [
-    /<div[^>]*id=["']root["']/i,
-    /<div[^>]*id=["']app["']/i,
+    /<div[^>]*id=["']root["'][^>]*>\s*<\/div>/i,
+    /<div[^>]*id=["']app["'][^>]*>\s*<\/div>/i,
     /<div[^>]*id=["']__next["']/i,
-    /React|Vue|Angular|__NEXT_DATA__|__NUXT__|ng-version/,
-    /<script[^>]*src=["'][^"']*react[^"']*["']/i,
-    /<script[^>]*src=["'][^"']*vue[^"']*["']/i,
+    /__NEXT_DATA__|__NUXT__/,
   ];
   return indicators.some(pattern => pattern.test(html));
 }
@@ -231,8 +263,9 @@ function needsJsRendering(html) {
 async function extractWithReadability(url, html) {
   const dom = new JSDOM(html, { url });
   const reader = new Readability(dom.window.document, {
-    charThreshold: 500,
-    classesToPreserve: ['caption', 'figure', 'figcaption', 'highlight'],
+    charThreshold: 200,
+    nbTopCandidates: 10,
+    classesToPreserve: ['caption', 'figure', 'figcaption', 'highlight', 'code', 'pre'],
   });
 
   const article = reader.parse();
@@ -244,14 +277,16 @@ async function extractWithReadability(url, html) {
   // Sanitize and enhance HTML
   let articleHtml = DOMPurify.sanitize(article.content, {
     ALLOWED_TAGS: [
-      'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'mark',
+      'p', 'br', 'hr', 'strong', 'b', 'em', 'i', 'u', 's', 'mark',
       'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-      'ul', 'ol', 'li',
+      'ul', 'ol', 'li', 'dl', 'dt', 'dd',
       'blockquote', 'q', 'cite',
       'a', 'img', 'figure', 'figcaption', 'picture', 'source',
-      'code', 'pre',
-      'table', 'thead', 'tbody', 'tr', 'th', 'td',
+      'code', 'pre', 'kbd', 'samp', 'var',
+      'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'caption', 'colgroup', 'col',
       'div', 'span', 'article', 'section',
+      'sup', 'sub', 'abbr', 'time',
+      'details', 'summary',
     ],
     ALLOWED_ATTR: ['href', 'src', 'srcset', 'alt', 'title', 'target', 'class', 'id', 'width', 'height', 'loading'],
   });
@@ -349,6 +384,58 @@ function fixImages(html, baseUrl) {
   });
 
   return doc.body.innerHTML;
+}
+
+/**
+ * Extract from raw HTML (skips fetch, reuses Readability pipeline)
+ * Used by browser extension which already has the rendered DOM
+ */
+export async function extractFromHtml(html, url) {
+  try {
+    // Extract metadata
+    const metadata = await scraper({ html, url });
+
+    // Try Readability
+    try {
+      const article = await extractWithReadability(url, html);
+      return {
+        ...article,
+        ...mergeMetadata(article, metadata),
+        extraction_method: 'browser-dom+readability',
+        extraction_status: 'success',
+        extraction_error: null,
+        raw_html: null,
+      };
+    } catch (readabilityError) {
+      console.warn(`Readability failed for raw HTML:`, readabilityError.message);
+
+      // Fallback to basic extraction
+      const article = extractBasic(html, url, metadata);
+      return {
+        ...article,
+        extraction_method: 'browser-dom+basic',
+        extraction_status: 'partial',
+        extraction_error: `Readability: ${readabilityError.message}`,
+        raw_html: null,
+      };
+    }
+  } catch (error) {
+    console.error('Raw HTML extraction failed:', error);
+    return {
+      article_html: null,
+      text_content: null,
+      title: url,
+      byline: null,
+      site_name: url ? new URL(url).hostname : 'unknown',
+      excerpt: null,
+      lead_image_url: null,
+      published_time: null,
+      extraction_method: null,
+      extraction_status: 'failed',
+      extraction_error: error.message,
+      raw_html: null,
+    };
+  }
 }
 
 /**

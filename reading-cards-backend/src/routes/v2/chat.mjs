@@ -20,7 +20,7 @@ chatRouter.use(requireAuth);
  */
 chatRouter.post("/", async (req, res) => {
   try {
-    const { conversation_id, user_message, messages } = req.body;
+    const { conversation_id, user_message, messages, surface_context, mode } = req.body;
 
     // New conversation-aware mode
     if (user_message !== undefined) {
@@ -30,6 +30,8 @@ chatRouter.post("/", async (req, res) => {
         userId: req.user.id,
         supabase: req.supabase,
         accessToken: req.accessToken,
+        surfaceContext: surface_context || null,
+        mode: mode || 'auto',
       });
 
       return res.json({
@@ -40,6 +42,8 @@ chatRouter.post("/", async (req, res) => {
         plan: result.plan || null,
         pendingActions: result.pendingActions || null,
         pendingToolCalls: result.pendingToolCalls || null,
+        draft_id: result.draftId || null,
+        tool_call_log: result.toolCallLog || [],
       });
     }
 
@@ -60,6 +64,8 @@ chatRouter.post("/", async (req, res) => {
       userId: req.user.id,
       supabase: req.supabase,
       accessToken: req.accessToken,
+      surfaceContext: surface_context || null,
+      mode: mode || 'auto',
     });
 
     res.json({
@@ -107,6 +113,7 @@ chatRouter.post("/confirm", async (req, res) => {
       messages: result.messages,
       pendingActions: result.pendingActions || null,
       pendingToolCalls: result.pendingToolCalls || null,
+      tool_call_log: result.toolCallLog || [],
     });
   } catch (error) {
     console.error("Chat confirm error:", error);

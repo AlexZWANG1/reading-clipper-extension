@@ -9,6 +9,7 @@ import {
   softDeleteCard,
   searchCards,
   getCardsByIds,
+  findEvidenceSuggestion,
 } from "../../services/supabase/cards.mjs";
 import {
   runAgent1,
@@ -79,6 +80,18 @@ async function resolveMaterialContext(supabase, userId, materialId) {
   };
 }
 
+async function withEvidenceSuggestion(supabase, card) {
+  let evidence_suggestion = null;
+  try {
+    if (card.topic_id) {
+      evidence_suggestion = await findEvidenceSuggestion(supabase, card, card.topic_id);
+    }
+  } catch (err) {
+    console.error('Evidence suggestion error (non-fatal):', err.message);
+  }
+  return evidence_suggestion;
+}
+
 router.post("/capture", async (req, res) => {
   try {
     const {
@@ -131,7 +144,8 @@ router.post("/capture", async (req, res) => {
         chunk_id: resolvedChunkId,
         locator,
       });
-      return res.json({ ok: true, card });
+      const evidence_suggestion = await withEvidenceSuggestion(req.supabase, card);
+      return res.json({ ok: true, card, evidence_suggestion });
     }
 
     if (!hasSnippet && !imageData) {
@@ -167,13 +181,14 @@ router.post("/capture", async (req, res) => {
       locator,
     });
 
-    res.json({ ok: true, card });
+    const evidence_suggestion = await withEvidenceSuggestion(req.supabase, card);
+    res.json({ ok: true, card, evidence_suggestion });
   } catch (error) {
     console.error("capture card error:", error);
     res.status(500).json({
       ok: false,
       error: "capture_error",
-      detail: String(error),
+      detail: error.message || "Unknown error",
     });
   }
 });
@@ -183,11 +198,15 @@ router.get("/", async (req, res) => {
     const { topic_title, topic_id, include_deleted, material_id, limit } = req.query;
 
     const includeDeleted = include_deleted === "true";
+    const parsedLimit = limit ? parseInt(limit, 10) : undefined;
+    if (parsedLimit !== undefined && (isNaN(parsedLimit) || parsedLimit < 1)) {
+      return res.status(400).json({ ok: false, error: "limit must be a positive integer" });
+    }
     const cards = await listCards(req.supabase, req.user.id, {
       topic_title: topic_title || undefined,
       topic_id: topic_id || undefined,
       material_id: material_id || undefined,
-      limit: limit ? parseInt(limit, 10) : undefined,
+      limit: parsedLimit,
       includeDeleted,
     });
 

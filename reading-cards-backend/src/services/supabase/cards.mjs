@@ -367,6 +367,73 @@ export async function getCardsByIds(supabase, cardIds) {
   return (data || []).map(transformCard);
 }
 
+/**
+ * Find hypotheses that might be relevant to a newly created card.
+ * Uses keyword overlap scoring with CJK bigram support.
+ *
+ * @param {Object} supabase - Supabase client
+ * @param {Object} card - The newly created card { summary, key_points, topic_id }
+ * @param {string} topicId - Topic to search boards in
+ * @returns {Object|null} { hypothesis_id, hypothesis_text, board_id, score } or null
+ */
+export async function findEvidenceSuggestion(supabase, card, topicId) {
+  if (!topicId) return null;
+
+  const { data: board } = await supabase
+    .from('thinking_boards')
+    .select('id')
+    .eq('topic_id', topicId)
+    .maybeSingle();
+
+  if (!board) return null;
+
+  const { data: hypotheses } = await supabase
+    .from('board_nodes')
+    .select('id, claim, content')
+    .eq('board_id', board.id)
+    .eq('node_type', 'hypothesis');
+
+  if (!hypotheses?.length) return null;
+
+  const cardText = `${card.summary || ''} ${(card.key_points || []).join(' ')}`.toLowerCase();
+
+  function extractTokens(text) {
+    const latinWords = text.match(/[a-z]{2,}/gi) || [];
+    const CJK_STOP_CHARS = new Set('的了在是我有和与不也这那些个');
+    const cjkChars = (text.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g) || [])
+      .filter(c => !CJK_STOP_CHARS.has(c));
+    const cjkBigrams = [];
+    for (let i = 0; i < cjkChars.length - 1; i++) {
+      cjkBigrams.push(cjkChars[i] + cjkChars[i + 1]);
+    }
+    return [...latinWords.map(w => w.toLowerCase()), ...cjkBigrams];
+  }
+
+  let bestMatch = null;
+  let bestScore = 0;
+
+  for (const h of hypotheses) {
+    const hypoText = (h.claim || h.content?.text || '').toLowerCase();
+    const hypoTokens = extractTokens(hypoText);
+    if (hypoTokens.length === 0) continue;
+
+    const matchCount = hypoTokens.filter(t => cardText.includes(t)).length;
+    const score = matchCount / hypoTokens.length;
+
+    if (score > bestScore && score > 0.4) {
+      bestScore = score;
+      bestMatch = {
+        hypothesis_id: h.id,
+        hypothesis_text: h.claim || h.content?.text,
+        board_id: board.id,
+        score,
+      };
+    }
+  }
+
+  return bestMatch;
+}
+
 // ========= 工具函数 =========
 
 /**

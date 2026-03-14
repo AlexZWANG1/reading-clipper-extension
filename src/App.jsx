@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, Settings2, LogOut } from 'lucide-react';
+import { Loader2, Settings2, LogOut, BookOpen, ExternalLink, Clock } from 'lucide-react';
 import { useStorage } from './hooks/use-storage';
 import { fetchTopics } from './api';
 import { isLoggedIn, getCurrentUser, logout } from './api/auth';
@@ -27,6 +27,31 @@ function App() {
 
     const [toast, setToast] = useState(null);
     const [saving, setSaving] = useState(false);
+    const [importing, setImporting] = useState(false);
+
+    // Current page awareness + recent imports
+    const [currentTab, setCurrentTab] = useState(null);
+    const [existingImport, setExistingImport] = useState(null);
+    const [recentImports, setRecentImports] = useState([]);
+
+    // Load current tab + check if already imported + load recent imports
+    useEffect(() => {
+        async function loadTabContext() {
+            try {
+                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                if (tab) setCurrentTab(tab);
+                if (tab?.url) {
+                    const resp = await chrome.runtime.sendMessage({ type: 'CHECK_URL_IMPORTED', url: tab.url });
+                    if (resp?.ok && resp.existing) setExistingImport(resp.existing);
+                }
+                const recentsResp = await chrome.runtime.sendMessage({ type: 'GET_RECENT_IMPORTS' });
+                if (recentsResp?.ok) setRecentImports(recentsResp.imports || []);
+            } catch (err) {
+                console.error('loadTabContext error', err);
+            }
+        }
+        loadTabContext();
+    }, []);
 
     // 检查认证状态
     useEffect(() => {
@@ -154,6 +179,50 @@ function App() {
         setAuthChecking(false);
     };
 
+    const handleImportPage = async () => {
+        setImporting(true);
+        try {
+            const tab = currentTab || (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
+            if (!tab?.url) {
+                setToast({ type: 'error', message: '无法获取当前页面信息' });
+                return;
+            }
+            const response = await chrome.runtime.sendMessage({
+                type: 'IMPORT_PAGE',
+                url: tab.url,
+                title: tab.title || '',
+                tabId: tab.id,
+            });
+            if (response?.ok) {
+                const title = response.title || tab.title || '页面';
+                if (response.isDuplicate) {
+                    setToast({ type: 'info', message: `「${title}」已导入过` });
+                } else {
+                    setToast({ type: 'success', message: `「${title}」导入成功！` });
+                }
+                // Update state
+                if (response.material_id) {
+                    setExistingImport({ id: response.material_id, title });
+                    // Refresh recent imports
+                    const recentsResp = await chrome.runtime.sendMessage({ type: 'GET_RECENT_IMPORTS' });
+                    if (recentsResp?.ok) setRecentImports(recentsResp.imports || []);
+                }
+            } else {
+                setToast({ type: 'error', message: response?.error || '导入失败' });
+            }
+            setTimeout(() => setToast(null), 3000);
+        } catch (err) {
+            console.error(err);
+            setToast({ type: 'error', message: '导入失败: ' + err.message });
+        } finally {
+            setImporting(false);
+        }
+    };
+
+    const openInReader = (materialId) => {
+        chrome.tabs.create({ url: `http://localhost:5173/materials/${materialId}`, active: true });
+    };
+
     // 检查认证状态中
     if (authChecking) {
         return (
@@ -207,6 +276,55 @@ function App() {
             </div>
 
             <div className="p-5 relative z-10">
+                {/* Import / Open Reader button */}
+                {existingImport ? (
+                    <div className="mb-5 space-y-2">
+                        <button
+                            onClick={() => openInReader(existingImport.id)}
+                            className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold rounded-xl shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-200"
+                        >
+                            <ExternalLink className="w-4 h-4" />
+                            在阅读器中打开
+                        </button>
+                        <p className="text-xs text-center text-surface-400">此页面已导入阅读器</p>
+                    </div>
+                ) : (
+                    <button
+                        onClick={handleImportPage}
+                        disabled={importing}
+                        className="w-full mb-5 flex items-center justify-center gap-2 py-3 px-4 bg-gradient-to-r from-primary-500 to-primary-600 text-white font-semibold rounded-xl shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:from-primary-600 hover:to-primary-700 transition-all duration-200 disabled:opacity-60"
+                    >
+                        {importing ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <BookOpen className="w-4 h-4" />
+                        )}
+                        {importing ? '正在导入...' : '导入此页面到阅读器'}
+                    </button>
+                )}
+
+                {/* Recent imports */}
+                {recentImports.length > 0 && (
+                    <div className="mb-5">
+                        <div className="flex items-center gap-1.5 mb-2">
+                            <Clock className="w-3 h-3 text-surface-400" />
+                            <span className="text-xs font-semibold text-surface-400 uppercase tracking-wider">最近导入</span>
+                        </div>
+                        <div className="space-y-1">
+                            {recentImports.slice(0, 5).map((item) => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => openInReader(item.id)}
+                                    className="w-full text-left px-3 py-2 text-sm text-surface-700 bg-white/60 hover:bg-white rounded-lg border border-surface-100 hover:border-surface-200 transition-all truncate"
+                                    title={item.title}
+                                >
+                                    {item.title}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 <ModeSwitch mode={mode} onChange={setMode} />
 
                 {mode === 'focus' && (

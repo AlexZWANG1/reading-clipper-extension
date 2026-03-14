@@ -23,10 +23,15 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
     api_key = settings.embeddings_api_key or "ollama"
     model = settings.embeddings_model
 
-    logger.info(f"Embedding {len(texts)} texts via {endpoint} (model: {model})")
+    # nomic-embed-text via Ollama has effective limit of ~6400 chars
+    # Truncate any text that exceeds this to prevent 400 errors
+    max_chars = 6000  # conservative limit
+    truncated_texts = [t[:max_chars] if len(t) > max_chars else t for t in texts]
+
+    logger.info(f"Embedding {len(truncated_texts)} texts via {endpoint} (model: {model})")
 
     try:
-        embeddings = await _call_embeddings_api(texts, endpoint, api_key, model)
+        embeddings = await _call_embeddings_api(truncated_texts, endpoint, api_key, model)
         logger.info(f"Successfully embedded {len(texts)} texts")
         return embeddings
     except httpx.HTTPStatusError as e:
@@ -51,14 +56,14 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
 async def _call_embeddings_api(
     texts: list[str], url: str, api_key: str, model: str
 ) -> list[list[float]]:
-    """Call OpenAI-compatible embeddings endpoint."""
-    batch_size = 100  # Process in batches to avoid payload size limits
+    """Call OpenAI-compatible embeddings endpoint.
+
+    Sends texts one at a time to avoid Ollama batch context length limits.
+    """
     all_embeddings: list[list[float]] = []
 
     async with httpx.AsyncClient(timeout=120) as client:
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i : i + batch_size]
-
+        for idx, text in enumerate(texts):
             resp = await client.post(
                 url,
                 headers={
@@ -67,7 +72,7 @@ async def _call_embeddings_api(
                 },
                 json={
                     "model": model,
-                    "input": batch,
+                    "input": text,
                 },
             )
             resp.raise_for_status()
@@ -79,15 +84,15 @@ async def _call_embeddings_api(
                     f"Invalid response format (missing 'data' field): {str(data)[:200]}"
                 )
 
-            batch_embeddings = []
             for item in data["data"]:
                 if "embedding" not in item:
                     raise ValueError(
                         f"Invalid response format (missing 'embedding' field): {str(item)[:200]}"
                     )
-                batch_embeddings.append(item["embedding"])
+                all_embeddings.append(item["embedding"])
 
-            all_embeddings.extend(batch_embeddings)
+            if (idx + 1) % 20 == 0:
+                logger.info(f"Embedded {idx + 1}/{len(texts)} texts...")
 
     return all_embeddings
 
