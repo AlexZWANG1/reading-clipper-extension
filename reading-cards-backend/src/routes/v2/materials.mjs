@@ -1,6 +1,31 @@
 import express from 'express';
 import { supabaseAdmin } from '../../config/supabase.mjs';
 import { requireAuth } from '../../middleware/auth.mjs';
+import multer from 'multer';
+import path from 'path';
+import { randomUUID } from 'crypto';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const UPLOADS_DIR = path.resolve(__dirname, '../../uploads');
+
+const storage = multer.diskStorage({
+  destination: UPLOADS_DIR,
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${randomUUID()}${ext}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.pdf', '.docx', '.pptx', '.txt', '.md'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, allowed.includes(ext));
+  },
+});
 
 const router = express.Router();
 
@@ -22,10 +47,10 @@ const CONTENT_FETCH_URL = process.env.CONTENT_FETCH_URL || 'http://127.0.0.1:820
  */
 router.post('/ingest', requireAuth, async (req, res) => {
   try {
-    const { source_type, url, file_path, text, topic_id, title } = req.body;
+    const { source_type, url, file_path, text, html, topic_id, title } = req.body;
     const userId = req.user.id; // from auth middleware
 
-    if (!source_type || !['url', 'file', 'text'].includes(source_type)) {
+    if (!source_type || !['url', 'file', 'text', 'html'].includes(source_type)) {
       return res.status(400).json({ error: 'Invalid source_type' });
     }
 
@@ -39,8 +64,32 @@ router.post('/ingest', requireAuth, async (req, res) => {
     if (source_type === 'text' && !text) {
       return res.status(400).json({ error: 'text required for source_type=text' });
     }
+    if (source_type === 'html' && !html) {
+      return res.status(400).json({ error: 'html required for source_type=html' });
+    }
 
-    // NEW: Call content-fetch service for URL extraction
+    // Duplicate URL detection
+    if (url && ['url', 'html'].includes(source_type)) {
+      const { data: existing } = await supabase
+        .from('materials')
+        .select('id, title')
+        .eq('user_id', userId)
+        .eq('url', url)
+        .limit(1)
+        .maybeSingle();
+
+      if (existing) {
+        return res.json({
+          ok: true,
+          material_id: existing.id,
+          title: existing.title,
+          url,
+          status: 'duplicate',
+        });
+      }
+    }
+
+    // Call content-fetch service for extraction
     let extractionResult = null;
     if (source_type === 'url') {
       try {
@@ -66,15 +115,32 @@ router.post('/ingest', requireAuth, async (req, res) => {
         }
       } catch (err) {
         console.error('[Materials] Content-fetch service failed:', err);
-        // Continue anyway, let sidecar handle it
+      }
+    } else if (source_type === 'html') {
+      try {
+        console.log(`[Materials] Extracting from browser DOM (${html.length} chars), url: ${url || 'none'}`);
+        const response = await fetch(`${CONTENT_FETCH_URL}/extract/html`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ html, url }),
+        });
+
+        if (response.ok) {
+          extractionResult = await response.json();
+          console.log(`[Materials] Browser DOM extraction successful - Method: ${extractionResult.extraction_method}, Status: ${extractionResult.extraction_status}`);
+        } else {
+          console.warn(`[Materials] Content-fetch /extract/html returned ${response.status}`);
+        }
+      } catch (err) {
+        console.error('[Materials] Content-fetch HTML extraction failed:', err);
       }
     }
 
     // 1. Create material record with rich metadata
     const materialData = {
       user_id: userId,
-      title: extractionResult?.title || title || (source_type === 'url' ? url : 'Untitled'),
-      source_type,
+      title: extractionResult?.title || title || (['url', 'html'].includes(source_type) ? url : 'Untitled'),
+      source_type: source_type === 'html' ? 'url' : source_type, // normalize html → url for storage
       url,
       file_path,
       topic_id,
@@ -127,13 +193,17 @@ router.post('/ingest', requireAuth, async (req, res) => {
       },
       body: JSON.stringify(sidecarPayload),
     }).catch((err) => {
-      console.error('Sidecar ingestion failed:', err);
-      // Update material status to failed
+      console.error('Sidecar ingestion failed:', err.message);
+      // Graceful degradation: if content was extracted, mark as completed (readable)
+      // Only mark as failed if we have no content at all
+      const hasContent = !!(extractionResult?.article_html || extractionResult?.text_content);
       supabase
         .from('materials')
         .update({
-          ingestion_status: 'failed',
-          ingestion_error: err.message,
+          ingestion_status: hasContent ? 'completed' : 'failed',
+          ingestion_error: hasContent
+            ? 'Sidecar unavailable — content readable, advanced features (semantic search) disabled'
+            : err.message,
         })
         .eq('id', material.id)
         .then();
@@ -142,6 +212,8 @@ router.post('/ingest', requireAuth, async (req, res) => {
     res.json({
       ok: true,
       material_id: material.id,
+      title: material.title,
+      url: material.url,
       status: 'pending',
     });
   } catch (error) {
@@ -296,6 +368,66 @@ router.delete('/:id', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Delete material error:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/upload', requireAuth, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded or unsupported file type' });
+    }
+
+    const userId = req.user.id;
+    const { topic_id } = req.body;
+    const filePath = req.file.path;
+    const originalName = req.file.originalname;
+    const title = path.basename(originalName, path.extname(originalName));
+
+    // Create material record
+    const { data: material, error } = await supabase
+      .from('materials')
+      .insert({
+        user_id: userId,
+        title,
+        source_type: 'file',
+        file_path: filePath,
+        topic_id: topic_id || null,
+        ingestion_status: 'pending',
+      })
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to create material' });
+    }
+
+    // Fire-and-forget sidecar call
+    fetch(`${SIDECAR_URL}/ingest`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Sidecar-Key': SIDECAR_API_KEY,
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        material_id: material.id,
+        source_type: 'file',
+        file_path: filePath,
+        topic_id: topic_id || null,
+      }),
+    }).catch((err) => {
+      console.error('Sidecar file ingestion failed:', err.message);
+      supabase
+        .from('materials')
+        .update({ ingestion_status: 'failed', ingestion_error: err.message })
+        .eq('id', material.id)
+        .then();
+    });
+
+    res.json({ ok: true, material_id: material.id, title, status: 'pending' });
+  } catch (err) {
+    console.error('Upload error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 

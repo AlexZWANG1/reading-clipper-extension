@@ -36,6 +36,9 @@ __pycache__/
 *.tmp
 *.temp
 
+# Uploaded files
+uploads/
+
 
 
 
