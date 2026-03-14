@@ -198,6 +198,21 @@ export async function createAIClientConfig(userId = null, supabaseClient = null)
   };
 }
 
+async function fetchWithTimeout(url, options, timeoutMs = 120000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error(`AI API 请求超时 (${timeoutMs / 1000}s)`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * 调用Chat API（兼容OpenAI格式）
  * @param {Object} config - AI客户端配置
@@ -231,7 +246,7 @@ export async function callChatAPI(config, messages, options = {}) {
   if (runtimeMode === "proxy") {
     if (process.env.LOG_LEVEL === 'debug') console.log(`[callChatAPI] 代理模式: ${chatEndpoint}, model: ${payload.model}`);
 
-    const response = await fetch(chatEndpoint, {
+    const response = await fetchWithTimeout(chatEndpoint, {
       method: "POST",
       headers,
       body: JSON.stringify(payload),
@@ -244,46 +259,94 @@ export async function callChatAPI(config, messages, options = {}) {
     }
 
     const result = await response.json();
+    // Token usage logging
+    if (result.usage) {
+      const { prompt_tokens, completion_tokens } = result.usage;
+      console.log(`[ai] ${payload.model} | ${prompt_tokens} in / ${completion_tokens} out | total: ${prompt_tokens + completion_tokens}`);
+    }
     if (process.env.LOG_LEVEL === 'debug') console.log("[callChatAPI] 代理响应成功");
     return result;
   }
 
   // 直连模式：Anthropic 需要特殊处理
   if (provider === "anthropic") {
+    // Extract system message (Anthropic requires it as a top-level field, not in messages)
+    const systemMessage = payload.messages.find(m => m.role === 'system');
+    const nonSystemMessages = payload.messages.filter(m => m.role !== 'system');
+
+    // Translate messages: OpenAI format → Anthropic format
+    const anthropicMessages = translateToAnthropicFormat(nonSystemMessages);
+
+    // Build Anthropic-specific payload
     const anthropicPayload = {
       model: payload.model,
       max_tokens: options.max_tokens || 4096,
-      messages: payload.messages,
+      ...(systemMessage ? { system: systemMessage.content } : {}),
+      messages: anthropicMessages,
     };
 
-    const response = await fetch(chatEndpoint, {
-      method: "POST",
+    // Add tools if present (translate OpenAI tool format → Anthropic)
+    if (options.tools?.length > 0) {
+      anthropicPayload.tools = options.tools.map(t => ({
+        name: t.function.name,
+        description: t.function.description,
+        input_schema: t.function.parameters,
+      }));
+    }
+
+    const response = await fetchWithTimeout(chatEndpoint, {
+      method: 'POST',
       headers,
       body: JSON.stringify(anthropicPayload),
     });
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
+      const errorText = await response.text().catch(() => '');
       throw new Error(`Anthropic API 请求失败：${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    // 转换为OpenAI格式
-    return {
-      choices: [
-        {
-          message: {
-            content: data.content?.[0]?.text || "",
-            role: "assistant",
-          },
-        },
-      ],
+
+    // Translate response: Anthropic format → OpenAI format
+    const textParts = (data.content || []).filter(b => b.type === 'text').map(b => b.text);
+    const toolUseParts = (data.content || []).filter(b => b.type === 'tool_use');
+
+    const message = {
+      role: 'assistant',
+      content: textParts.join('\n') || null,
     };
+
+    if (toolUseParts.length > 0) {
+      message.tool_calls = toolUseParts.map(tu => ({
+        id: tu.id,
+        type: 'function',
+        function: {
+          name: tu.name,
+          arguments: JSON.stringify(tu.input),
+        },
+      }));
+    }
+
+    const result = {
+      choices: [{ message }],
+      usage: data.usage ? {
+        prompt_tokens: data.usage.input_tokens,
+        completion_tokens: data.usage.output_tokens,
+      } : undefined,
+    };
+
+    // Token usage logging
+    if (result.usage) {
+      const { prompt_tokens, completion_tokens } = result.usage;
+      console.log(`[ai] ${payload.model} | ${prompt_tokens} in / ${completion_tokens} out | total: ${prompt_tokens + completion_tokens}`);
+    }
+
+    return result;
   }
 
   // 直连模式：OpenAI / Custom
   if (process.env.LOG_LEVEL === 'debug') console.log("[callChatAPI] 直连模式:", chatEndpoint, "model:", payload.model);
-  const response = await fetch(chatEndpoint, {
+  const response = await fetchWithTimeout(chatEndpoint, {
     method: "POST",
     headers,
     body: JSON.stringify(payload),
@@ -296,6 +359,11 @@ export async function callChatAPI(config, messages, options = {}) {
   }
 
   const result = await response.json();
+  // Token usage logging
+  if (result.usage) {
+    const { prompt_tokens, completion_tokens } = result.usage;
+    console.log(`[ai] ${payload.model} | ${prompt_tokens} in / ${completion_tokens} out | total: ${prompt_tokens + completion_tokens}`);
+  }
   if (process.env.LOG_LEVEL === 'debug') console.log("[callChatAPI] 直连响应成功");
   return result;
 }
@@ -333,7 +401,7 @@ export async function callResponsesAPI(config, prompt, input, options = {}) {
 
   console.log(`[callResponsesAPI] ${runtimeMode} 模式: ${responsesEndpoint}`);
 
-  const response = await fetch(responsesEndpoint, {
+  const response = await fetchWithTimeout(responsesEndpoint, {
     method: "POST",
     headers,
     body: JSON.stringify(payload),
@@ -370,6 +438,42 @@ function extractTextFromResponse(data) {
     }
   }
   return parts.join("\n\n");
+}
+
+/**
+ * Translate OpenAI-format messages to Anthropic format.
+ * - 'tool' role → 'user' with tool_result content block
+ * - assistant with tool_calls → assistant with tool_use content blocks
+ * Note: system messages must be extracted before calling this function.
+ */
+function translateToAnthropicFormat(messages) {
+  return messages.map(m => {
+    if (m.role === 'tool') {
+      return {
+        role: 'user',
+        content: [{
+          type: 'tool_result',
+          tool_use_id: m.tool_call_id,
+          content: m.content,
+        }],
+      };
+    }
+    if (m.tool_calls) {
+      return {
+        role: 'assistant',
+        content: [
+          ...(m.content ? [{ type: 'text', text: m.content }] : []),
+          ...m.tool_calls.map(tc => ({
+            type: 'tool_use',
+            id: tc.id,
+            name: tc.function.name,
+            input: JSON.parse(tc.function.arguments || '{}'),
+          })),
+        ],
+      };
+    }
+    return m;
+  });
 }
 
 /**
