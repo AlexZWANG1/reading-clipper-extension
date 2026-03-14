@@ -227,6 +227,8 @@ export function getRuntimeSummary() {
 // ========= Chat Completion 调用 =========
 
 /**
+ * @deprecated Use callChatAPI from aiClient.mjs instead. Will be removed in next major version.
+ *
  * Call chat completion API (OpenAI-compatible)
  * @param {Array} messages - Chat messages array
  * @param {Object} options - { model, temperature, max_tokens, json_mode }

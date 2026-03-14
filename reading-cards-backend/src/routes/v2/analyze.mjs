@@ -1,7 +1,7 @@
 import express from 'express';
 import { supabaseAdmin } from '../../config/supabase.mjs';
 import { requireAuth } from '../../middleware/auth.mjs';
-import { callChatCompletion } from '../../services/aiRuntime.mjs';
+import { createAIClientConfig, callChatAPI } from '../../services/aiClient.mjs';
 
 const router = express.Router();
 const supabase = supabaseAdmin;
@@ -15,6 +15,8 @@ router.post('/:id/analyze', requireAuth, async (req, res) => {
     const { id } = req.params;
     const { mode, question } = req.body;
     const userId = req.user.id;
+
+    const aiConfig = await createAIClientConfig(userId, supabase);
 
     if (!['summary', 'qa'].includes(mode)) {
       return res.status(400).json({ error: 'mode must be summary or qa' });
@@ -47,10 +49,17 @@ router.post('/:id/analyze', requireAuth, async (req, res) => {
       }
 
       const truncated = articleText.slice(0, MAX_CONTEXT_CHARS);
-      const result = await callChatCompletion([
+      const messages = [
         { role: 'system', content: 'You are a reading assistant. Respond in valid JSON.' },
         { role: 'user', content: `Analyze this article and provide:\n1. A 2-3 sentence summary\n2. 3-5 key arguments/claims (with the exact quote from the article)\n3. Questions worth exploring further\n\nRespond in the same language as the article.\n\nJSON format: { "summary": "...", "key_points": [{ "claim": "...", "quote": "exact text", "significance": "..." }], "questions": ["..."] }\n\nArticle:\n${truncated}` },
-      ], { json_mode: true, max_tokens: 4000 });
+      ];
+      const response = await callChatAPI(aiConfig, messages, {
+        max_tokens: 4000,
+        response_format: { type: 'json_object' },
+      });
+      let content = response.choices?.[0]?.message?.content || '';
+      content = content.replace(/^```json\s*\n?/, '').replace(/\n?```\s*$/, '');
+      const result = JSON.parse(content);
 
       return res.json({ mode: 'summary', result });
     }
@@ -89,10 +98,17 @@ router.post('/:id/analyze', requireAuth, async (req, res) => {
         context = text.slice(0, MAX_CONTEXT_CHARS);
       }
 
-      const result = await callChatCompletion([
+      const qaMessages = [
         { role: 'system', content: 'You are a reading assistant. Answer based on the article. Respond in valid JSON.' },
         { role: 'user', content: `Answer this question based on the article content below.\nCite specific passages by including exact quotes.\nIf the article doesn\'t address this, say so.\nRespond in the same language as the question.\n\nJSON format: { "answer": "...", "sources": [{ "chunk_id": "id if available", "quote": "exact text" }] }\n\nQuestion: ${question}\n\nArticle passages:\n${context}` },
-      ], { json_mode: true, max_tokens: 2000 });
+      ];
+      const qaResponse = await callChatAPI(aiConfig, qaMessages, {
+        max_tokens: 2000,
+        response_format: { type: 'json_object' },
+      });
+      let qaContent = qaResponse.choices?.[0]?.message?.content || '';
+      qaContent = qaContent.replace(/^```json\s*\n?/, '').replace(/\n?```\s*$/, '');
+      const result = JSON.parse(qaContent);
 
       return res.json({ mode: 'qa', result });
     }
