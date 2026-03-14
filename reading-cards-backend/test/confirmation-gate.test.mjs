@@ -28,6 +28,19 @@ describe('confirmation gate regression', () => {
     );
   });
 
+  it('chatConfirm continuation loop must also gate on write tools', () => {
+    assert.ok(
+      source.includes('hasMoreWrites'),
+      'chatConfirm should check hasMoreWrites in its continuation loop'
+    );
+    // The continuation loop after confirm must also pause for new writes
+    const confirmSection = source.slice(source.indexOf('chatConfirm'));
+    assert.ok(
+      confirmSection.includes('pendingActions') && confirmSection.includes('hasMoreWrites'),
+      'chatConfirm continuation must return pendingActions when AI requests more writes'
+    );
+  });
+
   it('chat mode must force explore group in BOTH chat() and chatWithConversation()', () => {
     // Both functions must use the same pattern to enforce chat mode = explore only
     const chatModePattern = /mode\s*===\s*['"]chat['"]\s*\?\s*['"]explore['"]/g;
