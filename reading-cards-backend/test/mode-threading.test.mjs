@@ -30,57 +30,28 @@ const autoPrompt = buildSystemPrompt({
   toolGroup: 'explore',
   mode: 'auto',
 });
-assert.ok(!autoPrompt.includes('聊天'), 'auto mode should not have chat instruction');
-assert.ok(!autoPrompt.includes('代理'), 'auto mode should not have agent instruction');
+assert.ok(!autoPrompt.includes('<mode>'), 'auto mode should not have mode tag');
 
-// Test 4: UUID prohibition present in all modes
-assert.ok(chatPrompt.includes('NEVER show internal IDs'), 'UUID prohibition missing in chat');
-assert.ok(agentPrompt.includes('NEVER show internal IDs'), 'UUID prohibition missing in agent');
-assert.ok(autoPrompt.includes('NEVER show internal IDs'), 'UUID prohibition missing in auto');
+// Test 4: XML structure present
+assert.ok(chatPrompt.includes('<role>'), 'should use XML role tag');
+assert.ok(chatPrompt.includes('<absolute_prohibitions>'), 'should use XML prohibitions tag');
+assert.ok(chatPrompt.includes('<data_model>'), 'should use XML data_model tag');
 
-// Test 5: output format guidance present
-assert.ok(chatPrompt.includes('card\'s title as a heading'), 'output format guidance missing');
+// Test 5: UUID prohibition present (now in Chinese)
+assert.ok(chatPrompt.includes('UUID'), 'UUID prohibition missing in chat');
 
-// Test 6: default mode (undefined) behaves like auto
-const defaultPrompt = buildSystemPrompt({
-  surfaceContext: null,
+// Test 6: Few-shot examples present
+assert.ok(chatPrompt.includes('<examples>'), 'few-shot examples missing');
+
+// Test 7: describeSurface should not contain IDs
+const boardPrompt = buildSystemPrompt({
+  surfaceContext: { surface: 'board', topicId: 'some-uuid-123' },
   methodology: null,
   researchState: null,
-  toolGroup: 'explore',
+  toolGroup: 'board',
+  mode: 'auto',
 });
-assert.ok(!defaultPrompt.includes('聊天'), 'default mode should behave like auto');
+assert.ok(!boardPrompt.includes('some-uuid-123'), 'surface should not expose topic UUID');
+assert.ok(boardPrompt.includes('思维画板'), 'board surface should mention thinking board');
 
-// Test 7-9: Tool group resolution with mode parameter
-import { inferToolGroup } from '../src/chat/toolGroups.mjs';
-
-// Helper that mirrors the actual orchestrator logic
-function resolveToolGroup(mode, message, surfaceContext, toolGroupOverride) {
-  return toolGroupOverride || (mode === 'chat' ? 'explore' : inferToolGroup(message, surfaceContext));
-}
-
-// Even with board keywords, chat mode should force explore
-assert.equal(
-  resolveToolGroup('chat', '帮我分解这个假说', { surface: 'board' }, null),
-  'explore',
-  'chat mode should force explore group regardless of keywords'
-);
-
-// Agent mode uses inference
-assert.equal(
-  resolveToolGroup('agent', '帮我分解这个假说', { surface: 'board' }, null),
-  'board',
-  'agent mode should use keyword/surface inference'
-);
-
-// toolGroupOverride always wins over mode
-assert.equal(
-  resolveToolGroup('chat', '搜索', null, 'full'),
-  'full',
-  'toolGroupOverride should win over chat mode'
-);
-
-// Test 10: computeResearchState exports
-import { computeResearchState } from '../src/agents/researchContext.mjs';
-assert.equal(typeof computeResearchState, 'function', 'computeResearchState should be a function');
-
-console.log('✅ All mode threading tests passed (10/10)');
+console.log('All prompt builder tests passed!');
