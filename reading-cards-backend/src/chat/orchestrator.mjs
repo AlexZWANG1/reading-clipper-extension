@@ -497,8 +497,10 @@ function summarizeToolResult(tool, result) {
       return `找到 ${result.count || result.cards?.length || 0} 张相关卡片`;
     case "ingest_url":
       return `已摄入: ${result.title || result.material_id || "unknown"}`;
-    case "create_card":
-      return `已创建卡片: ${result.card?.title || result.message || ""}`;
+    case "create_card": {
+      const summary = `已创建卡片: ${result.card?.title || result.message || ""}`;
+      return result.snippet_warning ? `${summary} ⚠ ${result.snippet_warning}` : summary;
+    }
     case "list_cards":
       return `列出 ${result.total || result.cards?.length || 0} 张卡片`;
     case "list_topics":
