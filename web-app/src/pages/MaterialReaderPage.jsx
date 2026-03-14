@@ -2,13 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ExternalLink, BookOpen, Search, Loader2,
-  FileText, Globe, FileType, X, CheckCircle,
+  FileText, Globe, FileType, X, CheckCircle, Sparkles,
 } from 'lucide-react';
 import { materialsApi, highlightsApi, cardsApi, searchApi } from '../lib/api';
 import { useTopicsStore } from '../lib/store';
 import ReaderContent from '../components/Reader/ReaderContent';
 import SelectionPopover from '../components/Reader/SelectionPopover';
 import CardsSidebar from '../components/Reader/CardsSidebar';
+import AIPanel from '../components/Reader/AIPanel';
 
 export default function MaterialReaderPage() {
   const { id } = useParams();
@@ -41,6 +42,7 @@ export default function MaterialReaderPage() {
   const [cardSuccess, setCardSuccess] = useState(false);
   const [cardHighlights, setCardHighlights] = useState([]);
   const [activeCardHighlightId, setActiveCardHighlightId] = useState(null);
+  const [showAIPanel, setShowAIPanel] = useState(false);
 
   useEffect(() => {
     if (id) loadMaterial();
@@ -277,8 +279,8 @@ export default function MaterialReaderPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
-          {/* Focus Lens 开关 */}
-          {showFocusInput ? (
+          {/* Focus Lens 开关 — only show when chunks available */}
+          {chunks.length === 0 ? null : showFocusInput ? (
             <div className="flex items-center gap-2">
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
@@ -314,6 +316,19 @@ export default function MaterialReaderPage() {
             </button>
           )}
 
+          {/* AI Panel toggle */}
+          <button
+            onClick={() => setShowAIPanel(!showAIPanel)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border rounded-lg transition-colors ${
+              showAIPanel
+                ? 'text-indigo-600 border-indigo-300 bg-indigo-50'
+                : 'text-gray-500 border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            AI
+          </button>
+
           {material.url && (
             <a
               href={material.url}
@@ -344,11 +359,17 @@ export default function MaterialReaderPage() {
         {/* 阅读区 */}
         <div className="flex-1 overflow-y-auto px-6 py-6 relative">
           {material.ingestion_status !== 'completed' && (
-            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-700">
+            <div className={`mb-4 p-3 rounded-lg text-sm ${
+              material.ingestion_status === 'failed'
+                ? 'bg-amber-50 border border-amber-200 text-amber-700'
+                : 'bg-yellow-50 border border-yellow-200 text-yellow-700'
+            }`}>
               {material.ingestion_status === 'processing'
                 ? '内容正在处理中，请稍后刷新...'
                 : material.ingestion_status === 'failed'
-                ? '内容处理失败。'
+                ? (material.article_html || material.text_content
+                    ? '语义搜索暂不可用，但文章内容已就绪，可正常阅读。'
+                    : '内容提取失败，请尝试重新导入。')
                 : '内容即将开始处理...'}
             </div>
           )}
@@ -372,17 +393,35 @@ export default function MaterialReaderPage() {
           />
         </div>
 
-        {/* 右侧卡片侧边栏 */}
+        {/* 右侧侧边栏 */}
         <div className="w-72 border-l border-gray-200 flex-shrink-0 overflow-hidden">
-          <CardsSidebar
-            materialId={id}
-            refreshSignal={cardRefresh}
-            onCardClick={(card) => {
-              const targets = buildCardHighlightFromCard(card);
-              setCardHighlights(targets);
-              setActiveCardHighlightId(targets[0]?.id || null);
-            }}
-          />
+          {showAIPanel ? (
+            <AIPanel
+              materialId={id}
+              onHighlightQuote={(quoteText) => {
+                if (!quoteText) return;
+                setCardHighlights([{
+                  id: `ai-quote-${Date.now()}`,
+                  exact: quoteText,
+                  prefix: '',
+                  suffix: '',
+                  chunk_id: null,
+                  color: 'indigo',
+                }]);
+                setActiveCardHighlightId(`ai-quote-${Date.now()}`);
+              }}
+            />
+          ) : (
+            <CardsSidebar
+              materialId={id}
+              refreshSignal={cardRefresh}
+              onCardClick={(card) => {
+                const targets = buildCardHighlightFromCard(card);
+                setCardHighlights(targets);
+                setActiveCardHighlightId(targets[0]?.id || null);
+              }}
+            />
+          )}
         </div>
       </div>
 
