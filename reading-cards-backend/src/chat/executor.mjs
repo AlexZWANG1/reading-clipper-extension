@@ -9,9 +9,14 @@ import {
 } from "../services/supabase/tasks.mjs";
 import { addMessage } from "../services/supabase/conversations.mjs";
 import { executeTool } from "./toolExecutor.mjs";
+import { getToolSideEffect } from "./tools.mjs";
 import { createAIClientConfig, callChatAPI } from "../services/aiClient.mjs";
 
 const cancelledTaskIds = new Set();
+
+// Spec §12: Research runs may create but NOT delete existing data.
+// Block destructive tools during automated plan execution.
+const BLOCKED_IN_PLAN = new Set(['delete_board_node', 'delete_board_edge']);
 
 export function cancelExecution(taskId) {
   if (!taskId) return;
@@ -75,6 +80,14 @@ export async function executePlan({ task, planSpec, conversationId, supabase }) 
       });
 
       try {
+        // Guard: block destructive tools during automated plan execution (Spec §12)
+        if (BLOCKED_IN_PLAN.has(planStep.tool)) {
+          throw new Error(
+            `Tool "${planStep.tool}" is blocked during plan execution. ` +
+            `Research runs may create data but cannot delete existing nodes/edges.`
+          );
+        }
+
         // Resolve input — may reference previous step outputs
         const resolvedInput = resolveStepInput(planStep, stepOutputs);
 
