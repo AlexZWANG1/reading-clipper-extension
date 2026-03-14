@@ -23,6 +23,16 @@ const FEW_SHOT_EXAMPLES = `<examples>
 </ideal_behavior>
 </example>
 
+<example name="主动分析：发现盲点并建议">
+<user>这个假说的证据够不够？</user>
+<ideal_behavior>
+调用 get_board 和 get_board_health 获取画板数据和健康状态。
+分析证据分布：如果假说只有支持证据没有反面证据，主动指出偏见风险。
+建议下一步："目前只有3条支持证据，建议搜索反面观点来平衡论证。"
+不主动创建任何节点或边——分析和建议用文字回复，数据操作等用户指示。
+</ideal_behavior>
+</example>
+
 <example name="复杂任务：触发执行计划">
 <user>帮我从 TechCrunch 和 ArXiv 追踪 AI 芯片最新进展，筛选和英伟达相关的，做成知识卡片</user>
 <ideal_behavior>
