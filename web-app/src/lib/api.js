@@ -570,6 +570,35 @@ export const boardsApi = {
     request(`/v2/boards/${boardId}/edges/${edgeId}`, {
       method: 'DELETE',
     }),
+
+  // ========= Health / Draft / Quick-link =========
+
+  getHealth: (boardId) =>
+    request(`/v2/boards/${boardId}/health`),
+
+  getDrafts: (boardId) =>
+    request(`/v2/boards/${boardId}/drafts`),
+
+  commitDraft: (boardId, draftId, acceptedIndices = null) =>
+    request(`/v2/boards/${boardId}/drafts/${draftId}/commit`, {
+      method: 'POST',
+      body: JSON.stringify({ accepted_indices: acceptedIndices }),
+    }),
+
+  rejectDraft: (boardId, draftId) =>
+    request(`/v2/boards/${boardId}/drafts/${draftId}/reject`, {
+      method: 'POST',
+    }),
+
+  quickLink: (boardId, cardId, hypothesisId, relationType = 'supports') =>
+    request(`/v2/boards/${boardId}/quick-link`, {
+      method: 'POST',
+      body: JSON.stringify({
+        card_id: cardId,
+        hypothesis_id: hypothesisId,
+        relation_type: relationType,
+      }),
+    }),
 };
 
 // ========= Chat API =========
@@ -662,6 +691,23 @@ export const materialsApi = {
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
       throw new ApiError(data.error || 'Upload failed', response.status, data);
+    }
+    return response.json();
+  },
+  analyze: async (id, mode, question) => {
+    const token = getAccessToken();
+    const response = await fetch(`${API_BASE}/v2/materials/${id}/analyze`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ mode, question }),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new ApiError(data.error || 'Analysis failed', response.status, data);
     }
     return response.json();
   },
