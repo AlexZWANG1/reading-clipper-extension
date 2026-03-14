@@ -65,7 +65,7 @@ export async function executeTool(name, args, ctx) {
     }
 
     case "get_card": {
-      const card = await findCardById(supabase, args.card_id);
+      const card = await findCardById(supabase, args.card_id, userId);
       if (!card) return { error: "card_not_found" };
       return { card };
     }
@@ -109,7 +109,7 @@ export async function executeTool(name, args, ctx) {
     }
 
     case "get_board": {
-      const board = await getFullBoard(supabase, args.board_id);
+      const board = await getFullBoard(supabase, args.board_id, userId);
       if (!board) return { error: "board_not_found" };
       return { board };
     }
@@ -123,7 +123,7 @@ export async function executeTool(name, args, ctx) {
     }
 
     case "get_document": {
-      const doc = await getDocument(supabase, args.doc_id);
+      const doc = await getDocument(supabase, args.doc_id, userId);
       if (!doc) return { error: "document_not_found" };
       return { document: doc };
     }

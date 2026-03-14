@@ -173,8 +173,8 @@ export async function listCards(supabase, userId, filters = {}) {
  * @param {string} cardId - 卡片 ID
  * @returns {Object|null} 卡片对象或 null
  */
-export async function findCardById(supabase, cardId) {
-  const { data, error } = await supabase
+export async function findCardById(supabase, cardId, userId) {
+  let query = supabase
     .from("cards")
     .select(
       `
@@ -182,8 +182,9 @@ export async function findCardById(supabase, cardId) {
       topic:topics(id, title)
     `
     )
-    .eq("id", cardId)
-    .single();
+    .eq("id", cardId);
+  if (userId) query = query.eq("user_id", userId);
+  const { data, error } = await query.single();
 
   if (error) {
     if (error.code === "PGRST116") {

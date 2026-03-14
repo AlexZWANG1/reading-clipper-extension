@@ -129,8 +129,8 @@ export async function listDocuments(supabase, userId, filters = {}) {
  * @param {string} docId - 文档 ID
  * @returns {Object|null} 文档对象或 null
  */
-export async function getDocument(supabase, docId) {
-  const { data, error } = await supabase
+export async function getDocument(supabase, docId, userId) {
+  let query = supabase
     .from("documents")
     .select(
       `
@@ -138,8 +138,9 @@ export async function getDocument(supabase, docId) {
       topic:topics(id, title)
     `
     )
-    .eq("id", docId)
-    .single();
+    .eq("id", docId);
+  if (userId) query = query.eq("user_id", userId);
+  const { data, error } = await query.single();
 
   if (error) {
     if (error.code === "PGRST116") {

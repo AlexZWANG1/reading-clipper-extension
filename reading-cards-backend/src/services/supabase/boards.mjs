@@ -329,8 +329,14 @@ export async function deleteEdge(supabase, edgeId) {
 /**
  * 获取完整画板数据（包含节点和边）
  */
-export async function getFullBoard(supabase, boardId) {
-    const board = await getBoardById(supabase, boardId);
+export async function getFullBoard(supabase, boardId, userId) {
+    let query = supabase
+        .from("thinking_boards")
+        .select("*")
+        .eq("id", boardId);
+    if (userId) query = query.eq("user_id", userId);
+    const { data: board, error } = await query.single();
+    if (error && error.code !== "PGRST116") throw error;
     if (!board) return null;
 
     const nodes = await listNodes(supabase, boardId);
