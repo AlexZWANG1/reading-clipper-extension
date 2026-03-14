@@ -84,7 +84,20 @@ export async function executeTool(name, args, ctx) {
         source_url: args.source_url || null,
       };
       const card = await addCard(supabase, userId, cardData);
-      return { card, message: `已创建卡片，ID: ${card.id}` };
+
+      // Best-effort raw_snippet traceability check (Spec §12)
+      let snippetWarning = null;
+      if (args.raw_snippet && args.source_url) {
+        try {
+          snippetWarning = await verifyRawSnippet(supabase, userId, args.source_url, args.raw_snippet);
+        } catch {
+          // Non-blocking — don't fail card creation over verification errors
+        }
+      }
+
+      const result = { card, message: `已创建卡片，ID: ${card.id}` };
+      if (snippetWarning) result.snippet_warning = snippetWarning;
+      return result;
     }
 
     // ── Topics (read) ──
@@ -292,4 +305,38 @@ export async function executeTool(name, args, ctx) {
     default:
       return { error: `unknown_tool: ${name}` };
   }
+}
+
+// ── Helpers ──────────────────────────────────────────
+
+/**
+ * Best-effort verification that raw_snippet is an exact substring of source material.
+ * Returns a warning string if verification fails, null if verified or skipped.
+ */
+async function verifyRawSnippet(supabase, userId, sourceUrl, rawSnippet) {
+  if (!rawSnippet || rawSnippet.length < 10) return null; // Too short to verify meaningfully
+
+  // Find material by URL
+  const { data: material } = await supabase
+    .from('materials')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('url', sourceUrl)
+    .maybeSingle();
+
+  if (!material) return null; // Material not found — can't verify, skip
+
+  // Check if snippet exists in any chunk
+  const { data: matchingChunks } = await supabase
+    .from('chunks')
+    .select('id')
+    .eq('material_id', material.id)
+    .ilike('content', `%${rawSnippet.slice(0, 100)}%`) // Use first 100 chars to avoid query limits
+    .limit(1);
+
+  if (!matchingChunks || matchingChunks.length === 0) {
+    return "raw_snippet 未在源材料中找到精确匹配。请确认引用的是原文而非改写。";
+  }
+
+  return null; // Verified
 }
