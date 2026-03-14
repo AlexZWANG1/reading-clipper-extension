@@ -16,6 +16,7 @@ import { supabaseAdmin } from "../config/supabase.mjs";
 import { buildSystemPrompt } from "./promptBuilder.mjs";
 import { inferToolGroup, getToolsForGroup } from "./toolGroups.mjs";
 import { getResearchState, loadUserMethodology, computeResearchState } from "../agents/researchContext.mjs";
+import { estimateTokens, calculateBudget, buildHistoryWithinBudget } from "./contextBudget.mjs";
 
 const MAX_TOOL_ROUNDS = 6;
 
@@ -375,6 +376,16 @@ export async function chatConfirm({ messages, pendingToolCalls, confirmedIds, us
 
 // ── Helpers ──────────────────────────────────────────
 
+function summarizeArgs(args) {
+  if (!args) return '';
+  const entries = Object.entries(args);
+  if (entries.length === 0) return '';
+  return entries
+    .slice(0, 3)
+    .map(([k, v]) => `${k}=${typeof v === 'string' ? v.slice(0, 30) : JSON.stringify(v).slice(0, 30)}`)
+    .join(', ');
+}
+
 function summarizeResult(result) {
   if (!result) return 'null';
   if (result.error) return `error: ${result.error}`;
@@ -517,17 +528,51 @@ export async function chatWithConversation({ conversationId, userMessage, userId
     message_type: "text",
   });
 
-  // Load conversation history for context
-  const history = await listMessages(adminSb, convId, { limit: 50 });
+  // Load conversation history (newest-first after P0-1 fix)
+  const history = await listMessages(adminSb, convId, { limit: 200 });
 
-  // Convert DB messages to OpenAI format (skip plan metadata messages)
-  const messages = history
-    .filter((m) => m.message_type === "text" || m.message_type === "plan_complete" || m.message_type === "step_progress")
+  // Build system prompt and scoped tools (needed for budget calculation)
+  const topicId = surfaceContext?.topicId || null;
+  const [methodology, researchState] = await Promise.all([
+    loadUserMethodology(supabase, userId).catch(() => null),
+    topicId ? getResearchState(supabase, topicId).catch(() => null) : null,
+  ]);
+  const toolGroup = inferToolGroup(userMessage, surfaceContext);
+
+  const systemPrompt = buildSystemPrompt({ surfaceContext, methodology, researchState, toolGroup, mode });
+  const scopedTools = getToolsForGroup(toolGroup);
+
+  // Calculate token budget
+  const aiConfig = await createAIClientConfig(userId, supabase);
+  const systemPromptTokens = estimateTokens(systemPrompt);
+  const toolDefTokens = estimateTokens(JSON.stringify(scopedTools));
+  const { historyBudget } = calculateBudget(aiConfig.contextWindow, systemPromptTokens, toolDefTokens);
+
+  // Find conversation summary if it exists
+  const conversationSummary = history
+    .find(m => m.message_type === 'conversation_summary')?.content || null;
+
+  // Convert DB messages to chat format, preserving tool call history
+  const chatMessages = history
     .filter((m) => m.role === "user" || m.role === "assistant")
-    .map((m) => ({ role: m.role, content: m.content }));
+    .map((m) => {
+      // For tool_calls messages, include a compressed summary
+      if (m.message_type === 'tool_calls' && m.metadata?.tool_calls) {
+        return {
+          role: m.role,
+          content: m.metadata.tool_calls
+            .map(tc => `[Tool: ${tc.tool}(${summarizeArgs(tc.args)}) → ${tc.result_summary || 'done'}]`)
+            .join('\n'),
+        };
+      }
+      return { role: m.role, content: m.content };
+    });
+
+  // Select messages within token budget
+  const budgetedMessages = buildHistoryWithinBudget(chatMessages, historyBudget, conversationSummary);
 
   // ALL input goes to AI — AI decides whether to chat or request a plan
-  const result = await chat({ messages, userId, supabase, accessToken, surfaceContext, mode });
+  const result = await chat({ messages: budgetedMessages, userId, supabase, accessToken, surfaceContext, mode });
 
   // Check if AI requested a plan
   if (result.planRequest) {
