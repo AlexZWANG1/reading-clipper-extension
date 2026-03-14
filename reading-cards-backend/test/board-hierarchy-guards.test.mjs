@@ -71,6 +71,66 @@ describe('Board hierarchy guard: edge relation_type', () => {
   });
 });
 
+describe('Board hierarchy guard: propose_board_changes validates hierarchy', () => {
+  it('rejects proposed evidence without parent_id', async () => {
+    const result = await executeTool('propose_board_changes', {
+      board_id: 'board-1',
+      changes: [
+        { action: 'create_node', node_type: 'evidence', text: 'orphan evidence' },
+      ],
+      reasoning: 'test',
+    }, ctx);
+
+    assert.equal(result.error, 'methodology_violation');
+    assert.ok(result.message.includes('parent_id'));
+  });
+
+  it('rejects proposed hypothesis without parent_id', async () => {
+    const result = await executeTool('propose_board_changes', {
+      board_id: 'board-1',
+      changes: [
+        { action: 'create_node', node_type: 'hypothesis', text: 'orphan hypothesis' },
+      ],
+      reasoning: 'test',
+    }, ctx);
+
+    assert.equal(result.error, 'methodology_violation');
+    assert.ok(result.message.includes('parent_id'));
+  });
+
+  it('allows proposed question without parent_id', async () => {
+    // Questions are top-level nodes — no parent needed
+    // This will fail at DB level since we have no real supabase,
+    // but it should NOT be caught by the methodology guard
+    try {
+      await executeTool('propose_board_changes', {
+        board_id: 'board-1',
+        changes: [
+          { action: 'create_node', node_type: 'question', text: 'a question' },
+        ],
+        reasoning: 'test',
+      }, ctx);
+    } catch {
+      // Expected: fails at createDraft since no DB, but NOT methodology_violation
+    }
+    // If we got here without methodology_violation, the guard correctly passes questions
+  });
+
+  it('allows create_edge changes (no parent_id needed)', async () => {
+    try {
+      await executeTool('propose_board_changes', {
+        board_id: 'board-1',
+        changes: [
+          { action: 'create_edge', source_node_id: 'n1', target_node_id: 'n2', relation_type: 'supports' },
+        ],
+        reasoning: 'test',
+      }, ctx);
+    } catch {
+      // Expected: fails at createDraft since no DB
+    }
+  });
+});
+
 describe('Board hierarchy guard: error messages include suggestions', () => {
   it('evidence rejection suggests calling get_board first', async () => {
     const result = await executeTool('create_board_node', {

@@ -245,10 +245,22 @@ export async function executeTool(name, args, ctx) {
 
     // ── Draft tool (creates preview, not real data) ──
     case "propose_board_changes": {
+      // Methodology guard: validate Q→H→E hierarchy in proposed changes
+      const changes = args.changes || [];
+      for (const change of changes) {
+        if (change.action !== 'create_node') continue;
+        if ((change.node_type === 'evidence' || change.node_type === 'hypothesis') && !change.parent_id) {
+          return {
+            error: "methodology_violation",
+            message: `${change.node_type} nodes must have parent_id. Evidence → hypothesis, hypothesis → question.`,
+            suggestion: "Call get_board first to find the parent node, then include parent_id (real UUID or $temp_id reference) in each hypothesis/evidence change.",
+          };
+        }
+      }
       try {
         const draft = await createDraft(
           supabase, userId, args.board_id,
-          args.changes || [], args.reasoning || ""
+          changes, args.reasoning || ""
         );
         return {
           draft_id: draft.id,
