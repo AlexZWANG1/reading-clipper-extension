@@ -4,12 +4,20 @@ import {
   ArrowLeft, ExternalLink, BookOpen, Search, Loader2,
   FileText, Globe, FileType, X, CheckCircle, Sparkles,
 } from 'lucide-react';
-import { materialsApi, highlightsApi, cardsApi, searchApi } from '../lib/api';
+import { materialsApi, highlightsApi, cardsApi, searchApi, boardsApi } from '../lib/api';
 import { useTopicsStore } from '../lib/store';
 import ReaderContent from '../components/Reader/ReaderContent';
 import SelectionPopover from '../components/Reader/SelectionPopover';
 import CardsSidebar from '../components/Reader/CardsSidebar';
 import AIPanel from '../components/Reader/AIPanel';
+import EvidenceSuggestionToast from '../components/EvidenceSuggestionToast';
+// TODO: Import StoryHealthBadge and integrate where story units reference cards.
+// The StoryHealthBadge component is ready at '../components/StoryHealthBadge'.
+// Integration requires mapping card_ids from story units to hypotheses via healthMap.
+// See plan Task 10, Step 2 for the integration pattern:
+//   1. On mount, if material has topic_id, fetch board health via boardsApi.getTopicBoard + boardsApi.getHealth
+//   2. Build healthMap: { [cardId]: hypothesis } for warning statuses
+//   3. In story unit rendering, for each card_id, render <StoryHealthBadge hypothesis={healthMap[cardId]} topicId={material?.topic_id} />
 
 export default function MaterialReaderPage() {
   const { id } = useParams();
@@ -43,6 +51,13 @@ export default function MaterialReaderPage() {
   const [cardHighlights, setCardHighlights] = useState([]);
   const [activeCardHighlightId, setActiveCardHighlightId] = useState(null);
   const [showAIPanel, setShowAIPanel] = useState(false);
+
+  // Evidence suggestion toast state (Task 9)
+  const [evidenceSuggestion, setEvidenceSuggestion] = useState(null);
+  const [lastSavedCardId, setLastSavedCardId] = useState(null);
+
+  // Derive selectedTopicTitle for the evidence toast
+  const selectedTopicTitle = topics.find(t => t.id === (selectedTopicId || material?.topic_id))?.title || '';
 
   useEffect(() => {
     if (id) loadMaterial();
@@ -155,6 +170,12 @@ export default function MaterialReaderPage() {
           },
         },
       });
+
+      // Check for evidence suggestion from backend (ambient hypothesis matching)
+      if (captureResult.evidence_suggestion) {
+        setEvidenceSuggestion(captureResult.evidence_suggestion);
+        setLastSavedCardId(captureResult.card?.id);
+      }
 
       const createdCard = captureResult?.card || null;
       if (createdCard) {
@@ -400,15 +421,16 @@ export default function MaterialReaderPage() {
               materialId={id}
               onHighlightQuote={(quoteText) => {
                 if (!quoteText) return;
+                const hlId = `ai-quote-${Date.now()}`;
                 setCardHighlights([{
-                  id: `ai-quote-${Date.now()}`,
+                  id: hlId,
                   exact: quoteText,
                   prefix: '',
                   suffix: '',
                   chunk_id: null,
                   color: 'indigo',
                 }]);
-                setActiveCardHighlightId(`ai-quote-${Date.now()}`);
+                setActiveCardHighlightId(hlId);
               }}
             />
           ) : (
@@ -424,6 +446,19 @@ export default function MaterialReaderPage() {
           )}
         </div>
       </div>
+
+      {/* Evidence Suggestion Toast (Task 9) */}
+      {evidenceSuggestion && lastSavedCardId && (
+        <EvidenceSuggestionToast
+          suggestion={evidenceSuggestion}
+          cardId={lastSavedCardId}
+          topicTitle={selectedTopicTitle}
+          onDismiss={() => {
+            setEvidenceSuggestion(null);
+            setLastSavedCardId(null);
+          }}
+        />
+      )}
 
       {/* 建卡弹窗 */}
       {creatingCard && (
