@@ -253,20 +253,35 @@ export async function updateProposal(supabase, proposalId, updates) {
 // ── Helpers for runner ──
 
 export async function acquireTaskLock(supabase, taskId, runId) {
-  const { data, error } = await supabase
+  const now = new Date().toISOString();
+  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+
+  const { data } = await supabase
     .from('tasks')
-    .update({
-      is_running: true,
-      running_run_id: runId,
-      updated_at: new Date().toISOString(),
-    })
+    .update({ is_running: true, running_run_id: runId, locked_at: now })
     .eq('id', taskId)
     .eq('is_running', false)
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error || !data) return null;
-  return data;
+  if (data) return true;
+
+  // Check for stale lock (>30 minutes)
+  const { data: staleData } = await supabase
+    .from('tasks')
+    .update({ is_running: true, running_run_id: runId, locked_at: now })
+    .eq('id', taskId)
+    .eq('is_running', true)
+    .lt('locked_at', thirtyMinutesAgo)
+    .select()
+    .maybeSingle();
+
+  if (staleData) {
+    console.warn(`[tasks] Force-acquired stale lock on task ${taskId}`);
+    return true;
+  }
+
+  return false;
 }
 
 export async function releaseTaskLock(supabase, taskId) {

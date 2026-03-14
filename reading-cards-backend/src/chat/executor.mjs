@@ -20,7 +20,7 @@ export function cancelExecution(taskId) {
 
 /**
  * Execute a plan sequentially.
- * Each step calls a tool, saves the result, and optionally gets AI commentary.
+ * Each step calls a tool, saves the result, and writes a template-based progress message.
  *
  * @param {Object} opts
  * @param {Object} opts.task - Task record (from tasks table)
@@ -31,6 +31,9 @@ export function cancelExecution(taskId) {
 export async function executePlan({ task, planSpec, conversationId, supabase }) {
   const userId = task.user_id;
   const steps = planSpec.steps || [];
+
+  // Cache AI client config once for the entire plan execution
+  const aiConfig = await createAIClientConfig(userId, supabase);
 
   // Create run record
   const run = await createRun(supabase, userId, task.id);
@@ -86,15 +89,11 @@ export async function executePlan({ task, planSpec, conversationId, supabase }) 
         // Save step output for later steps
         stepOutputs[planStep.id] = toolResult;
 
-        // Generate AI note for this step (brief interpretation)
-        const aiNote = await generateStepNote(planStep, toolResult, userId, supabase);
-
         // Update step record
         await updateStep(supabase, stepRecord.id, {
           status: "completed",
           tool_output: toolResult,
           output_summary: summarizeToolOutput(planStep.tool, toolResult),
-          ai_note: aiNote,
           completed_at: new Date().toISOString(),
         });
 
@@ -109,10 +108,10 @@ export async function executePlan({ task, planSpec, conversationId, supabase }) 
         // Write progress message to conversation
         if (conversationId) {
           await addMessage(supabase, conversationId, {
-            role: "assistant",
-            content: `**${planStep.title}** - ${summarizeToolOutput(planStep.tool, toolResult)}${aiNote ? `\n> ${aiNote}` : ""}`,
-            message_type: "step_progress",
-            metadata: { step_id: planStep.id, step_index: i, tool: planStep.tool, status: "completed" },
+            role: 'assistant',
+            content: `**${planStep.title}** — ${summarizeToolOutput(planStep.tool, toolResult)}`,
+            message_type: 'step_progress',
+            metadata: { step_id: planStep.id, step_index: i, tool: planStep.tool, status: 'completed' },
           });
         }
       } catch (err) {
@@ -146,7 +145,7 @@ export async function executePlan({ task, planSpec, conversationId, supabase }) 
     }
 
     // Generate final summary
-    const summary = await generatePlanSummary(planSpec, results, userId, supabase);
+    const summary = await generatePlanSummary(planSpec, results, aiConfig);
 
     // Write completion message
     if (conversationId) {
@@ -192,58 +191,36 @@ export async function executePlan({ task, planSpec, conversationId, supabase }) 
 // ── Helpers ──
 
 /**
- * Resolve step input by injecting outputs from previous steps.
- * Supports $ref:step_id patterns in input_hint values.
+ * Recursively resolve $ref:step_id references in any value (string, array, nested object).
  */
-function resolveStepInput(planStep, stepOutputs) {
-  const input = { ...(planStep.input_hint || {}) };
-
-  for (const [key, value] of Object.entries(input)) {
-    if (typeof value === "string" && value.startsWith("$ref:")) {
-      const refStepId = value.slice(5);
-      if (stepOutputs[refStepId]) {
-        input[key] = stepOutputs[refStepId];
-      }
-    }
+function deepResolveRefs(value, stepOutputs) {
+  if (typeof value === 'string' && value.startsWith('$ref:')) {
+    return stepOutputs[value.slice(5)] ?? value;
   }
-
-  return input;
+  if (Array.isArray(value)) {
+    return value.map(v => deepResolveRefs(v, stepOutputs));
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, deepResolveRefs(v, stepOutputs)])
+    );
+  }
+  return value;
 }
 
 /**
- * Generate a brief AI note for a completed step.
+ * Resolve step input by recursively injecting outputs from previous steps.
+ * Supports $ref:step_id patterns at any depth in input_hint values.
  */
-async function generateStepNote(planStep, toolResult, userId, supabase) {
-  try {
-    const aiConfig = await createAIClientConfig(userId, supabase);
-    const messages = [
-      {
-        role: "system",
-        content: "You are a research assistant. Given a tool execution result, provide a 1-sentence observation or insight in Chinese. Be concise.",
-      },
-      {
-        role: "user",
-        content: `Tool: ${planStep.tool}\nGoal: ${planStep.goal}\nResult: ${JSON.stringify(toolResult).slice(0, 1000)}`,
-      },
-    ];
-
-    const response = await callChatAPI(aiConfig, messages, {
-      temperature: 0.3,
-      max_tokens: 100,
-    });
-
-    return response.choices?.[0]?.message?.content?.trim() || null;
-  } catch {
-    return null;
-  }
+function resolveStepInput(planStep, stepOutputs) {
+  return deepResolveRefs(planStep.input_hint || {}, stepOutputs);
 }
 
 /**
  * Generate a final summary of the plan execution.
  */
-async function generatePlanSummary(planSpec, results, userId, supabase) {
+async function generatePlanSummary(planSpec, results, aiConfig) {
   try {
-    const aiConfig = await createAIClientConfig(userId, supabase);
     const messages = [
       {
         role: "system",
@@ -251,7 +228,7 @@ async function generatePlanSummary(planSpec, results, userId, supabase) {
       },
       {
         role: "user",
-        content: `Plan: ${planSpec.intent_summary}\nResults: ${JSON.stringify(results.step_outputs).slice(0, 2000)}`,
+        content: `Plan: ${planSpec.intent_summary}\nResults: ${safeStringify(results.step_outputs, 2000)}`,
       },
     ];
 
@@ -268,6 +245,34 @@ async function generatePlanSummary(planSpec, results, userId, supabase) {
 
 function formatFallbackSummary(results) {
   return `执行完成: ${results.steps_completed}/${results.steps_total} 步骤成功${results.steps_failed > 0 ? `, ${results.steps_failed} 步骤失败` : ""}。`;
+}
+
+/**
+ * Safely stringify a value with a character limit.
+ * Truncates arrays by keeping complete items and objects by truncating long string values.
+ */
+function safeStringify(obj, maxChars = 3000) {
+  const full = JSON.stringify(obj);
+  if (full.length <= maxChars) return full;
+  if (Array.isArray(obj)) {
+    const items = [];
+    let len = 2;
+    for (const item of obj) {
+      const s = JSON.stringify(item);
+      if (len + s.length + 1 > maxChars - 50) break;
+      items.push(item);
+      len += s.length + 1;
+    }
+    return JSON.stringify(items) + ` ...(共 ${obj.length} 项，已截取前 ${items.length} 项)`;
+  }
+  if (typeof obj === 'object' && obj !== null) {
+    const truncated = {};
+    for (const [k, v] of Object.entries(obj)) {
+      truncated[k] = typeof v === 'string' && v.length > 200 ? v.slice(0, 200) + '...' : v;
+    }
+    return JSON.stringify(truncated).slice(0, maxChars);
+  }
+  return full.slice(0, maxChars) + '...(已截断)';
 }
 
 /**
@@ -293,6 +298,6 @@ function summarizeToolOutput(tool, result) {
     case "list_topics":
       return `列出 ${result.topics?.length || 0} 个主题`;
     default:
-      return JSON.stringify(result).slice(0, 100);
+      return safeStringify(result, 100);
   }
 }
