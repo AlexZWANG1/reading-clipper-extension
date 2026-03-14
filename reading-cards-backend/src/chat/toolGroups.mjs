@@ -14,7 +14,9 @@ const TOOL_GROUPS = {
     'list_documents', 'get_document', 'get_board_health', 'request_plan',
   ],
 
-  // Board-focused tools — includes propose_board_changes (draft, not direct mutation)
+  // Board-focused tools — creation goes through propose_board_changes (draft, not direct mutation)
+  // Spec §11 Board: direct node/edge creation is FORBIDDEN — must use draft system.
+  // update/delete of EXISTING nodes requires approval (confirmation gate handles this).
   board: [
     'get_board', 'get_board_health', 'propose_board_changes',
     'search_cards', 'semantic_search', 'get_card', 'list_cards',

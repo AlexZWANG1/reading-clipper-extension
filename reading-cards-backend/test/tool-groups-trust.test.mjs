@@ -140,6 +140,16 @@ describe('Trust Invariant: board group write tools are correctly classified', ()
     assert.ok(boardTools.includes('delete_board_node'));
   });
 
+  it('board group must NOT contain create_board_node (Spec §11: creation must use draft)', () => {
+    assert.ok(!boardTools.includes('create_board_node'),
+      'Direct node creation bypasses draft system — Spec §11 Board: "Forbidden: Direct node/edge creation bypassing draft system"');
+  });
+
+  it('board group must NOT contain create_board_edge (Spec §11: creation must use draft)', () => {
+    assert.ok(!boardTools.includes('create_board_edge'),
+      'Direct edge creation bypasses draft system — must use propose_board_changes');
+  });
+
   it('board group must NOT contain create_card (wrong context)', () => {
     assert.ok(!boardTools.includes('create_card'),
       'create_card belongs in cards group, not board group');
