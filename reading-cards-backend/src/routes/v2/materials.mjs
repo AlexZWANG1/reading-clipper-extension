@@ -7,7 +7,7 @@ import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const UPLOADS_DIR = path.resolve(__dirname, '../../uploads');
+const UPLOADS_DIR = path.resolve(__dirname, '../../../uploads');
 
 const storage = multer.diskStorage({
   destination: UPLOADS_DIR,
