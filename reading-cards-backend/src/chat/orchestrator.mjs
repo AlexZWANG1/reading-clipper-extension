@@ -107,66 +107,104 @@ export async function chat({ messages, userId, supabase, accessToken, onToolCall
       return { reply: assistantMsg.content || "", messages: currentMessages, toolCallLog, draftId };
     }
 
-    // Classify tool calls by side effect
-    const hasWriteTools = toolCalls.some((tc) => {
+    // Split tool calls into write (need confirmation) and auto (safe to execute)
+    const writeToolCalls = toolCalls.filter((tc) => {
       const effect = getToolSideEffect(tc.function.name);
       return effect === "write" || effect === "destructive";
     });
+    const autoToolCalls = toolCalls.filter((tc) => {
+      const effect = getToolSideEffect(tc.function.name);
+      return effect === "read_only" || effect === "draft";
+    });
 
-    // Draft tools are auto-executed (they create previews, not real data)
-    const hasDraftTools = toolCalls.some((tc) => getToolSideEffect(tc.function.name) === "draft");
-
-    if (hasWriteTools && !hasDraftTools) {
-      // Build pending actions list for the frontend
-      const pending = toolCalls.map((tc) => {
+    // Auto-execute read_only + draft tools immediately
+    if (autoToolCalls.length > 0) {
+      const autoResults = [];
+      for (const tc of autoToolCalls) {
         let args = {};
-        try { args = JSON.parse(tc.function.arguments || "{}"); } catch { args = {}; }
+        try { args = JSON.parse(tc.function.arguments || "{}"); } catch {}
+        try {
+          const result = await executeTool(tc.function.name, args, {
+            supabase, userId, accessToken,
+          });
+          autoResults.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: JSON.stringify(result),
+          });
+          const logEntry = {
+            id: tc.id,
+            tool: tc.function.name,
+            args,
+            result_summary: summarizeResult(result),
+            status: result.error ? "error" : "completed",
+          };
+          toolCallLog.push(logEntry);
+          if (onToolCall) onToolCall(logEntry);
+        } catch (err) {
+          autoResults.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: JSON.stringify({ error: err.message }),
+          });
+          const logEntry = {
+            id: tc.id,
+            tool: tc.function.name,
+            args,
+            result_summary: `error: ${err.message}`,
+            status: "error",
+          };
+          toolCallLog.push(logEntry);
+          if (onToolCall) onToolCall(logEntry);
+        }
+      }
+
+      // Handle draft ID extraction from propose_board_changes
+      for (const ar of autoResults) {
+        try {
+          const parsed = JSON.parse(ar.content);
+          if (parsed.draft_id) draftId = parsed.draft_id;
+        } catch {}
+      }
+
+      // If there are also write tool calls, we need a separate assistant message
+      // for the auto tool calls so the conversation stays well-formed
+      if (writeToolCalls.length > 0) {
+        // Insert assistant message with only auto tool calls, then tool results
+        currentMessages.push({
+          role: "assistant",
+          content: null,
+          tool_calls: autoToolCalls,
+        });
+        currentMessages.push(...autoResults);
+      } else {
+        // No write tools — just add results to the existing assistant message
+        currentMessages.push(...autoResults);
+      }
+    }
+
+    // If write tools exist, pause for confirmation
+    if (writeToolCalls.length > 0) {
+      const pending = writeToolCalls.map((tc) => {
+        let parsedArgs = {};
+        try { parsedArgs = JSON.parse(tc.function.arguments || "{}"); } catch {}
         return {
           id: tc.id,
           name: tc.function.name,
-          args,
+          args: parsedArgs,
           side_effect: getToolSideEffect(tc.function.name),
-          confirm_message: buildConfirmMessage(tc.function.name, args),
+          confirm_message: buildConfirmMessage(tc.function.name, parsedArgs),
         };
       });
 
-      const messagesBeforeToolCall = currentMessages.slice(0, -1);
-
       return {
         reply: "",
-        messages: messagesBeforeToolCall,
+        messages: currentMessages,
         pendingActions: pending,
-        pendingToolCalls: toolCalls,
+        pendingToolCalls: writeToolCalls,
         toolCallLog,
+        draftId,
       };
-    }
-
-    // Read-only and draft tools — execute immediately and log for visibility
-    const toolResults = await executeAllTools(toolCalls, { supabase, userId, accessToken });
-    currentMessages.push(...toolResults);
-
-    // Log tool calls for frontend visibility
-    for (let i = 0; i < toolCalls.length; i++) {
-      const tc = toolCalls[i];
-      let args = {};
-      try { args = JSON.parse(tc.function.arguments || "{}"); } catch { args = {}; }
-      let result = {};
-      try { result = JSON.parse(toolResults[i].content); } catch { result = {}; }
-
-      // Capture draft_id if a draft was created
-      if (tc.function.name === 'propose_board_changes' && result.draft_id) {
-        draftId = result.draft_id;
-      }
-
-      const logEntry = {
-        id: tc.id,
-        tool: tc.function.name,
-        args,
-        result_summary: summarizeToolResult(tc.function.name, result),
-        status: result.error ? "error" : "completed",
-      };
-      toolCallLog.push(logEntry);
-      if (onToolCall) onToolCall(logEntry);
     }
 
     // Post-action hook: recompute research state if board was mutated
@@ -336,6 +374,18 @@ export async function chatConfirm({ messages, pendingToolCalls, confirmedIds, us
 }
 
 // ── Helpers ──────────────────────────────────────────
+
+function summarizeResult(result) {
+  if (!result) return 'null';
+  if (result.error) return `error: ${result.error}`;
+  const keys = Object.keys(result);
+  return keys.slice(0, 3).map(k => {
+    const v = result[k];
+    if (Array.isArray(v)) return `${k}: ${v.length} items`;
+    if (typeof v === 'string') return `${k}: ${v.slice(0, 40)}`;
+    return `${k}: ${JSON.stringify(v).slice(0, 40)}`;
+  }).join(', ');
+}
 
 async function executeAllTools(toolCalls, ctx) {
   return Promise.all(
