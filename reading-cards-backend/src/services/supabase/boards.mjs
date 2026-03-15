@@ -152,7 +152,7 @@ export async function listNodes(supabase, boardId) {
         .from("board_nodes")
         .select(`
       *,
-      card:cards(id, summary, key_points, source_name, source_url, raw_snippet, image_url)
+      card:cards(id, summary, key_points, source_name, source_url, raw_snippet, image_url, material_id, locator, title, fact_or_view)
     `)
         .eq("board_id", boardId)
         .order("created_at", { ascending: true });
