@@ -25,7 +25,7 @@ import '@xyflow/react/dist/style.css';
 import dagre from 'dagre';
 import { Plus, Loader2, LayoutGrid, Target, Keyboard } from 'lucide-react';
 import { boardsApi } from '../../lib/api';
-import { useUIStore, useChatStore } from '../../lib/store';
+import { useUIStore, useChatStore, useWorkspaceStore } from '../../lib/store';
 import DraftNode from '../DraftNode';
 import DraftCommitBar from '../DraftCommitBar';
 import HealthSidebar from '../HealthSidebar';
@@ -386,24 +386,39 @@ function BoardCanvasInner({ topicId, onBoardLoaded, onOpenReaderAtQuote, dragCar
     // ========= Draft Handlers =========
     const handleCommitAll = useCallback(async (draftId) => {
         try {
+            // Trigger commit animation on draft nodes
+            const draftNodeIds = nodes.filter(n => n.data?.isDraft).map(n => n.id);
+            setNodes(ns => ns.map(n =>
+                draftNodeIds.includes(n.id) ? { ...n, data: { ...n.data, animationState: 'committing' } } : n
+            ));
             await boardsApi.commitDraft(boardId, draftId);
             setPendingDraft(null);
-            loadBoard();
+            // Reload after animation settles
+            setTimeout(() => loadBoard(), 500);
         } catch (err) {
             console.error('Commit draft failed:', err);
             showToast('提交草稿失败', 'error');
         }
-    }, [boardId, loadBoard, showToast]);
+    }, [boardId, nodes, setNodes, loadBoard, showToast]);
 
     const handleRejectAll = useCallback(async (draftId) => {
         try {
-            await boardsApi.rejectDraft(boardId, draftId);
-            setPendingDraft(null);
+            // Trigger reject animation on draft nodes
+            const draftNodeIds = nodes.filter(n => n.data?.isDraft).map(n => n.id);
+            setNodes(ns => ns.map(n =>
+                draftNodeIds.includes(n.id) ? { ...n, data: { ...n.data, animationState: 'rejecting' } } : n
+            ));
+            // Wait for animation, then remove
+            setTimeout(async () => {
+                await boardsApi.rejectDraft(boardId, draftId);
+                setPendingDraft(null);
+                setNodes(ns => ns.filter(n => !draftNodeIds.includes(n.id)));
+            }, 200);
         } catch (err) {
             console.error('Reject draft failed:', err);
             showToast('拒绝草稿失败', 'error');
         }
-    }, [boardId, showToast]);
+    }, [boardId, nodes, setNodes, showToast]);
 
     const handleReview = useCallback(() => {
         if (!pendingDraft?.changes?.length) return;
@@ -420,6 +435,10 @@ function BoardCanvasInner({ topicId, onBoardLoaded, onOpenReaderAtQuote, dragCar
     const handleAcceptNode = useCallback(async (draftNodeId) => {
         if (!pendingDraft) return;
         const idx = parseInt(draftNodeId.replace('draft-', ''), 10);
+        // Trigger commit animation
+        setNodes(ns => ns.map(n =>
+            n.id === draftNodeId ? { ...n, data: { ...n.data, animationState: 'committing' } } : n
+        ));
         try {
             await boardsApi.commitDraft(boardId, pendingDraft.id, [idx]);
             const remaining = (pendingDraft.changes || []).filter((_, i) => i !== idx);
@@ -428,28 +447,35 @@ function BoardCanvasInner({ topicId, onBoardLoaded, onOpenReaderAtQuote, dragCar
             } else {
                 setPendingDraft({ ...pendingDraft, changes: remaining });
             }
-            loadBoard();
+            setTimeout(() => loadBoard(), 500);
         } catch (err) {
             console.error('Accept node failed:', err);
             showToast('接受节点失败', 'error');
         }
-    }, [boardId, pendingDraft, loadBoard, showToast]);
+    }, [boardId, pendingDraft, setNodes, loadBoard, showToast]);
 
     const handleRejectNode = useCallback(async (draftNodeId) => {
         if (!pendingDraft) return;
         const idx = parseInt(draftNodeId.replace('draft-', ''), 10);
-        const remaining = (pendingDraft.changes || []).filter((_, i) => i !== idx);
-        if (remaining.length === 0) {
-            try {
-                await boardsApi.rejectDraft(boardId, pendingDraft.id);
-            } catch (err) {
-                console.error('Reject draft failed:', err);
+        // Trigger reject animation
+        setNodes(ns => ns.map(n =>
+            n.id === draftNodeId ? { ...n, data: { ...n.data, animationState: 'rejecting' } } : n
+        ));
+        setTimeout(async () => {
+            setNodes(ns => ns.filter(n => n.id !== draftNodeId));
+            const remaining = (pendingDraft.changes || []).filter((_, i) => i !== idx);
+            if (remaining.length === 0) {
+                try {
+                    await boardsApi.rejectDraft(boardId, pendingDraft.id);
+                } catch (err) {
+                    console.error('Reject draft failed:', err);
+                }
+                setPendingDraft(null);
+            } else {
+                setPendingDraft({ ...pendingDraft, changes: remaining });
             }
-            setPendingDraft(null);
-        } else {
-            setPendingDraft({ ...pendingDraft, changes: remaining });
-        }
-    }, [boardId, pendingDraft]);
+        }, 200);
+    }, [boardId, pendingDraft, setNodes]);
 
     // ========= Node Action Callbacks =========
     const handleNodeUpdate = useCallback(async (nodeId, updates) => {
@@ -588,6 +614,10 @@ function BoardCanvasInner({ topicId, onBoardLoaded, onOpenReaderAtQuote, dragCar
 
     // ========= Auto Layout =========
     const autoLayout = useCallback(() => {
+        // Add transition class for smooth dagre repositioning
+        const container = document.querySelector('.react-flow');
+        if (container) container.classList.add('dagre-transitioning');
+
         setNodes(currentNodes => {
             setEdges(currentEdges => {
                 const { nodes: layouted, edges: layoutedEdges } = getLayoutedElements(
@@ -598,7 +628,98 @@ function BoardCanvasInner({ topicId, onBoardLoaded, onOpenReaderAtQuote, dragCar
             });
             return currentNodes;
         });
+
+        // Remove transition class after animation
+        setTimeout(() => {
+            if (container) container.classList.remove('dagre-transitioning');
+        }, 350);
     }, [setNodes, setEdges]);
+
+    // Incremental positioning — place new node relative to parent (Spec §2.4)
+    const computeIncrementalPosition = useCallback((parentNode, childType, siblingIndex) => {
+        if (!parentNode) return { x: 100, y: 100 };
+        const px = parentNode.position.x;
+        const py = parentNode.position.y;
+        const ph = parentNode.measured?.height || 120;
+
+        switch (childType) {
+            case 'question':
+                return { x: px + siblingIndex * 300, y: py + ph + 40 };
+            case 'hypothesis':
+                return { x: px + siblingIndex * 300, y: py + ph + 30 };
+            case 'evidence':
+                return { x: px + 20, y: py + siblingIndex * 90 + ph + 20 };
+            default:
+                return { x: px + 200, y: py + ph + 40 };
+        }
+    }, []);
+
+    // Add nodes with stagger animation (Spec §2.4, §2.5)
+    const addNodesWithStagger = useCallback((newNodes) => {
+        const layoutMode = useWorkspaceStore.getState().layoutMode;
+
+        newNodes.forEach((nodeData, index) => {
+            setTimeout(() => {
+                const parentNode = nodeData.parent_id
+                    ? nodes.find(n => n.id === nodeData.parent_id)
+                    : null;
+
+                const position = layoutMode === 'incremental'
+                    ? computeIncrementalPosition(parentNode, nodeData.node_type, index)
+                    : { x: 0, y: 0 };
+
+                const newNode = {
+                    id: nodeData.id,
+                    type: nodeData.node_type === 'question' ? 'questionNode'
+                        : nodeData.node_type === 'hypothesis' ? 'hypothesisNode'
+                        : nodeData.node_type === 'evidence' ? 'evidenceNode'
+                        : 'draftNode',
+                    position,
+                    data: {
+                        ...nodeData,
+                        animationState: 'entering',
+                        onAnimationEnd: () => {
+                            setNodes(ns => ns.map(n =>
+                                n.id === nodeData.id ? { ...n, data: { ...n.data, animationState: null } } : n
+                            ));
+                        },
+                    },
+                };
+
+                setNodes(ns => [...ns, newNode]);
+
+                if (nodeData.parent_id) {
+                    const newEdge = {
+                        id: `e-${nodeData.parent_id}-${nodeData.id}`,
+                        source: nodeData.parent_id,
+                        target: nodeData.id,
+                        type: 'monoStep',
+                        data: {
+                            animated: true,
+                            onAnimationComplete: (edgeId) => {
+                                setEdges(es => es.map(e =>
+                                    e.id === edgeId ? { ...e, data: { ...e.data, animated: false } } : e
+                                ));
+                            },
+                        },
+                    };
+                    setEdges(es => [...es, newEdge]);
+                }
+
+                if (layoutMode === 'dagre' && index === newNodes.length - 1) {
+                    setTimeout(() => autoLayout(), 50);
+                }
+            }, index * 100);
+        });
+    }, [nodes, setNodes, setEdges, computeIncrementalPosition, autoLayout]);
+
+    // Register boardNodeAdder for incremental node addition from chat
+    useEffect(() => {
+        useWorkspaceStore.getState().setBoardNodeAdder((nodeData) => {
+            addNodesWithStagger(Array.isArray(nodeData) ? nodeData : [nodeData]);
+        });
+        return () => useWorkspaceStore.getState().setBoardNodeAdder(null);
+    }, [addNodesWithStagger]);
 
     const focusRootQuestion = useCallback(() => {
         const questionNodes = nodes.filter((node) => node.type === 'questionNode');

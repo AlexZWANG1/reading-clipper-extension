@@ -784,6 +784,10 @@ export const useWorkspaceStore = create((set, get) => ({
   // Board refresh
   boardRefreshToken: 0,
 
+  // Board animation
+  layoutMode: 'dagre',         // 'dagre' | 'incremental'
+  boardNodeAdder: null,         // callback set by BoardCanvas
+
   // Left Nav
   leftNavExpanded: false,
 
@@ -804,6 +808,8 @@ export const useWorkspaceStore = create((set, get) => ({
     readerMaterialId: null,
     readerWidth: null,
     readerScrollLocator: null,
+    layoutMode: 'dagre',
+    boardNodeAdder: null,
     leftNavExpanded: false,
   }),
 
@@ -824,6 +830,13 @@ export const useWorkspaceStore = create((set, get) => ({
     readerScrollLocator: locator || null,
   }),
   clearReaderScrollLocator: () => set({ readerScrollLocator: null }),
+
+  setLayoutMode: (mode) => set({ layoutMode: mode }),
+  setBoardNodeAdder: (fn) => set({ boardNodeAdder: fn }),
+  addBoardNode: (nodeData) => {
+    const { boardNodeAdder } = get();
+    if (boardNodeAdder) boardNodeAdder(nodeData);
+  },
 
   toggleLeftNav: () => set((s) => ({ leftNavExpanded: !s.leftNavExpanded })),
   setLeftNavExpanded: (expanded) => set({ leftNavExpanded: expanded }),
