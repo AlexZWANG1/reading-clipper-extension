@@ -788,6 +788,10 @@ export const useWorkspaceStore = create((set, get) => ({
   layoutMode: 'dagre',         // 'dagre' | 'incremental'
   boardNodeAdder: null,         // callback set by BoardCanvas
 
+  // Research Run (Spec §3.1)
+  autonomyLevel: 'explore',
+  activeResearchRun: null,
+
   // Left Nav
   leftNavExpanded: false,
 
@@ -811,6 +815,8 @@ export const useWorkspaceStore = create((set, get) => ({
     layoutMode: 'dagre',
     boardNodeAdder: null,
     leftNavExpanded: false,
+    autonomyLevel: 'explore',
+    activeResearchRun: null,
   }),
 
   setBoardId: (boardId) => set({ boardId }),
@@ -840,6 +846,9 @@ export const useWorkspaceStore = create((set, get) => ({
 
   toggleLeftNav: () => set((s) => ({ leftNavExpanded: !s.leftNavExpanded })),
   setLeftNavExpanded: (expanded) => set({ leftNavExpanded: expanded }),
+
+  setAutonomyLevel: (level) => set({ autonomyLevel: level }),
+  setActiveResearchRun: (run) => set({ activeResearchRun: run }),
 
   invalidateBoard: () => set((s) => ({ boardRefreshToken: s.boardRefreshToken + 1 })),
 }));
