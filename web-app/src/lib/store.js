@@ -766,6 +766,54 @@ export const useChatStore = create((set, get) => ({
   }),
 }));
 
+// ========= Workspace 状态 (Spec §10) =========
+export const useWorkspaceStore = create((set, get) => ({
+  // Topic
+  topicId: null,
+  boardId: null,
+
+  // Canvas
+  activeView: 'structure', // 'structure' | 'document'
+
+  // Reader
+  readerOpen: false,
+  readerMaterialId: null,
+
+  // Board refresh
+  boardRefreshToken: 0,
+
+  // Left Nav
+  leftNavExpanded: false,
+
+  // Actions
+  enterWorkspace: (topicId) => set({
+    topicId,
+    activeView: 'structure',
+    readerOpen: false,
+    readerMaterialId: null,
+    leftNavExpanded: false,
+  }),
+
+  leaveWorkspace: () => set({
+    topicId: null,
+    boardId: null,
+    activeView: 'structure',
+    readerOpen: false,
+    readerMaterialId: null,
+  }),
+
+  setBoardId: (boardId) => set({ boardId }),
+  setActiveView: (view) => set({ activeView: view }),
+
+  openReader: (materialId) => set({ readerOpen: true, readerMaterialId: materialId }),
+  closeReader: () => set({ readerOpen: false, readerMaterialId: null }),
+
+  toggleLeftNav: () => set((s) => ({ leftNavExpanded: !s.leftNavExpanded })),
+  setLeftNavExpanded: (expanded) => set({ leftNavExpanded: expanded }),
+
+  invalidateBoard: () => set((s) => ({ boardRefreshToken: s.boardRefreshToken + 1 })),
+}));
+
 // ========= UI 状态 =========
 export const useUIStore = create((set) => ({
   sidebarOpen: typeof window === 'undefined' ? true : window.innerWidth >= 1024,

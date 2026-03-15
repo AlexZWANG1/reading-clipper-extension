@@ -17,7 +17,6 @@ import {
   useReactFlow,
   BackgroundVariant,
   useStore,
-  getSmoothStepPath,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import dagre from 'dagre';
@@ -28,6 +27,7 @@ import { useUIStore } from '../lib/store';
 import QuestionNode from './board/QuestionNode';
 import HypothesisNode from './board/HypothesisNode';
 import EvidenceNode from './board/EvidenceNode';
+import MonoStepEdge from './board/MonoStepEdge';
 
 // 鈹€鈹€ Node / Edge type registries 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
@@ -45,34 +45,6 @@ const BOARD_PALETTE = {
   neutral: '#8D8576',
   refute: '#C34A3C',
 };
-
-function MonoStepEdge({ sourceX, sourceY, targetX, targetY, style, markerEnd, data }) {
-  const [path] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY });
-  const glow = !!data?.isFocus;
-  return (
-    <>
-      <path d={path} fill="none" stroke="rgba(0,0,0,0)" strokeWidth={12} pointerEvents="stroke" />
-      <path
-        d={path}
-        fill="none"
-        strokeWidth={style?.strokeWidth || 1.6}
-        stroke={style?.stroke}
-        strokeDasharray={style?.strokeDasharray}
-        markerEnd={markerEnd}
-      />
-      {glow && (
-        <path
-          d={path}
-          fill="none"
-          stroke="var(--glow)"
-          strokeWidth={(style?.strokeWidth || 1.6) + 2}
-          strokeLinecap="round"
-          style={{ filter: 'drop-shadow(0 0 4px var(--glow))' }}
-        />
-      )}
-    </>
-  );
-}
 
 const edgeTypes = { monoStep: MonoStepEdge };
 

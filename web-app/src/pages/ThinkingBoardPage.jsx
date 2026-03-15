@@ -15,7 +15,6 @@ import {
     useReactFlow,
     BackgroundVariant,
     useStore,
-    getSmoothStepPath,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import dagre from 'dagre';
@@ -27,10 +26,11 @@ import HealthSidebar from '../components/HealthSidebar';
 import DraftNode from '../components/DraftNode';
 import DraftCommitBar from '../components/DraftCommitBar';
 
-// Custom nodes
+// Custom nodes & edges
 import QuestionNode from '../components/board/QuestionNode';
 import HypothesisNode from '../components/board/HypothesisNode';
 import EvidenceNode from '../components/board/EvidenceNode';
+import MonoStepEdge from '../components/board/MonoStepEdge';
 
 const nodeTypes = {
     questionNode: QuestionNode,
@@ -47,34 +47,6 @@ const BOARD_PALETTE = {
     neutral: '#94A3B8',
     refute: '#C33A30',
 };
-
-// ========= Custom Edges =========
-function MonoStepEdge({ id, sourceX, sourceY, targetX, targetY, style, markerEnd, data }) {
-    const [path] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY });
-    const glow = !!data?.isFocus;
-
-    return (
-        <>
-            {/* hitbox (thick, transparent, clickable) */}
-            <path d={path} fill="none" stroke="rgba(0,0,0,0)" strokeWidth={12} pointerEvents="stroke" />
-
-            {/* visual (thin, colored) */}
-            <path d={path} fill="none" strokeWidth={style?.strokeWidth || 1.6} stroke={style?.stroke} strokeDasharray={style?.strokeDasharray} markerEnd={markerEnd} />
-
-            {/* glow (only focus chain) */}
-            {glow && (
-                <path
-                    d={path}
-                    fill="none"
-                    stroke="var(--glow)"
-                    strokeWidth={(style?.strokeWidth || 1.6) + 2}
-                    strokeLinecap="round"
-                    style={{ filter: 'drop-shadow(0 0 4px var(--glow))' }}
-                />
-            )}
-        </>
-    );
-}
 
 const edgeTypes = { monoStep: MonoStepEdge };
 
