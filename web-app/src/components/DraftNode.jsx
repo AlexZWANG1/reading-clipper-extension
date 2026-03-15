@@ -1,10 +1,11 @@
 import { memo, useState } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Check, X } from 'lucide-react';
+import AnimatedNodeWrapper from './board/AnimatedNodeWrapper';
 
 const DraftNode = memo(({ data, id }) => {
   const [hovered, setHovered] = useState(false);
-  const { text, node_type, onAccept, onReject } = data;
+  const { text, node_type, onAccept, onReject, animationState, onAnimationEnd } = data;
 
   const typeLabels = {
     question: 'Q',
@@ -13,14 +14,16 @@ const DraftNode = memo(({ data, id }) => {
   };
 
   return (
+    <AnimatedNodeWrapper animationState={animationState} onAnimationEnd={onAnimationEnd}>
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onTouchStart={() => setHovered(true)}
-      className="relative px-3 py-2 rounded-lg min-w-[180px] max-w-[260px]"
+      className="relative px-3 py-2 rounded-lg min-w-[180px] max-w-[260px] draft-node-container"
       style={{
         border: '2px dashed var(--ai-accent)',
         backgroundColor: 'var(--ai-accent-subtle, rgba(139, 92, 246, 0.08))',
+        opacity: 0.85,
       }}
     >
       {/* AI badge */}
@@ -64,6 +67,7 @@ const DraftNode = memo(({ data, id }) => {
       <Handle type="target" position={Position.Top} style={{ background: 'var(--ai-accent)' }} />
       <Handle type="source" position={Position.Bottom} style={{ background: 'var(--ai-accent)' }} />
     </div>
+    </AnimatedNodeWrapper>
   );
 });
 

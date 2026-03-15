@@ -1,6 +1,7 @@
 import { memo, useState } from 'react';
 import { Handle, Position, NodeResizer } from '@xyflow/react';
 import { ExternalLink, Trash2, Star } from 'lucide-react';
+import AnimatedNodeWrapper from './AnimatedNodeWrapper';
 
 const RELATION_CONFIG = {
   supports: {
@@ -54,6 +55,8 @@ function EvidenceNode({ id, data, selected }) {
     lod = 'normal',
     dimmed = false,
     compactMode = true,
+    animationState,
+    onAnimationEnd,
   } = data;
   const [hovered, setHovered] = useState(false);
 
@@ -77,7 +80,7 @@ function EvidenceNode({ id, data, selected }) {
   const factBadgeClass = `badge ${factOrView === 'VIEW' ? 'badge-view' : 'badge-fact'}`;
 
   return (
-    <>
+    <AnimatedNodeWrapper animationState={animationState} onAnimationEnd={onAnimationEnd}>
       <NodeResizer minWidth={220} minHeight={96} isVisible={selected} />
       <div
         className="relative group flex flex-col"
@@ -223,7 +226,7 @@ function EvidenceNode({ id, data, selected }) {
 
         <Handle type="source" position={Position.Bottom} className="neuro-handle" />
       </div>
-    </>
+    </AnimatedNodeWrapper>
   );
 }
 

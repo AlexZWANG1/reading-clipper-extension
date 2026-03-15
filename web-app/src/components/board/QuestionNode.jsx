@@ -1,6 +1,7 @@
 import { memo, useState, useRef, useEffect } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Plus, ChevronDown, ChevronRight, Trash2, MessageSquare } from 'lucide-react';
+import AnimatedNodeWrapper from './AnimatedNodeWrapper';
 
 const STATUS_CONFIG = {
   open: {
@@ -38,6 +39,8 @@ function QuestionNode({ id, data, selected }) {
     lod = 'normal',
     dimmed = false,
     compactMode = true,
+    animationState,
+    onAnimationEnd,
   } = data;
 
   const [editing, setEditing] = useState(false);
@@ -68,6 +71,7 @@ function QuestionNode({ id, data, selected }) {
   };
 
   return (
+    <AnimatedNodeWrapper animationState={animationState} onAnimationEnd={onAnimationEnd}>
     <div
       className="relative group w-full h-full flex flex-col"
       onMouseEnter={() => setHovered(true)}
@@ -229,6 +233,7 @@ function QuestionNode({ id, data, selected }) {
 
       <Handle type="source" position={Position.Bottom} className="neuro-handle" />
     </div>
+    </AnimatedNodeWrapper>
   );
 }
 
