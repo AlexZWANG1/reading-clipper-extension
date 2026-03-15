@@ -118,9 +118,11 @@ The canvas has two views of the same underlying data — toggled via tabs at the
 
 The existing `ThinkingBoardPage` React Flow implementation, promoted to the main canvas:
 
-- **Reuse**: ReactFlow setup, node types (QuestionNode, HypothesisNode, EvidenceNode, DraftNode), edge types (MonoStepEdge), dagre auto-layout, LOD system, cinematic focus mode, keyboard shortcuts
+- **Reuse**: ReactFlow setup, node types (QuestionNode, HypothesisNode, EvidenceNode, DraftNode), dagre auto-layout, LOD system (zoom-based detail levels), selection-based chain highlighting (2-hop BFS dimming)
+- **Extract**: MonoStepEdge — currently duplicated inline in both `ThinkingBoardPage.jsx` (line 52) and `EmbeddedThinkBoard.jsx` (line 49) with minor differences. Extract to shared `components/board/MonoStepEdge.jsx`
+- **Build new**: Keyboard shortcuts (Q/H/F for node creation, Tab for compact mode, Ctrl+L for auto-layout) — these do not exist yet in the codebase
 - **Reuse**: HealthSidebar (embed as overlay in Board corner, not separate column)
-- **Reuse**: Evidence Pool (merge into left nav Cards list — same data, single location)
+- **Retire**: Evidence Pool sidebar from ThinkingBoardPage (merge into left nav Cards list — same data, single location)
 - **Remove**: Separate `/topics/:topicId` full-page route (Board now lives in workspace)
 
 ### Document View (研究备忘)
@@ -347,14 +349,22 @@ Management layer uses a simpler navigation (sidebar or top bar):
 | EvidenceNode | `components/board/EvidenceNode.jsx` | Same — Board structure view |
 | DraftNode | `components/DraftNode.jsx` | Same — Draft approval on Board |
 | DraftCommitBar | `components/DraftCommitBar.jsx` | Same — batch approval bar |
-| MonoStepEdge | Inside ThinkingBoardPage | Extract and reuse |
+| MonoStepEdge | Inline in ThinkingBoardPage (line 52) + EmbeddedThinkBoard (line 49) | Extract to shared `components/board/MonoStepEdge.jsx` |
 | ReaderContent | `components/Reader/ReaderContent.jsx` | Embed in split panel |
 | SelectionPopover | `components/Reader/SelectionPopover.jsx` | Same — text selection |
 | CardsSidebar (Reader) | `components/Reader/CardsSidebar.jsx` | Same — reader sidebar |
 | AIPanel | `components/Reader/AIPanel.jsx` | Same — reader AI panel |
 | HealthSidebar | `components/HealthSidebar.jsx` | Reposition as Board overlay |
-| GlobalChatPanel | `components/GlobalChatPanel.jsx` | Evolve into workspace Chat panel |
-| TopicsSidebar | `components/TopicsSidebar.jsx` | Evolve into collapsible left nav |
+| GlobalChatPanel | `components/GlobalChatPanel.jsx` | Evolve into workspace Chat panel (see ChatJournalPanel below) |
+| TopicsSidebar | `components/TopicsSidebar.jsx` | Evolve into collapsible left nav (see WorkspaceLeftNav below) |
+
+### Components to Retire
+
+| Component | Current Location | Reason |
+|-----------|-----------------|--------|
+| BoardChatPanel | `components/BoardChatPanel.jsx` | Board-scoped chat absorbed by ChatJournalPanel (workspace Chat handles board context) |
+| EmbeddedThinkBoard | `components/EmbeddedThinkBoard.jsx` | Replaced by BoardCanvas; the embedded board in CardsPage is no longer needed |
+| CanvasPlaceholder | `components/CanvasPlaceholder.jsx` | Right-panel wrapper in CardsPage; replaced by workspace layout |
 
 ### Components to Create
 
@@ -370,6 +380,33 @@ Management layer uses a simpler navigation (sidebar or top bar):
 | `TopicsHome` | New management home with topic grid + Inbox |
 | `InboxPanel` | Expandable panel for uncategorized materials/cards |
 | `WorkspaceLeftNav` | Collapsible nav with Materials + Cards for current topic |
+
+### New Component Responsibilities
+
+**`BoardCanvas`** (highest risk — extracted from 1390-line ThinkingBoardPage):
+- Absorbs: ReactFlow setup, node/edge rendering, dagre layout, LOD, selection/focus, draft node display, DraftCommitBar, node CRUD handlers, drag-and-drop card→evidence creation, edge connection handler
+- Does NOT absorb: page chrome (back button, title), evidence pool sidebar (→ left nav), full-screen layout (→ workspace orchestrates)
+- Props: `topicId`, `boardId`, `onBoardMutated`, `boardRefreshToken`
+- Must stay mounted when view toggles to document (hidden via CSS, not unmounted)
+
+**`ChatJournalPanel`** (evolved from GlobalChatPanel 526 lines):
+- Absorbs: message rendering, tool call logs, plan proposals, write confirmations from GlobalChatPanel
+- Absorbs: board-scoped chat context from BoardChatPanel (retired)
+- New: JournalBlock rendering interleaved with messages, wider fixed panel (not floating overlay), Research Run progress blocks
+- Removes: floating button behavior, open/close/minimize states (always visible in workspace)
+- In management layer: falls back to floating GlobalChatPanel behavior (or hidden)
+
+**`WorkspaceLeftNav`** (evolved from TopicsSidebar 542 lines):
+- Absorbs: Evidence Pool mode from TopicsSidebar (card list for selected topic with search/filter)
+- New: Materials list section (TopicsSidebar currently has no material listing), material click → triggers Reader split panel open
+- New: Collapse/expand behavior (icon-only collapsed state)
+- Removes: Topic-list browser mode (→ TopicsHome page), topic CRUD (→ TopicsHome)
+
+**`WorkspaceReader`** (extracted from MaterialReaderPage ~350 lines):
+- Absorbs: material data fetching, chunk loading, highlight management, selection state, card creation flow, focus lens from MaterialReaderPage
+- Renders: ReaderContent + SelectionPopover + CardsSidebar (existing sub-components, reused as-is)
+- New: `isEmbedded` layout mode (no h-screen, no fixed modals), close button, split-panel sizing
+- Props: `materialId`, `onClose`, `onCardCreated`
 
 ### Pages to Retire
 
@@ -420,7 +457,7 @@ AI gets richer context: knows the topic, which view is active, whether the user 
 
 Current: Multiple Zustand stores (cardsStore, topicsStore, chatStore, etc.)
 
-New workspace needs a unified `workspaceStore`:
+New workspace needs a unified `workspaceStore` for UI state:
 
 ```javascript
 workspaceStore = {
@@ -443,6 +480,35 @@ workspaceStore = {
 
   // Left Nav
   leftNavExpanded: boolean,
+}
+```
+
+### Board Data Architecture (critical decision)
+
+Board data (nodes, edges, drafts) currently lives as component-local state inside `ThinkingBoardPage.jsx` via React Flow's `useNodesState` and `useEdgesState`. There is no Zustand store for board data today.
+
+**Decision: Keep board data in React Flow's internal state, but ensure `BoardCanvas` never unmounts.**
+
+- The `BoardCanvas` component must stay mounted when toggling between structure/document views. Document view renders alongside (hidden or overlaid), not as a replacement.
+- This avoids a massive refactor of the 1390-line ThinkingBoardPage into Zustand.
+- Board refresh is triggered via `boardRefreshToken` in `workspaceStore` (existing pattern from CardsPage).
+- During Research Run, new nodes are added via API → increment `boardRefreshToken` → React Flow re-fetches and re-renders with dagre layout.
+
+### Surface Context Migration
+
+Current `useSurfaceContext` hook uses `useMatch` against route patterns. In the workspace, all context lives under a single route (`/topics/:topicId`), so the hook must read from `workspaceStore` instead:
+
+```javascript
+// New useSurfaceContext implementation
+function useSurfaceContext() {
+  const { topicId, activeView, readerOpen, readerMaterialId } = useWorkspaceStore();
+  const isWorkspace = useMatch('/topics/:topicId');
+
+  if (isWorkspace) {
+    return { surface: 'workspace', topicId, activeView, readerOpen, readerMaterialId };
+  }
+  // Fall back to route-based detection for management pages
+  // ...existing logic...
 }
 ```
 
@@ -471,10 +537,97 @@ Each surface answers its core question at a glance:
 - **Chat stream**: "What's happening?" — conversation + Journal blocks
 - **Left nav**: "What materials/evidence do I have?" — scannable lists
 
-## 12. Open Questions (for future refinement)
+## 12. Layout Dual-Mode Strategy
 
-1. **Document view evolution**: Currently a simple textarea. How much auto-generation from Q→H→E data? Full report generation or user-editable draft?
-2. **Research Run cancellation UX**: How does the user pause/resume a running agent? Chat command ("pause") or UI button?
-3. **Multi-topic research**: Can a user have multiple workspace tabs open? Or strictly one-topic-at-a-time?
-4. **Mobile experience**: Workspace is desktop-first. What's the mobile fallback? Chat-only? Read-only Board?
-5. **Keyboard shortcuts**: Current Board has Q/H/F/Tab/Ctrl+L shortcuts. How do these work with Chat input focused?
+Current `Layout.jsx` provides a global sidebar + outlet for all routes. After redesign, two different layouts are needed:
+
+### Management Layout
+- Global sidebar navigation (Topics, Tasks, Materials, Settings)
+- Standard page container with padding and max-width
+- GlobalChatPanel as floating overlay (existing behavior)
+- Used by: `/`, `/tasks`, `/materials`, `/settings`
+
+### Workspace Layout
+- No global sidebar (replaced by WorkspaceLeftNav)
+- Full-screen, no padding
+- ChatJournalPanel as fixed right column (not floating)
+- Used by: `/topics/:topicId`
+
+### Implementation
+
+Use separate layout components per layer:
+
+```jsx
+// App.jsx routes
+<Route element={<ManagementLayout />}>
+  <Route index element={<TopicsHome />} />
+  <Route path="tasks" element={<TasksPage />} />
+  <Route path="materials" element={<MaterialsPage />} />
+  <Route path="settings" element={<SettingsPage />} />
+</Route>
+
+<Route path="topics/:topicId" element={<WorkspaceLayout />}>
+  <Route index element={<TopicWorkspace />} />
+</Route>
+```
+
+`ManagementLayout` reuses the current `Layout.jsx` with updated nav items. `WorkspaceLayout` is new — provides the full-screen workspace shell.
+
+## 13. Migration Strategy
+
+### Phased Rollout
+
+The workspace can be built alongside existing routes without breaking anything. Old routes are removed only after the workspace is validated.
+
+**Phase 1: Foundation (can run parallel with existing app)**
+- Extract `BoardCanvas` from `ThinkingBoardPage` → shared component
+- Extract `MonoStepEdge` → shared component
+- Extract `WorkspaceReader` from `MaterialReaderPage` → embeddable component
+- Create `workspaceStore` (Zustand)
+- Create `WorkspaceLayout` shell
+
+**Phase 2: Core Workspace**
+- Build `TopicWorkspace` page (orchestrates Canvas + Chat + LeftNav)
+- Build `WorkspaceLeftNav` (from TopicsSidebar evidence pool mode + materials)
+- Build `ChatJournalPanel` (from GlobalChatPanel + JournalBlock)
+- Wire up `/topics/:topicId` → `TopicWorkspace` (replaces ThinkingBoardPage)
+
+**Phase 3: Management Layer**
+- Build `TopicsHome` (from CardsPage topic overview + TopicsPage)
+- Add `InboxPanel` for uncategorized items
+- Wire up `/` → `TopicsHome` (replaces CardsPage)
+
+**Phase 4: Cleanup**
+- Remove old routes (`/chat`, `/topics` list, `/rss`, `/sources`, `/ai-settings`, `/materials/:id`)
+- Retire unused components (BoardChatPanel, EmbeddedThinkBoard, CanvasPlaceholder)
+- Consolidate settings page
+
+### Risk Mitigation
+
+- Phase 1 components are extracted without modifying existing pages — zero breakage
+- Phase 2 creates a new route that coexists with old routes
+- Old `/topics/:topicId` → ThinkingBoardPage only gets replaced when `TopicWorkspace` is validated
+- Feature flag: `WORKSPACE_V2=true` can gate the new route during development
+
+## 14. Document View Clarification
+
+The document view (研究备忘) evolves in two stages:
+
+**Stage 1 (this redesign)**: Auto-generated read-only structured report from Q→H→E data. Each hypothesis becomes a section with evidence bullets and confidence indicators. Claims cite specific cards. This is deterministic rendering of existing board data — no AI involved.
+
+**Stage 2 (future)**: AI-generated narrative synthesis with user editing capability. The AI writes prose connecting evidence and reasoning. User can edit. This requires a rich text editor and is out of scope for this redesign.
+
+## 15. Animation Feasibility Notes
+
+Board real-time growth animations during Research Run need special handling:
+
+- **Dagre conflict**: The dagre auto-layout repositions ALL nodes when any node is added. This fights smooth entry animations. During Research Run, use **incremental positioning** (place new nodes relative to parent, then optionally run dagre on user request) instead of auto-layout on every addition.
+- **Batching**: AI may create multiple nodes in a single tool call. Animate them as a group (staggered fade-in, 100ms delay between each) rather than all at once.
+- **React Flow performance**: For boards with 50+ nodes, use React Flow's `nodeOrigin` and `viewport` controls to keep new nodes visible without full `fitView` calls.
+
+## 16. Open Questions (for future refinement)
+
+1. **Research Run cancellation UX**: How does the user pause/resume a running agent? Chat command ("pause") or UI button?
+2. **Multi-topic research**: Can a user have multiple workspace tabs open? Or strictly one-topic-at-a-time?
+3. **Mobile experience**: Workspace is desktop-first. What's the mobile fallback? Chat-only? Read-only Board?
+4. **Keyboard shortcuts scope**: New keyboard shortcuts (Q/H/F/Tab/Ctrl+L) need a focus management strategy — when Chat input is focused, shortcuts should not fire on the Board.
