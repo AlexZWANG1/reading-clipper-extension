@@ -1,6 +1,6 @@
 import { Download, Chrome, ExternalLink, CheckCircle, ArrowRight, BookOpen, Zap, Shield } from 'lucide-react';
 
-function DownloadPage() {
+function DownloadPage({ embedded = false }) {
   const REPO_URL = 'https://github.com/AlexZWANG1/reading-clipper-extension';
   const RELEASES_URL = `${REPO_URL}/releases`;
   const ISSUES_URL = `${REPO_URL}/issues`;
@@ -8,6 +8,7 @@ function DownloadPage() {
   return (
     <div className="space-y-8 animate-fade-in">
       {/* 页面标题 */}
+      {!embedded && (
       <div>
         <h1 className="text-2xl font-bold text-surface-900 flex items-center gap-2">
           <Download className="w-7 h-7 text-primary-500" />
@@ -17,6 +18,7 @@ function DownloadPage() {
           安装浏览器扩展，开始使用 Reading Clipper
         </p>
       </div>
+      )}
 
       {/* 安装步骤 */}
       <div className="bg-white rounded-xl border border-surface-100 p-6 space-y-6">

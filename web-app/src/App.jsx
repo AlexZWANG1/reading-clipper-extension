@@ -15,6 +15,7 @@ import RssSubscriptionDetailPage from './pages/RssSubscriptionDetailPage';
 import AISettingsPage from './pages/AISettingsPage';
 import DownloadPage from './pages/DownloadPage';
 import ChatPage from './pages/ChatPage';
+import SettingsPage from './pages/SettingsPage';
 import MaterialsPage from './pages/MaterialsPage';
 import MaterialReaderPage from './pages/MaterialReaderPage';
 import TasksPage from './pages/TasksPage';
@@ -116,7 +117,7 @@ function App() {
           <Route index element={<Suspense fallback={<div className="flex items-center justify-center h-screen"><div className="w-8 h-8 border-[3px] border-blue-500 border-t-transparent rounded-full animate-spin" /></div>}><TopicWorkspace /></Suspense>} />
         </Route>
 
-        {/* Management routes — standard layout (Spec §8, §12) */}
+        {/* Primary management routes — visible in nav (Spec §3.6) */}
         <Route
           path="/"
           element={
@@ -126,18 +127,30 @@ function App() {
           }
         >
           <Route index element={<TopicsHome />} />
-          <Route path="workbench" element={<CardsPage />} />
+          <Route path="tasks" element={<TasksPage />} />
+          <Route path="tasks/:id" element={<TaskDetailView />} />
           <Route path="materials" element={<MaterialsPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+        </Route>
+
+        {/* Legacy routes — accessible by URL, hidden from nav (Spec §3.6) */}
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="workbench" element={<CardsPage />} />
+          <Route path="chat" element={<ChatPage />} />
+          <Route path="topics" element={<TopicsPage />} />
           <Route path="materials/:id" element={<MaterialReaderPage />} />
           <Route path="rss" element={<RssPage />} />
           <Route path="rss/subscriptions/:id" element={<RssSubscriptionDetailPage />} />
-          <Route path="topics" element={<TopicsPage />} />
           <Route path="sources" element={<SourcesPage />} />
-          <Route path="ai-settings" element={<AISettingsPage />} />
-          <Route path="chat" element={<ChatPage />} />
-          <Route path="tasks" element={<TasksPage />} />
-          <Route path="tasks/:id" element={<TaskDetailView />} />
-          <Route path="download" element={<DownloadPage />} />
+          <Route path="ai-settings" element={<Navigate to="/settings?tab=ai" replace />} />
+          <Route path="download" element={<Navigate to="/settings?tab=export" replace />} />
         </Route>
 
         {/* 404 */}

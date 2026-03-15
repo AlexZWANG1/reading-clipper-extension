@@ -36,7 +36,7 @@ function inferDiscoverSourceType(input) {
   return 'website_url';
 }
 
-export default function RssPage() {
+export default function RssPage({ embedded = false }) {
   const navigate = useNavigate();
   const { showToast } = useUIStore();
   const {
@@ -193,6 +193,7 @@ export default function RssPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
+        {!embedded && (
         <div>
           <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
             RSS 订阅
@@ -201,6 +202,7 @@ export default function RssPage() {
             管理订阅并将感兴趣条目导入来源库
           </p>
         </div>
+        )}
         <div className="flex items-center gap-2">
           <label className="btn btn-secondary cursor-pointer flex items-center gap-2">
             {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}

@@ -351,7 +351,7 @@ function SourceRow({ source, onEdit, onDelete }) {
   );
 }
 
-function SourcesPage() {
+function SourcesPage({ embedded = false }) {
   const { sources, loading, fetchSources, createSource, updateSource, deleteSource } =
     useSourcesStore();
   const { showToast } = useUIStore();
@@ -400,12 +400,14 @@ function SourcesPage() {
     <div className="space-y-6 animate-fade-in">
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
+        {!embedded && (
         <div>
           <h1 className="text-2xl font-bold text-surface-900">信息源管理</h1>
           <p className="text-surface-500 mt-1">
             管理你的信息来源，帮助 AI 更好地匹配卡片
           </p>
         </div>
+        )}
         <button
           onClick={() => {
             setEditingSource(null);

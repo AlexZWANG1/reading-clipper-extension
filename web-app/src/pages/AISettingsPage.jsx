@@ -584,7 +584,7 @@ function PromptCard({ prompt, onSave, saving }) {
 /**
  * AI 设置页面（合并 Settings + Prompts）
  */
-function AISettingsPage() {
+function AISettingsPage({ embedded = false }) {
     const { showToast } = useUIStore();
 
     // API 设置状态
@@ -698,6 +698,7 @@ function AISettingsPage() {
 
     return (
         <div className="space-y-6 animate-fade-in">
+            {!embedded && (
             <div>
                 <h1 className="text-2xl font-bold flex items-center gap-2" style={{ color: 'var(--text-0)' }}>
                     <Settings2 className="w-7 h-7" style={{ color: 'var(--accent-400)' }} />
@@ -707,6 +708,7 @@ function AISettingsPage() {
                     配置 OpenAI API、查看模型分配和管理 AI Prompts
                 </p>
             </div>
+            )}
 
             {isLoading && (
                 <div className="flex items-center justify-center py-16">
