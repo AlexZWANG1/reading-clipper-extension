@@ -142,12 +142,13 @@ function getParentEdgeStyle(isHypoTarget, hypoState) {
 }
 
 // ========= Exported BoardCanvas =========
-export default function BoardCanvas({ topicId, onBoardLoaded, dragCardRef, focusCardId, className }) {
+export default function BoardCanvas({ topicId, onBoardLoaded, onOpenReaderAtQuote, dragCardRef, focusCardId, className }) {
     return (
         <ReactFlowProvider>
             <BoardCanvasInner
                 topicId={topicId}
                 onBoardLoaded={onBoardLoaded}
+                onOpenReaderAtQuote={onOpenReaderAtQuote}
                 dragCardRef={dragCardRef}
                 focusCardId={focusCardId}
                 className={className}
@@ -156,7 +157,7 @@ export default function BoardCanvas({ topicId, onBoardLoaded, dragCardRef, focus
     );
 }
 
-function BoardCanvasInner({ topicId, onBoardLoaded, dragCardRef, focusCardId, className }) {
+function BoardCanvasInner({ topicId, onBoardLoaded, onOpenReaderAtQuote, dragCardRef, focusCardId, className }) {
     const { screenToFlowPosition, setCenter } = useReactFlow();
     const { showToast } = useUIStore();
     const { boardInvalidateCounter } = useChatStore();
@@ -316,6 +317,23 @@ function BoardCanvasInner({ topicId, onBoardLoaded, dragCardRef, focusCardId, cl
     }, [boardInvalidateCounter, loadBoard]);
 
     // ========= Cinematic Focus Mode =========
+    // Evidence node double-click → open reader at quote (Spec §1.3)
+    const handleNodeDoubleClick = useCallback((event, node) => {
+        if (node.type === 'evidenceNode' && node.data?.card) {
+            const card = node.data.card;
+            if (card.material_id && onOpenReaderAtQuote) {
+                const locator = (() => {
+                    const raw = card.locator;
+                    if (!raw) return null;
+                    if (typeof raw === 'object') return raw;
+                    if (typeof raw === 'string') { try { return JSON.parse(raw); } catch { return null; } }
+                    return null;
+                })();
+                onOpenReaderAtQuote(card.material_id, locator?.quote_selector || locator);
+            }
+        }
+    }, [onOpenReaderAtQuote]);
+
     const handleSelectionChange = useCallback(({ nodes: selectedNodes }) => {
         if (!selectedNodes || selectedNodes.length === 0) {
             setFocusedChainIds(null);
@@ -1056,6 +1074,7 @@ function BoardCanvasInner({ topicId, onBoardLoaded, dragCardRef, focusCardId, cl
                     onNodesDelete={(deleted) => deleted.forEach(n => handleDeleteNode(n.id))}
                     onNodeDragStop={onNodeDragStop}
                     onSelectionChange={handleSelectionChange}
+                    onNodeDoubleClick={handleNodeDoubleClick}
                     nodeTypes={nodeTypes}
                     edgeTypes={edgeTypes}
                     fitView

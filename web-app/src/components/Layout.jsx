@@ -1,26 +1,19 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
-  CreditCard,
   Folder,
   LogOut,
   Menu,
   X,
   User,
-  BookOpen,
-  Globe,
-  Download,
   Sparkles,
-  MessageCircle,
   FileText,
-  Layout as LayoutIcon,
-  Scale,
   ListChecks,
-  Rss,
+  Settings,
 } from 'lucide-react';
 import { useAuthStore, useUIStore } from '../lib/store';
 import GlobalChatPanel from './GlobalChatPanel';
 
-// 导航结构 — Management Layer (Spec §8)
+// 导航结构 — Management Layer (Spec §8, §1.4)
 const navGroups = [
   {
     title: 'Research',
@@ -32,23 +25,13 @@ const navGroups = [
   {
     title: 'Library',
     items: [
-      { to: '/materials', icon: FileText, label: '来源库' },
-      { to: '/rss', icon: Rss, label: 'RSS 订阅' },
-      { to: '/sources', icon: Globe, label: '信息源' },
-    ],
-  },
-  {
-    title: 'Legacy',
-    items: [
-      { to: '/workbench', icon: LayoutIcon, label: '工作台' },
-      { to: '/chat', icon: MessageCircle, label: 'AI 对话' },
+      { to: '/materials', icon: FileText, label: '材料库' },
     ],
   },
 ];
 
 const userItems = [
-  { to: '/ai-settings', icon: Sparkles, label: 'AI 设置' },
-  { to: '/download', icon: Download, label: '下载' },
+  { to: '/ai-settings', icon: Sparkles, label: '设置' },
 ];
 
 function Layout() {

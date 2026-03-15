@@ -9,9 +9,15 @@ import { useNavigate } from 'react-router-dom';
 import {
     FileText, BookOpen, Layers, ChevronLeft, ChevronRight,
     Search, Settings, Home, ExternalLink, GripVertical,
+    Crosshair, ListChecks,
 } from 'lucide-react';
 import { materialsApi } from '../../lib/api';
 import { useCardsStore } from '../../lib/store';
+
+const REGION_FLAGS = {
+    us: '\u{1F1FA}\u{1F1F8}', cn: '\u{1F1E8}\u{1F1F3}', eu: '\u{1F1EA}\u{1F1FA}',
+    jp: '\u{1F1EF}\u{1F1F5}', kr: '\u{1F1F0}\u{1F1F7}', uk: '\u{1F1EC}\u{1F1E7}',
+};
 
 export default function WorkspaceLeftNav({
     topicId,
@@ -19,6 +25,7 @@ export default function WorkspaceLeftNav({
     expanded,
     onToggle,
     onOpenReader,
+    onOpenReaderAtQuote,
     onLocateCard,
     dragCardRef,
 }) {
@@ -104,13 +111,14 @@ export default function WorkspaceLeftNav({
                 </div>
 
                 <div className="flex flex-col items-center gap-2">
-                    <button
-                        onClick={() => navigate('/')}
-                        className="p-2 rounded-lg transition-colors hover:bg-blue-500/10"
-                        style={{ color: 'var(--text-2)' }}
-                        title="返回首页"
-                    >
+                    <button onClick={() => navigate('/')} className="p-2 rounded-lg transition-colors hover:bg-blue-500/10" style={{ color: 'var(--text-2)' }} title="研究主页">
                         <Home size={18} />
+                    </button>
+                    <button onClick={() => navigate('/tasks')} className="p-2 rounded-lg transition-colors hover:bg-blue-500/10" style={{ color: 'var(--text-2)' }} title="研究任务">
+                        <ListChecks size={18} />
+                    </button>
+                    <button onClick={() => navigate('/ai-settings')} className="p-2 rounded-lg transition-colors hover:bg-blue-500/10" style={{ color: 'var(--text-2)' }} title="设置">
+                        <Settings size={18} />
                     </button>
                 </div>
             </div>
@@ -209,45 +217,110 @@ export default function WorkspaceLeftNav({
                         </button>
                     ))
                 ) : (
-                    filteredItems.map(card => (
-                        <div
-                            key={card.id}
-                            draggable={!!dragCardRef}
-                            onDragStart={() => handleDragStart(card)}
-                            onClick={() => onLocateCard?.(card.id)}
-                            className="p-2.5 rounded-lg transition-all hover:-translate-y-px cursor-pointer group/card"
-                            style={{ background: 'var(--surface-0)', border: '1px solid transparent' }}
-                            onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--stroke-0)'}
-                            onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}
-                        >
-                            <div className="flex items-start gap-2">
-                                {dragCardRef && (
-                                    <div className="shrink-0 pt-0.5 opacity-30 group-hover/card:opacity-70 transition-opacity" style={{ color: 'var(--text-2)' }}>
-                                        <GripVertical size={12} />
-                                    </div>
-                                )}
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-1 mb-0.5">
-                                        <span
-                                            className="text-[8px] font-mono font-bold uppercase px-1 rounded-sm"
-                                            style={{
-                                                color: '#fff',
-                                                backgroundColor: card.fact_or_view === 'view' ? 'var(--text-secondary)' : 'var(--text-primary)',
-                                            }}
-                                        >
-                                            {card.fact_or_view === 'view' ? 'VIEW' : 'FACT'}
-                                        </span>
-                                        <span className="text-[11px] font-medium truncate" style={{ color: 'var(--text-0)' }}>
-                                            {card.title || '暂未命名'}
-                                        </span>
-                                    </div>
-                                    <div className="text-[10px] line-clamp-2" style={{ color: 'var(--text-2)', lineHeight: '1.5' }}>
-                                        {card.summary || '(无内容)'}
+                    filteredItems.map(card => {
+                        const regionFlag = card.source_region ? REGION_FLAGS[card.source_region] : null;
+                        const locator = (() => {
+                            const raw = card.locator;
+                            if (!raw) return null;
+                            if (typeof raw === 'object') return raw;
+                            if (typeof raw === 'string') { try { return JSON.parse(raw); } catch { return null; } }
+                            return null;
+                        })();
+
+                        return (
+                            <div
+                                key={card.id}
+                                draggable={!!dragCardRef}
+                                onDragStart={() => handleDragStart(card)}
+                                onClick={() => onLocateCard?.(card.id)}
+                                className="p-2.5 rounded-lg transition-all hover:-translate-y-px cursor-pointer group/card"
+                                style={{ background: 'var(--surface-0)', border: '1px solid transparent' }}
+                                onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--stroke-0)'}
+                                onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}
+                            >
+                                <div className="flex items-start gap-2">
+                                    {dragCardRef && (
+                                        <div className="shrink-0 pt-0.5 opacity-30 group-hover/card:opacity-70 transition-opacity" style={{ color: 'var(--text-2)' }}>
+                                            <GripVertical size={12} />
+                                        </div>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        {/* Title row: region flag + type badge + title */}
+                                        <div className="flex items-center gap-1 mb-0.5">
+                                            {regionFlag && <span className="text-[10px]">{regionFlag}</span>}
+                                            <span
+                                                className="text-[8px] font-mono font-bold uppercase px-1 rounded-sm"
+                                                style={{
+                                                    color: '#fff',
+                                                    backgroundColor: card.fact_or_view === 'view' ? 'var(--text-secondary)' : 'var(--text-primary)',
+                                                }}
+                                            >
+                                                {card.fact_or_view === 'view' ? 'VIEW' : 'FACT'}
+                                            </span>
+                                            <span className="text-[11px] font-medium truncate" style={{ color: 'var(--text-0)' }}>
+                                                {card.title || '暂未命名'}
+                                            </span>
+                                        </div>
+                                        {/* Summary */}
+                                        <div className="text-[10px] line-clamp-2 mb-1" style={{ color: 'var(--text-2)', lineHeight: '1.5' }}>
+                                            {card.summary || '(无内容)'}
+                                        </div>
+                                        {/* Source badge row */}
+                                        <div className="flex items-center justify-between">
+                                            {card.source_name && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (card.material_id && locator) {
+                                                            onOpenReaderAtQuote?.(card.material_id, locator.quote_selector || locator);
+                                                        } else if (card.material_id) {
+                                                            onOpenReader?.(card.material_id);
+                                                        }
+                                                    }}
+                                                    className="flex items-center gap-1 text-[10px] truncate max-w-[60%] hover:underline"
+                                                    style={{ color: 'var(--accent-400)' }}
+                                                >
+                                                    <FileText size={9} className="shrink-0" />
+                                                    {card.source_name}
+                                                </button>
+                                            )}
+                                            {/* Hover actions */}
+                                            <div className="flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity">
+                                                {card.material_id && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (locator) {
+                                                                onOpenReaderAtQuote?.(card.material_id, locator.quote_selector || locator);
+                                                            } else {
+                                                                onOpenReader?.(card.material_id);
+                                                            }
+                                                        }}
+                                                        className="p-0.5 rounded hover:bg-blue-500/10"
+                                                        style={{ color: 'var(--text-2)' }}
+                                                        title="在阅读器中查看原文"
+                                                    >
+                                                        <BookOpen size={11} />
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onLocateCard?.(card.id);
+                                                    }}
+                                                    className="p-0.5 rounded hover:bg-blue-500/10"
+                                                    style={{ color: 'var(--text-2)' }}
+                                                    title="在论证板上定位"
+                                                >
+                                                    <Crosshair size={11} />
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    ))
+                        );
+                    })
                 )}
 
                 {filteredItems.length === 0 && (
@@ -257,15 +330,31 @@ export default function WorkspaceLeftNav({
                 )}
             </div>
 
-            {/* Footer */}
+            {/* Footer — management quick links */}
             <div className="px-3 py-2 flex items-center gap-2" style={{ borderTop: '1px solid var(--stroke-0)' }}>
                 <button
                     onClick={() => navigate('/')}
                     className="flex items-center gap-1.5 text-xs py-1.5 px-2 rounded-lg transition-colors hover:bg-blue-500/10"
                     style={{ color: 'var(--text-2)' }}
+                    title="研究主页"
                 >
                     <Home size={14} />
-                    返回首页
+                </button>
+                <button
+                    onClick={() => navigate('/tasks')}
+                    className="flex items-center gap-1.5 text-xs py-1.5 px-2 rounded-lg transition-colors hover:bg-blue-500/10"
+                    style={{ color: 'var(--text-2)' }}
+                    title="研究任务"
+                >
+                    <ListChecks size={14} />
+                </button>
+                <button
+                    onClick={() => navigate('/ai-settings')}
+                    className="flex items-center gap-1.5 text-xs py-1.5 px-2 rounded-lg transition-colors hover:bg-blue-500/10"
+                    style={{ color: 'var(--text-2)' }}
+                    title="设置"
+                >
+                    <Settings size={14} />
                 </button>
             </div>
         </div>

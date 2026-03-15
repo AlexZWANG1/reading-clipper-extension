@@ -11,6 +11,7 @@ import BoardCanvas from './BoardCanvas';
 import DocumentView from './DocumentView';
 import WorkspaceReader from './WorkspaceReader';
 import ChatJournalPanel from './ChatJournalPanel';
+import ResizeDivider from './ResizeDivider';
 
 export default function TopicWorkspace() {
     const { topicId } = useParams();
@@ -18,6 +19,7 @@ export default function TopicWorkspace() {
         activeView, setActiveView,
         readerOpen, readerMaterialId,
         openReader, closeReader,
+        readerWidth, setReaderWidth, initReaderWidth,
         leftNavExpanded, toggleLeftNav, setLeftNavExpanded,
         enterWorkspace, leaveWorkspace,
         setBoardId,
@@ -26,12 +28,20 @@ export default function TopicWorkspace() {
     const [topicTitle, setTopicTitle] = useState('');
     const [focusCardId, setFocusCardId] = useState(null);
     const dragCardRef = useRef(null);
+    const contentAreaRef = useRef(null);
 
     // Enter/leave workspace lifecycle
     useEffect(() => {
         enterWorkspace(topicId);
         return () => leaveWorkspace();
     }, [topicId, enterWorkspace, leaveWorkspace]);
+
+    // Initialize reader width as pixels on first open
+    useEffect(() => {
+        if (readerOpen && contentAreaRef.current && !readerWidth) {
+            initReaderWidth(contentAreaRef.current.clientWidth);
+        }
+    }, [readerOpen, readerWidth, initReaderWidth]);
 
     const handleBoardLoaded = useCallback((boardId, topic) => {
         setBoardId(boardId);
@@ -43,6 +53,12 @@ export default function TopicWorkspace() {
         setLeftNavExpanded(false);
     }, [openReader, setLeftNavExpanded]);
 
+    const handleOpenReaderAtQuote = useCallback((materialId, locator) => {
+        const { openReaderAtQuote } = useWorkspaceStore.getState();
+        openReaderAtQuote(materialId, locator);
+        setLeftNavExpanded(false);
+    }, [setLeftNavExpanded]);
+
     const handleCloseReader = useCallback(() => {
         closeReader();
     }, [closeReader]);
@@ -51,6 +67,22 @@ export default function TopicWorkspace() {
         // Refresh board when a card is created from reader
         useWorkspaceStore.getState().invalidateBoard();
     }, []);
+
+    const cyclePresetWidth = useCallback(() => {
+        const container = contentAreaRef.current;
+        if (!container) return;
+        const w = container.clientWidth;
+        const current = readerWidth || Math.round(w * 0.4);
+        // Cycle: 40% → 60% → 40%
+        const target = current < w * 0.5 ? Math.round(w * 0.6) : Math.round(w * 0.4);
+        // Enable smooth CSS transition for preset cycling
+        const readerPanel = contentAreaRef.current?.querySelector('[data-reader-panel]');
+        if (readerPanel) {
+            readerPanel.style.transition = 'width 200ms ease-out';
+            setTimeout(() => { readerPanel.style.transition = ''; }, 220);
+        }
+        setReaderWidth(target);
+    }, [readerWidth, setReaderWidth]);
 
     // Auto-collapse left nav when clicking canvas
     const handleCanvasClick = useCallback(() => {
@@ -66,6 +98,7 @@ export default function TopicWorkspace() {
                 expanded={leftNavExpanded}
                 onToggle={toggleLeftNav}
                 onOpenReader={handleOpenReader}
+                onOpenReaderAtQuote={handleOpenReaderAtQuote}
                 onLocateCard={(cardId) => {
                     setActiveView('structure');
                     setFocusCardId(cardId);
@@ -76,10 +109,17 @@ export default function TopicWorkspace() {
             />
 
             {/* Main content area */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex overflow-hidden" ref={contentAreaRef}>
                 {/* Reader split panel (when open) */}
                 {readerOpen && readerMaterialId && (
-                    <div className="h-full shrink-0 relative" style={{ width: '40%', minWidth: 360, maxWidth: 600, borderRight: '1px solid var(--stroke-0)' }}>
+                    <div
+                        data-reader-panel
+                        className="h-full shrink-0 relative"
+                        style={{
+                            width: readerWidth || 400,
+                            minWidth: 320,
+                        }}
+                    >
                         <WorkspaceReader
                             materialId={readerMaterialId}
                             onClose={handleCloseReader}
@@ -87,6 +127,18 @@ export default function TopicWorkspace() {
                             isEmbedded
                         />
                     </div>
+                )}
+
+                {/* Resize divider */}
+                {readerOpen && readerMaterialId && (
+                    <ResizeDivider
+                        containerRef={contentAreaRef}
+                        currentWidth={readerWidth}
+                        onResize={setReaderWidth}
+                        onDoubleClick={cyclePresetWidth}
+                        minWidth={320}
+                        maxWidthPercent={0.8}
+                    />
                 )}
 
                 {/* Canvas area — clicking here auto-collapses left nav (Spec §3) */}
@@ -101,7 +153,7 @@ export default function TopicWorkspace() {
                                 color: activeView === 'structure' ? 'var(--accent-400)' : 'var(--text-2)',
                             }}
                         >
-                            🧠 论证板
+                            论证板
                         </button>
                         <button
                             onClick={() => setActiveView('document')}
@@ -111,7 +163,7 @@ export default function TopicWorkspace() {
                                 color: activeView === 'document' ? 'var(--accent-400)' : 'var(--text-2)',
                             }}
                         >
-                            📄 研究报告
+                            研究报告
                         </button>
                     </div>
 
@@ -120,6 +172,7 @@ export default function TopicWorkspace() {
                         <BoardCanvas
                             topicId={topicId}
                             onBoardLoaded={handleBoardLoaded}
+                            onOpenReaderAtQuote={handleOpenReaderAtQuote}
                             dragCardRef={dragCardRef}
                             focusCardId={focusCardId}
                             className="h-full"

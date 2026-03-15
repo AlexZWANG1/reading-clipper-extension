@@ -12,7 +12,7 @@ import {
     FileText, Globe, FileType, X, CheckCircle, Sparkles,
 } from 'lucide-react';
 import { materialsApi, highlightsApi, cardsApi, searchApi } from '../../lib/api';
-import { useTopicsStore } from '../../lib/store';
+import { useTopicsStore, useWorkspaceStore } from '../../lib/store';
 import ReaderContent from '../Reader/ReaderContent';
 import SelectionPopover from '../Reader/SelectionPopover';
 import CardsSidebar from '../Reader/CardsSidebar';
@@ -91,6 +91,26 @@ export default function WorkspaceReader({
             setLoading(false);
         }
     };
+
+    // Scroll-to-quote when scrollLocator changes (Spec §1.3)
+    const readerScrollLocator = useWorkspaceStore(s => s.readerScrollLocator);
+    const clearReaderScrollLocator = useWorkspaceStore(s => s.clearReaderScrollLocator);
+
+    useEffect(() => {
+        if (!readerScrollLocator || !material) return;
+        const hlId = `scroll-target-${Date.now()}`;
+        const scrollHighlight = {
+            id: hlId,
+            exact: readerScrollLocator.exact,
+            prefix: readerScrollLocator.prefix || '',
+            suffix: readerScrollLocator.suffix || '',
+            chunk_id: readerScrollLocator.chunk_id || null,
+            color: 'indigo',
+        };
+        setCardHighlights([scrollHighlight]);
+        setActiveCardHighlightId(hlId);
+        clearReaderScrollLocator();
+    }, [readerScrollLocator, material, clearReaderScrollLocator]);
 
     const handleHighlight = useCallback(async (selectionData) => {
         if (!selectionData) return;

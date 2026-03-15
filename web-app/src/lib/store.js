@@ -778,6 +778,8 @@ export const useWorkspaceStore = create((set, get) => ({
   // Reader
   readerOpen: false,
   readerMaterialId: null,
+  readerWidth: null,        // px integer, null = compute 40% on first open
+  readerScrollLocator: null, // { exact, prefix, suffix, chunk_id } or null
 
   // Board refresh
   boardRefreshToken: 0,
@@ -800,13 +802,28 @@ export const useWorkspaceStore = create((set, get) => ({
     activeView: 'structure',
     readerOpen: false,
     readerMaterialId: null,
+    readerWidth: null,
+    readerScrollLocator: null,
+    leftNavExpanded: false,
   }),
 
   setBoardId: (boardId) => set({ boardId }),
   setActiveView: (view) => set({ activeView: view }),
 
   openReader: (materialId) => set({ readerOpen: true, readerMaterialId: materialId }),
-  closeReader: () => set({ readerOpen: false, readerMaterialId: null }),
+  closeReader: () => set({ readerOpen: false, readerMaterialId: null, readerScrollLocator: null }),
+
+  setReaderWidth: (w) => set({ readerWidth: w }),
+  initReaderWidth: (containerWidth) => {
+    if (!get().readerWidth) set({ readerWidth: Math.round(containerWidth * 0.4) });
+  },
+
+  openReaderAtQuote: (materialId, locator) => set({
+    readerOpen: true,
+    readerMaterialId: materialId,
+    readerScrollLocator: locator || null,
+  }),
+  clearReaderScrollLocator: () => set({ readerScrollLocator: null }),
 
   toggleLeftNav: () => set((s) => ({ leftNavExpanded: !s.leftNavExpanded })),
   setLeftNavExpanded: (expanded) => set({ leftNavExpanded: expanded }),
