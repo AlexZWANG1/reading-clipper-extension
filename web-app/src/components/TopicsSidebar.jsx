@@ -30,12 +30,24 @@ function TopicsSidebar({
   const { createTopic, fetchTopics, updateTopic, deleteTopic } = useTopicsStore();
   const { showToast } = useUIStore();
 
+  const isUncategorized = selectedTopic === 'uncategorized';
+
   // 当前选中的 Topic 对象
-  const currentTopic = useMemo(() => topics.find(t => t.id === selectedTopic), [topics, selectedTopic]);
+  const currentTopic = useMemo(() => {
+    if (isUncategorized) return { id: 'uncategorized', title: '未分类' };
+    return topics.find(t => t.id === selectedTopic);
+  }, [topics, selectedTopic, isUncategorized]);
+
+  // 未分类卡片
+  const uncategorizedCards = useMemo(() => cards.filter(c => !c.topic_id), [cards]);
 
   // Evidence Pool 卡片列表
   const filteredCards = useMemo(() => {
-    let result = showAllCards ? cards : cards.filter(c => c.topic_id === selectedTopic);
+    let result = showAllCards
+      ? cards
+      : isUncategorized
+        ? cards.filter(c => !c.topic_id)
+        : cards.filter(c => c.topic_id === selectedTopic);
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       result = result.filter(c =>
@@ -485,6 +497,35 @@ function TopicsSidebar({
               </div>
             );
           })
+        )}
+
+        {/* 未分类卡片 — 兜底分类 */}
+        {uncategorizedCards.length > 0 && (
+          <div className="mb-1 mt-2 pt-2" style={{ borderTop: '1px solid var(--workbench-border)' }}>
+            <div className="relative group">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => onTopicSelect('uncategorized')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onTopicSelect('uncategorized');
+                  }
+                }}
+                className="w-full flex items-center gap-2 p-2 rounded-lg transition-all hover:bg-opacity-80"
+                style={{ background: 'transparent', border: '1px solid transparent' }}
+              >
+                <div className="w-2 h-2 rounded-full shrink-0" style={{ background: 'var(--workbench-text-muted)' }} />
+                <div className="flex-1 text-left min-w-0">
+                  <p className="text-sm font-medium truncate" style={{ color: 'var(--workbench-text-muted)' }}>未分类</p>
+                </div>
+                <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--workbench-card-soft)', color: 'var(--workbench-text-muted)' }}>
+                  {uncategorizedCards.length}
+                </span>
+              </div>
+            </div>
+          </div>
         )}
       </div>
 

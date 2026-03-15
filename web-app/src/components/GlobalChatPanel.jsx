@@ -123,8 +123,14 @@ export default function GlobalChatPanel() {
   } = useChatStore();
 
   // Update surface context when route changes
+  // Only overwrite if route provides topicId/materialId, or if surface type changed
   useEffect(() => {
-    setSurfaceContext(surfaceContext);
+    const stored = useChatStore.getState().surfaceContext;
+    const routeHasSpecificContext = surfaceContext.topicId || surfaceContext.materialId;
+    const surfaceChanged = !stored || stored.surface !== surfaceContext.surface;
+    if (surfaceChanged || routeHasSpecificContext) {
+      setSurfaceContext(surfaceContext);
+    }
   }, [surfaceContext.surface, surfaceContext.topicId, surfaceContext.materialId]);
 
   // Auto-scroll to bottom

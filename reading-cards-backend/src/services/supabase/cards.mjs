@@ -142,8 +142,10 @@ export async function listCards(supabase, userId, filters = {}) {
     }
   }
 
-  // 按 topic_id 筛选
-  if (filters.topic_id) {
+  // 按 topic_id 筛选（支持 'null' 查询未分类卡片）
+  if (filters.topic_id === 'null') {
+    query = query.is("topic_id", null);
+  } else if (filters.topic_id) {
     query = query.eq("topic_id", filters.topic_id);
   }
 

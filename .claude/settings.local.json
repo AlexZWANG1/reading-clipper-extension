@@ -23,7 +23,8 @@
       "Bash(netstat:*)",
       "Bash(__NEW_LINE_a2f4fc5e48130466__ curl:*)",
       "Bash(__NEW_LINE_f4296f2aae4ebdc0__ curl:*)",
-      "Bash(__NEW_LINE_7773209b4ca357db__ curl:*)"
+      "Bash(__NEW_LINE_7773209b4ca357db__ curl:*)",
+      "WebFetch(domain:docs.anthropic.com)"
     ]
   }
 }

@@ -57,6 +57,19 @@ export async function chat({ messages, userId, supabase, accessToken, onToolCall
     }
   }
 
+  // Enrich surface context with topic title for prompt (skip if already enriched)
+  let enrichedSurfaceContext = surfaceContext;
+  if (topicId && !surfaceContext?.topicTitle) {
+    try {
+      const { data: topicRow } = await supabase.from('topics').select('title').eq('id', topicId).single();
+      if (topicRow) {
+        enrichedSurfaceContext = { ...surfaceContext, topicTitle: topicRow.title };
+      }
+    } catch (_err) {
+      // non-fatal
+    }
+  }
+
   // Determine tool group
   const lastUserMsg = messages.filter(m => m.role === 'user').pop()?.content || '';
   const toolGroup = toolGroupOverride || (mode === 'chat' ? 'explore' : inferToolGroup(lastUserMsg, surfaceContext));
@@ -64,7 +77,7 @@ export async function chat({ messages, userId, supabase, accessToken, onToolCall
 
   // Build the system prompt
   const systemPrompt = buildSystemPrompt({
-    surfaceContext,
+    surfaceContext: enrichedSurfaceContext,
     methodology,
     researchState,
     toolGroup,
@@ -577,13 +590,20 @@ export async function chatWithConversation({ conversationId, userMessage, userId
 
   // Build system prompt and scoped tools (needed for budget calculation)
   const topicId = surfaceContext?.topicId || null;
-  const [methodology, researchState] = await Promise.all([
+  const [methodology, researchState, topicRow] = await Promise.all([
     loadUserMethodology(supabase, userId).catch(() => null),
     topicId ? getResearchState(supabase, topicId).catch(() => null) : null,
+    topicId ? supabase.from('topics').select('title').eq('id', topicId).single().then(r => r.data).catch(() => null) : null,
   ]);
+
+  // Enrich surface context with topic title
+  const enrichedSurfaceContext = (topicId && topicRow)
+    ? { ...surfaceContext, topicTitle: topicRow.title }
+    : surfaceContext;
+
   const toolGroup = mode === 'chat' ? 'explore' : inferToolGroup(userMessage, surfaceContext);
 
-  const systemPrompt = buildSystemPrompt({ surfaceContext, methodology, researchState, toolGroup, mode });
+  const systemPrompt = buildSystemPrompt({ surfaceContext: enrichedSurfaceContext, methodology, researchState, toolGroup, mode });
   const scopedTools = getToolsForGroup(toolGroup);
 
   // Calculate token budget
@@ -616,7 +636,7 @@ export async function chatWithConversation({ conversationId, userMessage, userId
   const budgetedMessages = buildHistoryWithinBudget(chatMessages, historyBudget, conversationSummary);
 
   // ALL input goes to AI — AI decides whether to chat or request a plan
-  const result = await chat({ messages: budgetedMessages, userId, supabase, accessToken, surfaceContext, mode });
+  const result = await chat({ messages: budgetedMessages, userId, supabase, accessToken, surfaceContext: enrichedSurfaceContext, mode });
 
   // Check if AI requested a plan
   if (result.planRequest) {

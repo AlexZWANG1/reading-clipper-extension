@@ -255,17 +255,23 @@ function formatResearchStateForPrompt(state) {
 
 /**
  * Describe the user's current surface for the AI prompt.
- * Does NOT expose UUIDs — IDs are passed implicitly through tool group inference.
+ * Includes topic_id when available so the AI can scope tool calls correctly.
  */
 function describeSurface(ctx) {
   if (!ctx?.surface || ctx.surface === 'general') return null;
+
+  // Topic context line — available on any surface that has a topicId
+  const topicLine = ctx.topicTitle
+    ? `当前 Topic：「${ctx.topicTitle}」（topic_id: ${ctx.topicId}）。你已经知道用户在哪个 Topic 下工作，不需要再询问。`
+    : '';
+
   switch (ctx.surface) {
     case 'board':
-      return '用户正在查看思维画板。优先帮助用户理解论证结构：假说是否有充分证据？哪里有盲点或偏见？用 get_board 和 get_board_health 获取数据，用 propose_board_changes 提议结构变更。';
+      return `${topicLine || '用户正在查看思维画板。'}优先帮助用户理解论证结构：假说是否有充分证据？哪里有盲点或偏见？用 get_board 和 get_board_health 获取数据，用 propose_board_changes 提议结构变更。`;
     case 'reader':
-      return '用户正在阅读器中阅读材料。优先帮助用户理解内容：这篇文章说了什么？提出了哪些论点？有什么证据支撑？用 semantic_search 搜索材料内容来回答。';
+      return `${topicLine}用户正在阅读器中阅读材料。优先帮助用户理解内容：这篇文章说了什么？提出了哪些论点？有什么证据支撑？用 semantic_search 搜索材料内容来回答。`;
     case 'cards':
-      return '用户正在卡片页面，浏览和管理知识卡片。';
+      return `${topicLine}用户正在工作台的卡片页面，浏览和管理知识卡片。`;
     default:
       return null;
   }

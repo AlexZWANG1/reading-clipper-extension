@@ -21,7 +21,7 @@ import {
   Save,
   Loader2,
 } from 'lucide-react';
-import { useCardsStore, useTopicsStore, useSourcesStore, useUIStore } from '../lib/store';
+import { useCardsStore, useTopicsStore, useSourcesStore, useUIStore, useChatStore } from '../lib/store';
 import { documentsApi } from '../lib/api';
 import { getTopicColor, buildHighlightUrl, getSourceDisplayName } from '../lib/ui-utils';
 import AddCardSection from '../components/AddCardSection';
@@ -321,6 +321,7 @@ function CardsPage() {
   const { topics, fetchTopics } = useTopicsStore();
   const { sources, fetchSources } = useSourcesStore();
   const { showToast } = useUIStore();
+  const { setSurfaceContext } = useChatStore();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTopic, setSelectedTopic] = useState(topicId || '');
@@ -391,12 +392,27 @@ function CardsPage() {
   useEffect(() => {
     const params = {};
     if (topicId) params.topic_id = topicId;
+    else if (selectedTopic === 'uncategorized') params.topic_id = 'null';
     else if (selectedTopic) params.topic_id = selectedTopic;
     fetchCards(params);
+    // Reset tab to cards when viewing uncategorized (no board/memo)
+    if (selectedTopic === 'uncategorized') setActiveTab('cards');
   }, [fetchCards, topicId, selectedTopic]);
 
+  // Update chat surface context when topic selection changes on workbench
+  // Update chat surface context when topic selection changes on workbench
   useEffect(() => {
-    if (!selectedTopic) {
+    const effectiveTopicId = topicId || selectedTopic;
+    if (effectiveTopicId && effectiveTopicId !== 'uncategorized') {
+      setSurfaceContext({ surface: 'cards', topicId: effectiveTopicId });
+    } else {
+      setSurfaceContext({ surface: 'cards' });
+    }
+    return () => setSurfaceContext({ surface: 'general' });
+  }, [topicId, selectedTopic, setSurfaceContext]);
+
+  useEffect(() => {
+    if (!selectedTopic || selectedTopic === 'uncategorized') {
       setMemoContent('');
       setMemoDocument(null);
       return;
@@ -524,7 +540,10 @@ function CardsPage() {
     }
   }, []);
 
-  const currentTopic = topics.find((t) => t.id === (topicId || selectedTopic));
+  const isUncategorized = selectedTopic === 'uncategorized';
+  const currentTopic = isUncategorized
+    ? { id: 'uncategorized', title: '未分类' }
+    : topics.find((t) => t.id === (topicId || selectedTopic));
   const isTopicOverview = !selectedTopic;
 
   const topicOverviewItems = useMemo(() => {
@@ -646,20 +665,24 @@ function CardsPage() {
                 <LayoutGrid className="w-4 h-4" />
                 证据卡
               </button>
-              <button
-                onClick={() => setActiveTab('board')}
-                className={`workbench-tab ${activeTab === 'board' ? 'workbench-tab-active' : ''}`}
-              >
-                <Network className="w-4 h-4" />
-                论证板
-              </button>
-              <button
-                onClick={() => setActiveTab('memo')}
-                className={`workbench-tab ${activeTab === 'memo' ? 'workbench-tab-active' : ''}`}
-              >
-                <FileText className="w-4 h-4" />
-                研究备忘
-              </button>
+              {!isUncategorized && (
+                <>
+                  <button
+                    onClick={() => setActiveTab('board')}
+                    className={`workbench-tab ${activeTab === 'board' ? 'workbench-tab-active' : ''}`}
+                  >
+                    <Network className="w-4 h-4" />
+                    论证板
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('memo')}
+                    className={`workbench-tab ${activeTab === 'memo' ? 'workbench-tab-active' : ''}`}
+                  >
+                    <FileText className="w-4 h-4" />
+                    研究备忘
+                  </button>
+                </>
+              )}
             </div>
           )}
           {selectedTopic && (
@@ -750,6 +773,40 @@ function CardsPage() {
                       </div>
                     </button>
                   ))}
+                  {/* 未分类兜底入口 */}
+                  {cards.filter(c => !c.topic_id).length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTopic('uncategorized')}
+                      className="w-full text-left rounded-xl p-4 transition-all hover:-translate-y-0.5"
+                      style={{
+                        background: 'var(--workbench-card)',
+                        border: '1px dashed var(--workbench-border)',
+                        boxShadow: 'var(--workbench-shadow-card)',
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-base font-semibold truncate" style={{ color: 'var(--workbench-text-muted)' }}>
+                            未分类
+                          </p>
+                          <p className="text-xs mt-1" style={{ color: 'var(--workbench-text-muted)' }}>
+                            未归入任何 Topic 的卡片
+                          </p>
+                        </div>
+                        <ArrowRight className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--workbench-text-muted)' }} />
+                      </div>
+                      <div className="mt-4">
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium"
+                          style={{ background: 'var(--workbench-card-soft)', color: 'var(--workbench-text-muted)' }}
+                        >
+                          <LayoutGrid className="w-3 h-3" />
+                          {cards.filter(c => !c.topic_id).length} 张卡片
+                        </span>
+                      </div>
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div
