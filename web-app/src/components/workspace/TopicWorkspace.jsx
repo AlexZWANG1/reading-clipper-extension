@@ -24,6 +24,7 @@ export default function TopicWorkspace() {
     } = useWorkspaceStore();
 
     const [topicTitle, setTopicTitle] = useState('');
+    const [focusCardId, setFocusCardId] = useState(null);
     const dragCardRef = useRef(null);
 
     // Enter/leave workspace lifecycle
@@ -66,8 +67,10 @@ export default function TopicWorkspace() {
                 onToggle={toggleLeftNav}
                 onOpenReader={handleOpenReader}
                 onLocateCard={(cardId) => {
-                    // TODO: implement card-to-board node location
-                    console.log('Locate card on board:', cardId);
+                    setActiveView('structure');
+                    setFocusCardId(cardId);
+                    // Reset after a tick so re-clicking same card works
+                    setTimeout(() => setFocusCardId(null), 500);
                 }}
                 dragCardRef={dragCardRef}
             />
@@ -118,6 +121,7 @@ export default function TopicWorkspace() {
                             topicId={topicId}
                             onBoardLoaded={handleBoardLoaded}
                             dragCardRef={dragCardRef}
+                            focusCardId={focusCardId}
                             className="h-full"
                         />
                     </div>

@@ -142,20 +142,21 @@ function getParentEdgeStyle(isHypoTarget, hypoState) {
 }
 
 // ========= Exported BoardCanvas =========
-export default function BoardCanvas({ topicId, onBoardLoaded, dragCardRef, className }) {
+export default function BoardCanvas({ topicId, onBoardLoaded, dragCardRef, focusCardId, className }) {
     return (
         <ReactFlowProvider>
             <BoardCanvasInner
                 topicId={topicId}
                 onBoardLoaded={onBoardLoaded}
                 dragCardRef={dragCardRef}
+                focusCardId={focusCardId}
                 className={className}
             />
         </ReactFlowProvider>
     );
 }
 
-function BoardCanvasInner({ topicId, onBoardLoaded, dragCardRef, className }) {
+function BoardCanvasInner({ topicId, onBoardLoaded, dragCardRef, focusCardId, className }) {
     const { screenToFlowPosition, setCenter } = useReactFlow();
     const { showToast } = useUIStore();
     const { boardInvalidateCounter } = useChatStore();
@@ -994,6 +995,22 @@ function BoardCanvasInner({ topicId, onBoardLoaded, dragCardRef, className }) {
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
     }, [nodes, autoLayout, createChildNode]);
+
+    // ========= Focus on card's evidence node (Spec §3, §9) =========
+    useEffect(() => {
+        if (!focusCardId || nodes.length === 0) return;
+        const evidenceNode = nodes.find(n =>
+            n.type === 'evidenceNode' && n.data?.card?.id === focusCardId
+        );
+        if (evidenceNode) {
+            const dims = NODE_DIMS[evidenceNode.type] || { width: NODE_WIDTH, height: 180 };
+            setCenter(
+                evidenceNode.position.x + dims.width / 2,
+                evidenceNode.position.y + dims.height / 2,
+                { zoom: 1.2, duration: 350 }
+            );
+        }
+    }, [focusCardId, nodes, setCenter]);
 
     // ========= Loading =========
     if (loading) {
