@@ -20,9 +20,6 @@ import MaterialReaderPage from './pages/MaterialReaderPage';
 import TasksPage from './pages/TasksPage';
 import TaskDetailView from './pages/TaskDetailView';
 
-// Lazy load ThinkingBoardPage (heavy: React Flow + dagre)
-const ThinkingBoardPage = lazy(() => import('./pages/ThinkingBoardPage'));
-
 // Workspace components (Spec §12)
 import WorkspaceLayout from './components/workspace/WorkspaceLayout';
 const TopicWorkspace = lazy(() => import('./components/workspace/TopicWorkspace'));
