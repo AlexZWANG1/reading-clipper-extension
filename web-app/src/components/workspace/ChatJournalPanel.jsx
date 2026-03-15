@@ -12,9 +12,11 @@ import {
     Play, XCircle, ChevronDown, ChevronRight, BookOpen,
 } from 'lucide-react';
 import { useSurfaceContext } from '../../hooks/useSurfaceContext';
-import { useChatStore } from '../../lib/store';
+import { useChatStore, useWorkspaceStore } from '../../lib/store';
 import { chatApi } from '../../lib/api';
+import { shouldShowJournalBlock, AUTONOMY_TO_MODE } from '../../lib/chat-utils';
 import ChatMessage from '../ChatMessage';
+import ResearchRunProgress from './ResearchRunProgress';
 
 const MODES = [
     { key: 'chat', label: '聊天' },
@@ -131,6 +133,12 @@ function JournalBlock({ content, timestamp }) {
 
 // ========= Main Panel =========
 
+const INTERVENTION_KEYWORDS = {
+    '暂停': 'pause', 'pause': 'pause',
+    '继续': 'resume', 'resume': 'resume',
+    '停止': 'stop', 'stop': 'stop',
+};
+
 export default function ChatJournalPanel({ className }) {
     const [input, setInput] = useState('');
     const [error, setError] = useState(null);
@@ -146,6 +154,8 @@ export default function ChatJournalPanel({ className }) {
         messages, sending, sendMessage, mode, setMode, setSurfaceContext, newConversation,
         activePlan, executing, executePlan, dismissPlan, surfaceContext: storedContext,
     } = useChatStore();
+
+    const autonomyLevel = useWorkspaceStore(s => s.autonomyLevel);
 
     // Update surface context
     useEffect(() => {
@@ -170,6 +180,27 @@ export default function ChatJournalPanel({ className }) {
         }
     }, [error]);
 
+    // Intercept tool results during Research Run → push to board
+    const handleToolResultForBoard = useCallback((toolCalls) => {
+        const { autonomyLevel: level, addBoardNode } = useWorkspaceStore.getState();
+        if (level !== 'run') return;
+        for (const tc of toolCalls) {
+            const name = tc.name || tc.function?.name || tc.tool;
+            const result = tc.result || tc.output || tc.result_summary;
+            if (!result) continue;
+            if (name === 'create_board_node' && typeof result === 'object' && result.node) {
+                addBoardNode(result.node);
+            }
+        }
+    }, []);
+
+    // Sync mode toggle → autonomy level
+    const handleModeChange = useCallback((newMode) => {
+        setMode(newMode);
+        const levelMap = { chat: 'explore', agent: 'agent', auto: 'run' };
+        useWorkspaceStore.getState().setAutonomyLevel(levelMap[newMode] || 'explore');
+    }, [setMode]);
+
     const handleSend = useCallback(async () => {
         const text = input.trim();
         if (!text || sending) return;
@@ -177,12 +208,32 @@ export default function ChatJournalPanel({ className }) {
         setError(null);
         if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
+        // Intervention keyword detection during Research Run
+        const { autonomyLevel: curLevel, activeResearchRun, setActiveResearchRun } = useWorkspaceStore.getState();
+        if (curLevel === 'run') {
+            const keyword = INTERVENTION_KEYWORDS[text.toLowerCase()];
+            if (keyword === 'pause') {
+                setActiveResearchRun({ ...activeResearchRun, status: 'paused' });
+            } else if (keyword === 'resume') {
+                setActiveResearchRun({ ...activeResearchRun, status: 'running' });
+            } else if (keyword === 'stop') {
+                setActiveResearchRun({ ...activeResearchRun, status: 'completed' });
+                useWorkspaceStore.getState().setAutonomyLevel('explore');
+                useWorkspaceStore.getState().invalidateBoard();
+                useWorkspaceStore.getState().setLayoutMode('dagre');
+            }
+        }
+
         try {
             const result = await sendMessage(text);
             if (result?.pendingActions?.length > 0) {
                 setPendingActions(result.pendingActions);
                 setPendingMessages(result.messages);
                 setPendingToolCalls(result.pendingToolCalls);
+            }
+            // Check for tool calls to forward to board
+            if (result?.toolCalls) {
+                handleToolResultForBoard(result.toolCalls);
             }
         } catch (err) {
             const msg = err?.message || '';
@@ -192,7 +243,7 @@ export default function ChatJournalPanel({ className }) {
                 setError(msg || '请求失败，请重试');
             }
         }
-    }, [input, sending, sendMessage]);
+    }, [input, sending, sendMessage, handleToolResultForBoard]);
 
     const handleConfirm = async () => {
         if (!pendingActions || !pendingMessages || !pendingToolCalls) return;
@@ -278,7 +329,7 @@ export default function ChatJournalPanel({ className }) {
                         {MODES.map((m) => (
                             <button
                                 key={m.key}
-                                onClick={() => setMode(m.key)}
+                                onClick={() => handleModeChange(m.key)}
                                 className="px-2 py-0.5 rounded-md text-[11px] transition-colors"
                                 style={
                                     mode === m.key
@@ -301,6 +352,9 @@ export default function ChatJournalPanel({ className }) {
                 </div>
             </div>
 
+            {/* Research Run progress bar */}
+            <ResearchRunProgress className="shrink-0" />
+
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
                 {!hasMessages && !sending && !pendingActions && !activePlan && (
@@ -317,6 +371,9 @@ export default function ChatJournalPanel({ className }) {
                         return <ToolCallLog key={msg.id || i} toolCalls={msg.metadata?.tool_calls} />;
                     }
                     if (msg.message_type === 'journal') {
+                        if (msg.role !== 'user' && !shouldShowJournalBlock(msg, autonomyLevel)) {
+                            return null;
+                        }
                         return <JournalBlock key={msg.id || i} content={msg.content} timestamp={msg.created_at} />;
                     }
                     return (
@@ -405,6 +462,20 @@ export default function ChatJournalPanel({ className }) {
 
             {/* Input */}
             <div className="px-4 py-3 flex-none" style={{ borderTop: '1px solid var(--stroke-0)' }}>
+                {/* Autonomy mode badge */}
+                <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{
+                        background: autonomyLevel === 'run' ? 'rgba(24,160,106,0.12)' :
+                                    autonomyLevel === 'agent' ? 'rgba(13,110,253,0.12)' :
+                                    'rgba(0,0,0,0.06)',
+                        color: autonomyLevel === 'run' ? '#18A06A' :
+                               autonomyLevel === 'agent' ? 'var(--accent-400)' :
+                               'var(--text-2)',
+                    }}>
+                        {autonomyLevel === 'run' ? 'Research Run' :
+                         autonomyLevel === 'agent' ? '代理' : '探索'}
+                    </span>
+                </div>
                 <div className="flex items-end gap-2">
                     <textarea
                         ref={textareaRef}
@@ -416,7 +487,10 @@ export default function ChatJournalPanel({ className }) {
                         }}
                         onKeyDown={handleKeyDown}
                         disabled={inputDisabled}
-                        placeholder={inputDisabled ? '等待中...' : '输入消息...'}
+                        placeholder={inputDisabled ? '等待中...' :
+                            autonomyLevel === 'run' ? '输入指令干预研究方向...' :
+                            autonomyLevel === 'agent' ? '告诉 AI 你想做什么...' :
+                            '问任何关于这个研究的问题...'}
                         rows={1}
                         className="flex-1 px-3 py-2 text-sm rounded-xl resize-none outline-none disabled:opacity-50"
                         style={{
