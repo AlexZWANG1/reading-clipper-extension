@@ -8,6 +8,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import CardsPage from './pages/CardsPage';
 import TopicsPage from './pages/TopicsPage';
+import TopicsHome from './components/workspace/TopicsHome';
 import SourcesPage from './pages/SourcesPage';
 import RssPage from './pages/RssPage';
 import RssSubscriptionDetailPage from './pages/RssSubscriptionDetailPage';
@@ -127,7 +128,8 @@ function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<CardsPage />} />
+          <Route index element={<TopicsHome />} />
+          <Route path="workbench" element={<CardsPage />} />
           <Route path="materials" element={<MaterialsPage />} />
           <Route path="materials/:id" element={<MaterialReaderPage />} />
           <Route path="rss" element={<RssPage />} />

@@ -20,10 +20,17 @@ import {
 import { useAuthStore, useUIStore } from '../lib/store';
 import GlobalChatPanel from './GlobalChatPanel';
 
-// 四组导航结构
+// 导航结构 — Management Layer (Spec §8)
 const navGroups = [
   {
-    title: 'Reader',
+    title: 'Research',
+    items: [
+      { to: '/', icon: Folder, label: '研究主页', end: true },
+      { to: '/tasks', icon: ListChecks, label: '研究任务' },
+    ],
+  },
+  {
+    title: 'Library',
     items: [
       { to: '/materials', icon: FileText, label: '来源库' },
       { to: '/rss', icon: Rss, label: 'RSS 订阅' },
@@ -31,16 +38,10 @@ const navGroups = [
     ],
   },
   {
-    title: 'Workbench',
+    title: 'Legacy',
     items: [
-      { to: '/', icon: LayoutIcon, label: '工作台', end: true },
-    ],
-  },
-  {
-    title: 'Copilot',
-    items: [
+      { to: '/workbench', icon: LayoutIcon, label: '工作台' },
       { to: '/chat', icon: MessageCircle, label: 'AI 对话' },
-      { to: '/tasks', icon: ListChecks, label: '研究任务' },
     ],
   },
 ];
