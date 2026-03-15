@@ -22,6 +22,10 @@ import TaskDetailView from './pages/TaskDetailView';
 // Lazy load ThinkingBoardPage (heavy: React Flow + dagre)
 const ThinkingBoardPage = lazy(() => import('./pages/ThinkingBoardPage'));
 
+// Workspace components (Spec §12)
+import WorkspaceLayout from './components/workspace/WorkspaceLayout';
+const TopicWorkspace = lazy(() => import('./components/workspace/TopicWorkspace'));
+
 // 布局组件
 import Layout from './components/Layout';
 import Toast from './components/Toast';
@@ -102,7 +106,19 @@ function App() {
           }
         />
 
-        {/* 受保护的路由 */}
+        {/* Workspace route — immersive topic workspace (Spec §12) */}
+        <Route
+          path="/topics/:topicId"
+          element={
+            <ProtectedRoute>
+              <WorkspaceLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Suspense fallback={<div className="flex items-center justify-center h-screen"><div className="w-8 h-8 border-[3px] border-blue-500 border-t-transparent rounded-full animate-spin" /></div>}><TopicWorkspace /></Suspense>} />
+        </Route>
+
+        {/* Management routes — standard layout (Spec §8, §12) */}
         <Route
           path="/"
           element={
@@ -117,7 +133,6 @@ function App() {
           <Route path="rss" element={<RssPage />} />
           <Route path="rss/subscriptions/:id" element={<RssSubscriptionDetailPage />} />
           <Route path="topics" element={<TopicsPage />} />
-          <Route path="topics/:topicId" element={<Suspense fallback={<div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-[3px] border-blue-500 border-t-transparent rounded-full animate-spin" /></div>}><ThinkingBoardPage /></Suspense>} />
           <Route path="sources" element={<SourcesPage />} />
           <Route path="ai-settings" element={<AISettingsPage />} />
           <Route path="chat" element={<ChatPage />} />
