@@ -473,6 +473,7 @@ function transformCard(dbCard) {
     created_at: dbCard.created_at,
     updated_at: dbCard.updated_at,
     deleted: dbCard.deleted,
+    source_region: dbCard.source_region || null,
   };
 }
 
