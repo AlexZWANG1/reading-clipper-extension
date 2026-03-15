@@ -7,6 +7,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Loader2, FileText, AlertTriangle, CheckCircle, HelpCircle } from 'lucide-react';
 import { boardsApi } from '../../lib/api';
+import { useWorkspaceStore } from '../../lib/store';
 import { BOARD_PALETTE } from './BoardCanvas';
 
 const CONFIDENCE_LABELS = {
@@ -26,7 +27,9 @@ export default function DocumentView({ topicId, className }) {
     const [loading, setLoading] = useState(true);
     const [boardData, setBoardData] = useState(null);
     const [topicData, setTopicData] = useState(null);
+    const boardRefreshToken = useWorkspaceStore(s => s.boardRefreshToken);
 
+    // Reload when topicId changes or board is invalidated (Spec §14)
     useEffect(() => {
         if (!topicId) return;
         setLoading(true);
@@ -37,7 +40,7 @@ export default function DocumentView({ topicId, className }) {
             })
             .catch(err => console.error('DocumentView load failed:', err))
             .finally(() => setLoading(false));
-    }, [topicId]);
+    }, [topicId, boardRefreshToken]);
 
     // Build tree structure from flat nodes/edges
     const sections = useMemo(() => {

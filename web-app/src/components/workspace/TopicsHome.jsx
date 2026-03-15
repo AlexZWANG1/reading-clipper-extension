@@ -10,6 +10,7 @@ import {
     FileText, Layers, X, Loader2, Inbox, Clock,
 } from 'lucide-react';
 import { useTopicsStore, useCardsStore, useUIStore } from '../../lib/store';
+import { materialsApi } from '../../lib/api';
 
 const TOPIC_COLORS = [
     { bg: 'rgba(99,102,241,0.12)', color: '#818CF8' },
@@ -34,10 +35,22 @@ export default function TopicsHome() {
     const [modalOpen, setModalOpen] = useState(false);
     const [editingTopic, setEditingTopic] = useState(null);
     const [inboxExpanded, setInboxExpanded] = useState(false);
+    const [materialCounts, setMaterialCounts] = useState({});
 
     useEffect(() => {
         fetchTopics();
         fetchCards({});
+        // Fetch material counts per topic
+        materialsApi.list().then(data => {
+            const materials = data.materials || data || [];
+            const counts = {};
+            materials.forEach(m => {
+                if (m.topic_id) {
+                    counts[m.topic_id] = (counts[m.topic_id] || 0) + 1;
+                }
+            });
+            setMaterialCounts(counts);
+        }).catch(() => {});
     }, [fetchTopics, fetchCards]);
 
     // Uncategorized cards
@@ -119,6 +132,7 @@ export default function TopicsHome() {
                             topic={topic}
                             color={color}
                             cardCount={cardCount}
+                            materialCount={materialCounts[topic.id] || 0}
                             onNavigate={() => navigate(`/topics/${topic.id}`)}
                             onEdit={() => { setEditingTopic(topic); setModalOpen(true); }}
                             onDelete={() => handleDelete(topic.id)}
@@ -194,7 +208,7 @@ export default function TopicsHome() {
     );
 }
 
-function TopicCard({ topic, color, cardCount, onNavigate, onEdit, onDelete }) {
+function TopicCard({ topic, color, cardCount, materialCount, onNavigate, onEdit, onDelete }) {
     const [menuOpen, setMenuOpen] = useState(false);
 
     return (
@@ -253,6 +267,9 @@ function TopicCard({ topic, color, cardCount, onNavigate, onEdit, onDelete }) {
             )}
 
             <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--text-2)' }}>
+                <span className="inline-flex items-center gap-1">
+                    <FileText size={12} /> {materialCount} 材料
+                </span>
                 <span className="inline-flex items-center gap-1">
                     <Layers size={12} /> {cardCount} 卡片
                 </span>

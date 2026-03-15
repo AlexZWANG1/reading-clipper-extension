@@ -23,11 +23,12 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import dagre from 'dagre';
-import { Plus, Loader2, LayoutGrid, Target } from 'lucide-react';
+import { Plus, Loader2, LayoutGrid, Target, Keyboard } from 'lucide-react';
 import { boardsApi } from '../../lib/api';
 import { useUIStore, useChatStore } from '../../lib/store';
 import DraftNode from '../DraftNode';
 import DraftCommitBar from '../DraftCommitBar';
+import HealthSidebar from '../HealthSidebar';
 
 import QuestionNode from '../board/QuestionNode';
 import HypothesisNode from '../board/HypothesisNode';
@@ -959,6 +960,41 @@ function BoardCanvasInner({ topicId, onBoardLoaded, dragCardRef, className }) {
         }
     }, [boardId, topic, setNodes, showToast]);
 
+    // ========= Keyboard Shortcuts (Spec §4) =========
+    useEffect(() => {
+        const handler = (e) => {
+            // Don't fire when typing in inputs/textareas
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+
+            if (e.ctrlKey && e.key === 'l') {
+                e.preventDefault();
+                autoLayout();
+                return;
+            }
+
+            // Q — create sub-question under selected node
+            if (e.key === 'q' || e.key === 'Q') {
+                const selected = nodes.find(n => n.selected);
+                if (selected && (selected.type === 'questionNode' || selected.type === 'hypothesisNode')) {
+                    createChildNode(selected.id, 'question', { content: { text: '' } });
+                }
+                return;
+            }
+
+            // H — create hypothesis under selected node
+            if (e.key === 'h' || e.key === 'H') {
+                const selected = nodes.find(n => n.selected);
+                if (selected && selected.type === 'questionNode') {
+                    createChildNode(selected.id, 'hypothesis', { claim: '' });
+                }
+                return;
+            }
+        };
+
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [nodes, autoLayout, createChildNode]);
+
     // ========= Loading =========
     if (loading) {
         return (
@@ -1083,6 +1119,13 @@ function BoardCanvasInner({ topicId, onBoardLoaded, dragCardRef, className }) {
                 onRejectAll={handleRejectAll}
                 onReview={handleReview}
             />
+
+            {/* Health Sidebar overlay (Spec §4, §11) */}
+            {boardId && (
+                <div className="absolute top-4 right-4 z-10">
+                    <HealthSidebar boardId={boardId} invalidateCounter={0} />
+                </div>
+            )}
         </div>
     );
 }

@@ -73,7 +73,7 @@ export default function TopicWorkspace() {
             />
 
             {/* Main content area */}
-            <div className="flex-1 flex overflow-hidden" onClick={handleCanvasClick}>
+            <div className="flex-1 flex overflow-hidden">
                 {/* Reader split panel (when open) */}
                 {readerOpen && readerMaterialId && (
                     <div className="h-full shrink-0 relative" style={{ width: '40%', minWidth: 360, maxWidth: 600, borderRight: '1px solid var(--stroke-0)' }}>
@@ -86,8 +86,8 @@ export default function TopicWorkspace() {
                     </div>
                 )}
 
-                {/* Canvas area */}
-                <div className="flex-1 flex flex-col min-w-0 relative">
+                {/* Canvas area — clicking here auto-collapses left nav (Spec §3) */}
+                <div className="flex-1 flex flex-col min-w-0 relative" onClick={handleCanvasClick}>
                     {/* View toggle tabs */}
                     <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex rounded-xl glass-surface overflow-hidden" style={{ boxShadow: '0 10px 22px rgba(31, 27, 20, 0.14)' }}>
                         <button
