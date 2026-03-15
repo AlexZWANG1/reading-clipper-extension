@@ -39,6 +39,9 @@ __pycache__/
 # Uploaded files
 uploads/
 
+# Superpowers brainstorm sessions
+.superpowers/
+
 
 
 
