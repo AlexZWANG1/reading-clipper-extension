@@ -31,7 +31,7 @@ const navGroups = [
 ];
 
 const userItems = [
-  { to: '/ai-settings', icon: Sparkles, label: '设置' },
+  { to: '/settings', icon: Sparkles, label: '设置' },
 ];
 
 function Layout() {

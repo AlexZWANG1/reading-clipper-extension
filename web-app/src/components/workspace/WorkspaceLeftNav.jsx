@@ -117,7 +117,7 @@ export default function WorkspaceLeftNav({
                     <button onClick={() => navigate('/tasks')} className="p-2 rounded-lg transition-colors hover:bg-blue-500/10" style={{ color: 'var(--text-2)' }} title="研究任务">
                         <ListChecks size={18} />
                     </button>
-                    <button onClick={() => navigate('/ai-settings')} className="p-2 rounded-lg transition-colors hover:bg-blue-500/10" style={{ color: 'var(--text-2)' }} title="设置">
+                    <button onClick={() => navigate('/settings')} className="p-2 rounded-lg transition-colors hover:bg-blue-500/10" style={{ color: 'var(--text-2)' }} title="设置">
                         <Settings size={18} />
                     </button>
                 </div>
@@ -349,7 +349,7 @@ export default function WorkspaceLeftNav({
                     <ListChecks size={14} />
                 </button>
                 <button
-                    onClick={() => navigate('/ai-settings')}
+                    onClick={() => navigate('/settings')}
                     className="flex items-center gap-1.5 text-xs py-1.5 px-2 rounded-lg transition-colors hover:bg-blue-500/10"
                     style={{ color: 'var(--text-2)' }}
                     title="设置"
