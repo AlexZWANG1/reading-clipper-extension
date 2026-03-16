@@ -1,585 +1,463 @@
-// ========= AI Chat Tool Definitions =========
-// Canonical tool specs — single source of truth for all tools the AI can invoke.
-// Each tool has a `side_effect` metadata used by the orchestrator's confirmation gate.
-
-// side_effect values:
-//   "read_only"   — auto-execute, no confirmation needed
-//   "write"       — requires user confirmation before execution
-//   "destructive" — requires user confirmation + warning
+// ========= AI Chat Tool Definitions (Harness V2) =========
+// Single source of truth for tools and their runtime risk levels.
 
 export const TOOL_DEFINITIONS = [
-  // ── Read-only tools ────────────────────────────────
+  // ── Read / Search ─────────────────────────────────────
   {
     type: "function",
     function: {
       name: "semantic_search",
       description:
-        "语义搜索用户已摄入的文档内容（基于向量相似度）。用于查找文档中的具体信息。返回: {results: [{chunk_text, score, source_title, material_id}], total: number}",
+        "在已摄入材料中做语义检索。适用：用户要求找原文证据、具体数据、段落出处。不适用：仅凭已有上下文即可回答。返回 results[{text,score,source,material_id}]。",
       parameters: {
         type: "object",
         properties: {
-          query: { type: "string", description: "The search query or question" },
-          limit: { type: "number", description: "Max results to return (default 10, max 20)" },
-          min_score: { type: "number", description: "Minimum similarity score 0-1 (default 0.3)" },
-          topic_id: { type: "string", description: "Optional: limit search to a specific topic" },
-          material_id: { type: "string", description: "Optional: limit search to chunks from a specific material (useful for reading a specific document)" },
+          query: { type: "string", description: "检索问题或关键词" },
+          limit: { type: "number", description: "返回数量，默认 10，最大 20" },
+          min_score: { type: "number", description: "最小相似度，默认 0.3" },
+          topic_id: { type: "string", description: "可选：限定主题" },
+          material_id: { type: "string", description: "可选：限定材料" },
         },
         required: ["query"],
       },
     },
-    side_effect: "read_only",
-    plan_allowed: true,
-    task_auto: true,
-    task_phases: ["filter"],
-    task_capability: "search",
+    risk_level: "auto",
   },
   {
     type: "function",
     function: {
       name: "search_cards",
       description:
-        "按关键词搜索用户的知识卡片。搜索范围是已提取的卡片摘要，不是原始文档。返回: {cards: [{id, title, summary, topic_id}], count: number}",
+        "按关键词检索卡片摘要。适用：查找已沉淀知识。不适用：查找材料原文段落（请用 semantic_search）。",
       parameters: {
         type: "object",
         properties: {
-          query: { type: "string", description: "Search keyword or phrase" },
-          topic_id: { type: "string", description: "Optional: limit search to a specific topic" },
+          query: { type: "string", description: "关键词或短语" },
+          topic_id: { type: "string", description: "可选：限定主题" },
         },
         required: ["query"],
       },
     },
-    side_effect: "read_only",
-    plan_allowed: true,
-    task_auto: true,
-    task_phases: ["filter"],
-    task_capability: "search",
+    risk_level: "auto",
   },
   {
     type: "function",
     function: {
       name: "list_cards",
-      description: "列出用户的知识卡片，可按主题筛选。返回: {cards: [{id, title, summary, topic_id, fact_or_view}], total: number}",
+      description: "列出卡片，可按 topic_id 过滤。适用：用户要浏览已有证据。",
       parameters: {
         type: "object",
         properties: {
-          topic_id: { type: "string", description: "Optional: filter by topic ID" },
-          limit: { type: "number", description: "Max cards to return (default 20, max 50)" },
+          topic_id: { type: "string", description: "可选：主题 ID" },
+          limit: { type: "number", description: "数量上限，默认 20，最大 50" },
         },
         required: [],
       },
     },
-    side_effect: "read_only",
-    plan_allowed: true,
-    task_auto: true,
-    task_phases: [],
-    task_capability: "knowledge_read",
+    risk_level: "auto",
   },
   {
     type: "function",
     function: {
       name: "get_card",
-      description: "获取单张卡片的详细信息。返回: {card: {id, title, summary, key_points, raw_snippet, fact_or_view, source_name, source_url}}",
+      description: "读取单张卡片详情。适用：需要核对 raw_snippet、来源、关键点。",
       parameters: {
         type: "object",
         properties: {
-          card_id: { type: "string", description: "The card ID" },
+          card_id: { type: "string", description: "卡片 ID" },
         },
         required: ["card_id"],
       },
     },
-    side_effect: "read_only",
-    plan_allowed: true,
-    task_auto: true,
-    task_phases: [],
-    task_capability: "knowledge_read",
+    risk_level: "auto",
   },
   {
     type: "function",
     function: {
       name: "list_topics",
-      description: "列出用户的所有主题及卡片数量。返回: {topics: [{id, title, card_count}]}",
+      description: "列出用户所有研究主题及卡片数量。",
       parameters: { type: "object", properties: {}, required: [] },
     },
-    side_effect: "read_only",
-    plan_allowed: true,
-    task_auto: true,
-    task_phases: [],
-    task_capability: "knowledge_read",
+    risk_level: "auto",
   },
   {
     type: "function",
     function: {
       name: "list_materials",
-      description:
-        "列出用户已摄入的材料（文档、URL、文本）。可按 topic 筛选。返回: {materials: [{id, title, source_type, url, ingestion_status, word_count, chunk_count, topic_id, created_at}], total: number}",
+      description: "列出已摄入材料。适用：确认材料是否存在、状态是否完成。",
       parameters: {
         type: "object",
         properties: {
-          topic_id: { type: "string", description: "Optional: filter by topic ID" },
-          status: { type: "string", enum: ["pending", "processing", "completed", "failed"], description: "Optional: filter by ingestion status" },
-          limit: { type: "number", description: "Max materials to return (default 20, max 50)" },
+          topic_id: { type: "string", description: "可选：主题 ID" },
+          status: {
+            type: "string",
+            enum: ["pending", "processing", "completed", "failed", "retrying"],
+            description: "可选：摄入状态",
+          },
+          limit: { type: "number", description: "数量上限，默认 20，最大 50" },
         },
         required: [],
       },
     },
-    side_effect: "read_only",
-    plan_allowed: true,
-    task_auto: true,
-    task_phases: [],
-    task_capability: "knowledge_read",
+    risk_level: "auto",
   },
   {
     type: "function",
     function: {
       name: "get_material",
-      description:
-        "获取单个材料的详情，包括标题、来源、状态和摘要（前500字）。如需深入查看文档内容，请用 semantic_search 并传入 material_id 参数进行针对性搜索。返回: {material: {id, title, source_type, url, ingestion_status, word_count, chunk_count, topic_id, excerpt, created_at}}",
+      description: "读取单个材料详情（含 excerpt）。适用：确认材料元信息或快速预览内容。",
       parameters: {
         type: "object",
         properties: {
-          material_id: { type: "string", description: "The material ID" },
+          material_id: { type: "string", description: "材料 ID" },
         },
         required: ["material_id"],
       },
     },
-    side_effect: "read_only",
-    plan_allowed: true,
-    task_auto: true,
-    task_phases: [],
-    task_capability: "knowledge_read",
+    risk_level: "auto",
   },
   {
     type: "function",
     function: {
       name: "list_sources",
-      description: "列出用户的信息来源，可按类别或状态筛选。返回: {sources: [{id, name, url, category, status}]}",
+      description: "列出信息源，可按 category/status 过滤。",
       parameters: {
         type: "object",
         properties: {
-          category: { type: "string", description: "Filter by source category" },
-          status: { type: "string", enum: ["active", "inactive", "archived"], description: "Filter by source status" },
+          category: { type: "string", description: "来源类别" },
+          status: { type: "string", enum: ["active", "inactive", "archived"], description: "来源状态" },
         },
         required: [],
       },
     },
-    side_effect: "read_only",
-    plan_allowed: true,
-    task_auto: true,
-    task_phases: [],
-    task_capability: "knowledge_read",
+    risk_level: "auto",
   },
   {
     type: "function",
     function: {
       name: "list_boards",
-      description: "列出用户的所有思维画板。返回: {boards: [{id, title, topic_id}]}",
+      description: "列出用户所有思维画板。",
       parameters: { type: "object", properties: {}, required: [] },
     },
-    side_effect: "read_only",
-    plan_allowed: true,
-    task_auto: true,
-    task_phases: [],
-    task_capability: "knowledge_read",
+    risk_level: "auto",
   },
   {
     type: "function",
     function: {
       name: "get_board",
-      description: "获取思维画板的完整节点和边数据。返回: {board: {id, title, nodes: [{id, node_type, content, parent_id, status}], edges: [{source_node_id, target_node_id, relation_type}]}}",
+      description:
+        "获取画板完整结构（nodes/edges）。适用：任何画板改动前先读取现状。不适用：直接盲改结构。",
       parameters: {
         type: "object",
         properties: {
-          board_id: { type: "string", description: "The board ID" },
+          board_id: { type: "string", description: "画板 ID" },
         },
         required: ["board_id"],
       },
     },
-    side_effect: "read_only",
-    plan_allowed: true,
-    task_auto: true,
-    task_phases: [],
-    task_capability: "knowledge_read",
+    risk_level: "auto",
   },
   {
     type: "function",
     function: {
       name: "list_documents",
-      description: "列出用户的研究文档，可按主题筛选。返回: {documents: [{id, title, topic_id}]}",
+      description: "列出研究文档，可按 topic_id 过滤。",
       parameters: {
         type: "object",
         properties: {
-          topic_id: { type: "string", description: "Optional: filter by topic ID" },
+          topic_id: { type: "string", description: "可选：主题 ID" },
         },
         required: [],
       },
     },
-    side_effect: "read_only",
-    plan_allowed: true,
-    task_auto: true,
-    task_phases: [],
-    task_capability: "knowledge_read",
+    risk_level: "auto",
   },
   {
     type: "function",
     function: {
       name: "get_document",
-      description: "获取单个文档的完整内容，包括问题、假说和章节。返回: {document: {id, title, content, topic_id}}",
+      description: "读取单个文档完整内容。",
       parameters: {
         type: "object",
         properties: {
-          doc_id: { type: "string", description: "The document ID" },
+          doc_id: { type: "string", description: "文档 ID" },
         },
         required: ["doc_id"],
       },
     },
-    side_effect: "read_only",
-    plan_allowed: true,
-    task_auto: true,
-    task_phases: [],
-    task_capability: "knowledge_read",
+    risk_level: "auto",
   },
 
-  // ── Task-oriented tools (used by plan executor + chat) ────
+  // ── Fetch / Ingest ─────────────────────────────────
   {
     type: "function",
     function: {
       name: "fetch_rss",
-      description:
-        "从 RSS 源抓取文章列表，返回标题、URL、摘要和发布时间。可用关键词过滤。",
+      description: "抓取 RSS 条目。适用：用户明确要求看订阅源更新或新闻候选集合。",
       parameters: {
         type: "object",
         properties: {
-          feeds: {
-            type: "array",
-            items: { type: "string" },
-            description: "Array of RSS feed URLs to fetch",
-          },
-          max_items: { type: "number", description: "Maximum items to return (default 20)" },
-          keywords: {
-            type: "array",
-            items: { type: "string" },
-            description: "Optional: filter items by keywords (title/summary must contain at least one)",
-          },
+          feeds: { type: "array", items: { type: "string" }, description: "RSS/Atom 链接数组" },
+          max_items: { type: "number", description: "最大条目数，默认 20" },
+          keywords: { type: "array", items: { type: "string" }, description: "可选：关键词过滤" },
         },
         required: ["feeds"],
       },
     },
-    side_effect: "read_only",
-    plan_allowed: true,
-    task_auto: true,
-    task_phases: ["collect"],
-    task_capability: "content_fetch",
+    risk_level: "auto",
   },
   {
     type: "function",
     function: {
       name: "ingest_url",
       description:
-        "将 URL 内容摄入知识库。提取内容、创建材料记录并触发分块和嵌入。",
+        "摄入 URL 到知识库并触发分块与嵌入。适用：用户明确要求导入/摄入链接。不适用：仅做内容解释时。参数规则：必须提供 url。",
       parameters: {
         type: "object",
         properties: {
-          url: { type: "string", description: "The URL to ingest" },
-          title: { type: "string", description: "Optional: override the article title" },
-          topic_id: { type: "string", description: "Optional: associate with a topic" },
+          url: { type: "string", description: "目标 URL" },
+          title: { type: "string", description: "可选：覆盖标题" },
+          topic_id: { type: "string", description: "可选：关联主题" },
         },
         required: ["url"],
       },
     },
-    side_effect: "write",
-    plan_allowed: true,
-    confirm_template: "摄入 URL: {url}",
-    task_auto: true,
-    task_phases: ["materialize"],
-    task_capability: "content_ingest",
+    risk_level: "auto",
   },
 
-  // ── Write tools (cards + board mutations) ─────────
+  // ── Cards / Board Mutations ────────────────────────
   {
     type: "function",
     function: {
       name: "create_card",
-      description:
-        `从源材料中提取并保存知识卡片。\n\n触发条件（必须全部满足）：\n1. 用户使用了"保存""创建卡片""提取""摘录"等明确存储意图的词\n2. 有明确的源材料（URL、文章、或对话中引用的文档）\n3. summary 和 key_points 基于源材料原文，不是 AI 的推理\n\n不触发：用户说"总结/分析/解释" → 用文字回复，不创建卡片`,
+      description: [
+        "创建知识卡片（证据沉淀）。",
+        "什么时候该用：用户明确表达“保存/提取/摘录/创建卡片”。",
+        "什么时候不该用：用户只是“总结/分析/解释”时，不要创建卡片，直接文字回答。",
+        "参数规则：raw_snippet 必须是来源原文摘录；如果不确定原文，先 semantic_search 再复制 text 字段。",
+        "违反规则会返回结构化校验错误，需要按 suggestion 修正后重试。",
+      ].join("\n"),
       parameters: {
         type: "object",
         properties: {
-          topic_title: {
-            type: "string",
-            description: "Topic name for the card. Auto-created if it doesn't exist.",
-          },
-          title: {
-            type: "string",
-            description: "A short, catchy title (3-8 words).",
-          },
-          fact_or_view: {
-            type: "string",
-            enum: ["fact", "view"],
-            description: "Whether the card is an objective fact/data or a subjective view/opinion. Default: fact.",
-          },
-          summary: {
-            type: "string",
-            description: "A concise 1-3 sentence summary of what the source says. Must paraphrase the source material, not your own analysis or inference.",
-          },
-          key_points: {
-            type: "array",
-            items: { type: "string" },
-            description: "Key takeaways from the source material (2-5 items). Each point must derive from what the source says, not your reasoning about it.",
-          },
-          raw_snippet: {
-            type: "string",
-            description: "MUST be an exact substring copied from the source material. Do not paraphrase, summarize, or rewrite. This is the verbatim quote the card is based on.",
-          },
-          note: {
-            type: "string",
-            description: "Optional annotation or note about this card.",
-          },
-          source_name: {
-            type: "string",
-            description: "Name of the information source (e.g., article title, book name).",
-          },
-          source_url: {
-            type: "string",
-            description: "URL of the information source.",
-          },
+          topic_title: { type: "string", description: "卡片所属主题名称（必填）" },
+          title: { type: "string", description: "可选：短标题" },
+          fact_or_view: { type: "string", enum: ["fact", "view"], description: "事实或观点，默认 fact" },
+          summary: { type: "string", description: "1-3 句摘要（必填）" },
+          key_points: { type: "array", items: { type: "string" }, description: "2-5 条要点" },
+          raw_snippet: { type: "string", description: "原文摘录（必填，且需可追溯）" },
+          note: { type: "string", description: "可选：备注" },
+          source_name: { type: "string", description: "可选：来源名称" },
+          source_url: { type: "string", description: "可选：来源 URL" },
         },
-        required: ["topic_title", "summary"],
+        required: ["topic_title", "summary", "raw_snippet"],
       },
     },
-    side_effect: "write",
-    plan_allowed: true,
-    confirm_template: "创建卡片到主题「{topic_title}」: \"{summary}\"",
-    task_auto: true,
-    task_phases: ["cardify"],
-    task_capability: "knowledge_capture",
+    risk_level: "auto",
   },
   {
     type: "function",
     function: {
       name: "create_board_node",
-      description: "在思维画板上创建新节点。节点类型：question、hypothesis、evidence。",
+      description:
+        "创建画板节点（question/hypothesis/evidence）。参数规则：hypothesis 必须挂在 question 下，evidence 必须挂在 hypothesis 下。",
       parameters: {
         type: "object",
         properties: {
-          board_id: { type: "string", description: "The board ID" },
-          node_type: { type: "string", enum: ["question", "hypothesis", "evidence"], description: "Type of node" },
-          text: { type: "string", description: "Node content text (used as content.text for questions, claim for hypotheses)" },
-          parent_id: { type: "string", description: "Optional: parent node ID for decomposition tree" },
-          card_id: { type: "string", description: "Optional: linked card ID (for evidence nodes)" },
+          board_id: { type: "string", description: "画板 ID" },
+          node_type: { type: "string", enum: ["question", "hypothesis", "evidence"], description: "节点类型" },
+          text: { type: "string", description: "节点文本" },
+          parent_id: { type: "string", description: "父节点 ID（hypothesis/evidence 必填）" },
+          card_id: { type: "string", description: "可选：证据节点关联卡片 ID" },
         },
         required: ["board_id", "node_type", "text"],
       },
     },
-    side_effect: "write",
-    plan_allowed: true,
-    confirm_template: "创建{node_type}节点: \"{text}\"",
-    task_auto: false,
-    task_phases: ["synthesize"],
-    task_capability: "structure_mutation",
+    risk_level: "confirm",
   },
   {
     type: "function",
     function: {
       name: "update_board_node",
-      description: "更新画板上已有节点的文本、状态、置信度等属性。",
+      description: "更新画板节点文本/状态/置信度等属性。",
       parameters: {
         type: "object",
         properties: {
-          node_id: { type: "string", description: "The node ID to update" },
-          text: { type: "string", description: "New text content" },
-          status: { type: "string", enum: ["open", "resolved", "blocked"], description: "Question status" },
-          hypo_state: { type: "string", enum: ["pending", "validated", "falsified"], description: "Hypothesis state" },
-          confidence: { type: "number", description: "Hypothesis confidence 0-1" },
-          priority: { type: "string", enum: ["normal", "critical"], description: "Question priority" },
+          node_id: { type: "string", description: "节点 ID" },
+          text: { type: "string", description: "可选：新文本" },
+          status: { type: "string", enum: ["open", "resolved", "blocked"], description: "question 状态" },
+          hypo_state: { type: "string", enum: ["pending", "validated", "falsified"], description: "hypothesis 状态" },
+          confidence: { type: "number", description: "置信度 0-1" },
+          priority: { type: "string", enum: ["normal", "critical"], description: "优先级" },
         },
         required: ["node_id"],
       },
     },
-    side_effect: "write",
-    plan_allowed: false,
-    confirm_template: "更新节点内容",
-    task_auto: false,
-    task_phases: ["synthesize"],
-    task_capability: "structure_mutation",
+    risk_level: "confirm",
   },
   {
     type: "function",
     function: {
       name: "delete_board_node",
-      description: "删除画板节点及其所有子节点和连接的边。",
+      description: "删除节点（会级联删除其子节点与边）。高风险操作。",
       parameters: {
         type: "object",
         properties: {
-          node_id: { type: "string", description: "The node ID to delete" },
+          node_id: { type: "string", description: "节点 ID" },
         },
         required: ["node_id"],
       },
     },
-    side_effect: "destructive",
-    plan_allowed: false,
-    confirm_template: "删除节点及其所有子节点",
-    task_auto: false,
-    task_phases: [],
-    task_capability: "structure_mutation",
+    risk_level: "confirm_warn",
   },
   {
     type: "function",
     function: {
       name: "create_board_edge",
-      description: "在画板节点之间创建关系边（supports/refutes/neutral）。",
+      description:
+        "创建节点关系边。relation_type 只能是 supports/refutes/neutral。",
       parameters: {
         type: "object",
         properties: {
-          board_id: { type: "string", description: "The board ID" },
-          source_node_id: { type: "string", description: "Source node ID (usually hypothesis)" },
-          target_node_id: { type: "string", description: "Target node ID (usually evidence)" },
-          relation_type: { type: "string", enum: ["supports", "refutes", "neutral"], description: "Relation type" },
+          board_id: { type: "string", description: "画板 ID" },
+          source_node_id: { type: "string", description: "源节点 ID" },
+          target_node_id: { type: "string", description: "目标节点 ID" },
+          relation_type: { type: "string", enum: ["supports", "refutes", "neutral"], description: "关系类型" },
         },
         required: ["board_id", "source_node_id", "target_node_id", "relation_type"],
       },
     },
-    side_effect: "write",
-    plan_allowed: true,
-    confirm_template: "创建{relation_type}关系边",
-    task_auto: false,
-    task_phases: ["synthesize"],
-    task_capability: "structure_mutation",
+    risk_level: "confirm",
   },
-
   {
     type: "function",
     function: {
       name: "delete_board_edge",
-      description: "删除画板上的关系边。",
+      description: "删除关系边。高风险操作。",
       parameters: {
         type: "object",
         properties: {
-          edge_id: { type: "string", description: "The edge ID to delete" },
+          edge_id: { type: "string", description: "边 ID" },
         },
         required: ["edge_id"],
       },
     },
-    side_effect: "destructive",
-    plan_allowed: false,
-    confirm_template: "删除关系边",
-    task_auto: false,
-    task_phases: [],
-    task_capability: "structure_mutation",
+    risk_level: "confirm_warn",
   },
-
-  // ── Draft tools (auto-execute, creates preview not real data) ──
   {
     type: "function",
     function: {
       name: "propose_board_changes",
-      description:
-        "提议对思维画板的批量更改，创建可视化草稿供用户在画板上审批。使用此工具代替逐个 create_board_node/create_board_edge 调用。changes 数组中每项：create_node 必须提供 action, node_type, text（hypothesis/evidence 还必须提供 parent_id）；create_edge 必须提供 action, source_node_id, target_node_id, relation_type。返回: {draft_id, changes_count, message}",
+      description: [
+        "批量提议画板变更，创建草稿供前端预览审批（不直接写入真实节点）。",
+        "什么时候该用：用户要求批量增改画板结构。",
+        "什么时候不该用：仅查询画板状态时。",
+        "参数规则：hypothesis/evidence 的 create_node 必须提供 parent_id；edge 的 relation_type 必须合法。",
+        "可以使用 $temp_id 引用同一草稿内新建节点。",
+      ].join("\n"),
       parameters: {
         type: "object",
         properties: {
-          board_id: { type: "string", description: "The board ID" },
+          board_id: { type: "string", description: "画板 ID" },
           changes: {
             type: "array",
             items: {
               type: "object",
               properties: {
-                action: { type: "string", enum: ["create_node", "create_edge"], description: "Action type" },
-                temp_id: { type: "string", description: "Temp ID for cross-referencing (e.g. 't1')" },
-                node_type: { type: "string", enum: ["question", "hypothesis", "evidence"], description: "Node type (for create_node)" },
-                text: { type: "string", description: "Node content text" },
-                parent_id: { type: "string", description: "Real UUID or $temp_id reference (e.g. '$t1')" },
-                card_id: { type: "string", description: "Card UUID for evidence nodes" },
-                source_node_id: { type: "string", description: "Source node for edges" },
-                target_node_id: { type: "string", description: "Target node for edges" },
-                relation_type: { type: "string", enum: ["supports", "refutes", "neutral"], description: "Edge relation type" },
+                action: { type: "string", enum: ["create_node", "create_edge"], description: "操作类型" },
+                temp_id: { type: "string", description: "临时引用 ID（如 t1）" },
+                node_type: { type: "string", enum: ["question", "hypothesis", "evidence"], description: "节点类型" },
+                text: { type: "string", description: "节点文本" },
+                parent_id: { type: "string", description: "父节点 ID，可用 $temp_id" },
+                card_id: { type: "string", description: "证据卡片 ID" },
+                source_node_id: { type: "string", description: "边起点 ID，可用 $temp_id" },
+                target_node_id: { type: "string", description: "边终点 ID，可用 $temp_id" },
+                relation_type: { type: "string", enum: ["supports", "refutes", "neutral"], description: "关系类型" },
               },
               required: ["action"],
             },
-            description: "Array of change operations",
+            description: "变更数组",
           },
-          reasoning: { type: "string", description: "Why these changes are proposed" },
+          reasoning: { type: "string", description: "提议理由" },
         },
         required: ["board_id", "changes", "reasoning"],
       },
     },
-    side_effect: "draft",
-    plan_allowed: false,
-    task_auto: false,
-    task_phases: ["synthesize"],
-    task_capability: "structure_mutation",
+    risk_level: "auto",
   },
 
-  // ── Health tool (read-only) ──
+  // ── Topic Health / Methodology ──────────────────────
   {
     type: "function",
     function: {
       name: "get_board_health",
-      description:
-        "获取主题的论证健康状态。返回: {total_hypotheses, total_evidence, blind_spots, hypotheses_summary: [{text, support, refute, status}], unanswered_questions}。纯数据计算，无 AI 调用。",
+      description: "获取主题论证健康状态（假说数、证据数、盲点等）。需 topic_id。",
       parameters: {
         type: "object",
         properties: {
-          topic_id: { type: "string", description: "The topic ID to check health for" },
+          topic_id: { type: "string", description: "主题 ID" },
         },
         required: ["topic_id"],
       },
     },
-    side_effect: "read_only",
-    plan_allowed: true,
-    task_auto: true,
-    task_phases: [],
-    task_capability: "knowledge_read",
+    risk_level: "auto",
   },
-
-  // ── Meta tool (plan request) ──
   {
     type: "function",
     function: {
-      name: "request_plan",
-      description: "当用户描述的任务需要 4 步以上、涉及多个数据源、或需要定期执行时，调用此工具请求生成执行计划。不要自己尝试逐步执行多步骤任务。返回: {plan_requested: true}",
-      parameters: {
-        type: "object",
-        properties: {
-          intent: {
-            type: "string",
-            description: "用一段话描述用户想要完成的任务，包含关键细节（数据源、筛选条件、输出格式等）"
-          }
-        },
-        required: ["intent"]
-      }
+      name: "get_methodology",
+      description:
+        "按需读取用户当前启用的方法论文档和结构化配置。适用：在执行研究分析前需要了解用户偏好与方法论约束。",
+      parameters: { type: "object", properties: {}, required: [] },
     },
-    side_effect: "read_only",
-    plan_allowed: false,
-    task_auto: false,
-    task_phases: [],
-    task_capability: "meta",
+    risk_level: "auto",
   },
 ];
 
-// Quick lookup map: tool name → full definition (including side_effect)
+export const LLM_TOOL_DEFINITIONS = TOOL_DEFINITIONS.map((t) => ({
+  type: t.type,
+  function: t.function,
+}));
+
 export const TOOL_MAP = Object.fromEntries(
   TOOL_DEFINITIONS.map((t) => [t.function.name, t])
 );
 
-// Get side_effect for a tool name. Defaults to "read_only" if unknown.
-export function getToolSideEffect(name) {
-  return TOOL_MAP[name]?.side_effect || "read_only";
+export function getToolRiskLevel(name) {
+  return TOOL_MAP[name]?.risk_level || "auto";
 }
 
-// Build confirmation message from template + args
-export function buildConfirmMessage(name, args) {
-  const tmpl = TOOL_MAP[name]?.confirm_template;
-  if (!tmpl) return `执行 ${name}`;
-  return tmpl.replace(/\{(\w+)\}/g, (_, key) => args[key] ?? key);
+const CHAT_MODE_BLOCKED_TOOLS = new Set([
+  "propose_board_changes",
+  "create_card",
+  "ingest_url",
+]);
+
+export function isWriteCapableTool(name) {
+  return CHAT_MODE_BLOCKED_TOOLS.has(name);
 }
 
-/**
- * Summarize a tool result into a short display string.
- * Single source of truth — used by orchestrator and executor.
- */
+export function buildConfirmMessage(name, args = {}) {
+  switch (name) {
+    case "create_board_node":
+      return `创建 ${args.node_type || "节点"}: "${String(args.text || "").slice(0, 80)}"`;
+    case "update_board_node":
+      return `更新节点 ${args.node_id || ""}`;
+    case "delete_board_node":
+      return `删除节点 ${args.node_id || ""}（将级联删除子节点）`;
+    case "create_board_edge":
+      return `创建 ${args.relation_type || "关系"} 边`;
+    case "delete_board_edge":
+      return `删除关系边 ${args.edge_id || ""}`;
+    default:
+      return `执行 ${name}`;
+  }
+}
+
 export function summarizeToolResult(tool, result) {
   if (!result) return "无结果";
   if (result.error) return `错误: ${result.error}`;
+  if (result.warning) return `警告: ${result.warning}`;
 
   switch (tool) {
     case "fetch_rss":
@@ -628,7 +506,10 @@ export function summarizeToolResult(tool, result) {
       return `草拟了 ${result.changes_count || 0} 个更改`;
     case "get_board_health":
       return `假说: ${result.total_hypotheses || 0}, 盲点: ${result.blind_spots || 0}`;
+    case "get_methodology":
+      return result.methodology ? "已加载方法论" : "未设置方法论";
     default:
-      return JSON.stringify(result).slice(0, 80);
+      return JSON.stringify(result).slice(0, 120);
   }
 }
+

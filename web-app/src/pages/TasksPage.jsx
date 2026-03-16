@@ -6,7 +6,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Send, Bot, User, Loader2, Trash2, ShieldCheck, ShieldAlert,
-  X, Check, ListChecks, ChevronRight, Sparkles, PlayCircle,
+  X, Check, ListChecks,
   Plus, Clock, MessageCircle, BookOpen, Globe,
 } from 'lucide-react';
 import { chatApi, topicsApi } from '../lib/api';
@@ -35,186 +35,6 @@ function toFriendlyChatError(error) {
   return message || '请求失败';
 }
 
-// ── Plan Components ──
-
-function PlanProposalCard({ message, onExecute, onDismiss, executing }) {
-  const metadata = message.metadata || {};
-  const planDisplay = metadata.plan_display || {};
-  const planSpec = metadata.plan_spec || {};
-  const steps = planSpec.steps || [];
-
-  return (
-    <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-elevated, var(--surface-1))', border: '1px solid var(--border-primary)' }}>
-      <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border-primary)' }}>
-        <div className="flex items-center gap-2 mb-1">
-          <ListChecks className="w-4 h-4" style={{ color: 'var(--accent-500)' }} />
-          <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>执行计划</span>
-        </div>
-        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-          {planDisplay.summary || planSpec.intent_summary}
-        </p>
-      </div>
-
-      {planDisplay.why_this_plan && (
-        <div className="px-4 py-2" style={{ background: 'var(--bg-muted)' }}>
-          <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{planDisplay.why_this_plan}</p>
-        </div>
-      )}
-
-      <div className="px-4 py-3 space-y-2">
-        {steps.map((step, i) => {
-          const explanation = planDisplay.step_explanations?.find((e) => e.step_id === step.id);
-          return (
-            <div key={step.id} className="flex items-start gap-2.5">
-              <div
-                className="w-5 h-5 rounded-full flex items-center justify-center flex-none mt-0.5 text-[10px] font-bold"
-                style={{ background: 'var(--accent-blue-subtle)', color: 'var(--accent-600)' }}
-              >
-                {i + 1}
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{step.title}</span>
-                  <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'var(--bg-muted)', color: 'var(--text-tertiary)' }}>
-                    {step.tool}
-                  </span>
-                </div>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                  {explanation?.explanation || step.goal}
-                </p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {onExecute && (
-        <div className="px-4 py-3 flex items-center gap-2" style={{ borderTop: '1px solid var(--border-primary)' }}>
-          <button
-            onClick={onExecute}
-            disabled={executing}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ background: 'var(--accent-500)' }}
-          >
-            {executing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
-            {executing ? '执行中...' : '开始执行'}
-          </button>
-          <button
-            onClick={onDismiss}
-            disabled={executing}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer disabled:cursor-not-allowed"
-            style={{ color: 'var(--text-secondary)', background: 'var(--bg-muted)' }}
-          >
-            <X className="w-3.5 h-3.5" /> 取消
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function StepProgressMessage({ message }) {
-  const meta = message.metadata || {};
-  const status = meta.status || 'completed';
-  const statusColor = status === 'completed' ? '#22c55e' : status === 'failed' ? '#ef4444' : 'var(--accent-500)';
-
-  return (
-    <div className="flex items-start gap-2 text-xs">
-      <div className="w-4 h-4 rounded-full flex items-center justify-center flex-none mt-0.5" style={{ background: statusColor + '20' }}>
-        {status === 'completed' ? (
-          <Check className="w-2.5 h-2.5" style={{ color: statusColor }} />
-        ) : status === 'failed' ? (
-          <X className="w-2.5 h-2.5" style={{ color: statusColor }} />
-        ) : (
-          <Loader2 className="w-2.5 h-2.5 animate-spin" style={{ color: statusColor }} />
-        )}
-      </div>
-      <span style={{ color: 'var(--text-secondary)' }}>{message.content}</span>
-    </div>
-  );
-}
-
-function PlanCompleteMessage({ message }) {
-  return (
-    <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.2)' }}>
-      <div className="flex items-center gap-2 mb-1.5">
-        <Check className="w-4 h-4" style={{ color: '#22c55e' }} />
-        <span className="text-sm font-medium" style={{ color: '#22c55e' }}>执行完成</span>
-      </div>
-      <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>{message.content}</p>
-    </div>
-  );
-}
-
-// ── Template Selector ──
-
-function TemplateSelector({ templates, onSelect }) {
-  const [expandedId, setExpandedId] = useState(null);
-  const [variables, setVariables] = useState({});
-
-  if (!templates || templates.length === 0) return null;
-
-  const handleUse = (template) => {
-    let prompt = template.prompt;
-    for (const v of template.variables || []) {
-      prompt = prompt.replace(`{${v}}`, variables[v] || `{${v}}`);
-    }
-    onSelect(prompt);
-    setExpandedId(null);
-    setVariables({});
-  };
-
-  return (
-    <div className="space-y-2">
-      <p className="text-xs font-medium" style={{ color: 'var(--text-tertiary)' }}>研究任务模板</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {templates.map((t) => (
-          <div
-            key={t.id}
-            className="rounded-xl transition-all cursor-pointer"
-            style={{ background: 'var(--bg-elevated, var(--surface-1))', border: '1px solid var(--border-primary)' }}
-          >
-            <div onClick={() => setExpandedId(expandedId === t.id ? null : t.id)} className="flex items-center gap-2 px-3 py-2.5">
-              <Sparkles className="w-3.5 h-3.5 flex-none" style={{ color: 'var(--accent-500)' }} />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{t.label}</p>
-                <p className="text-[10px] truncate" style={{ color: 'var(--text-tertiary)' }}>{t.description}</p>
-              </div>
-              <ChevronRight
-                className="w-3.5 h-3.5 flex-none transition-transform"
-                style={{ color: 'var(--text-tertiary)', transform: expandedId === t.id ? 'rotate(90deg)' : 'none' }}
-              />
-            </div>
-            {expandedId === t.id && (
-              <div className="px-3 pb-3 space-y-2" style={{ borderTop: '1px solid var(--border-primary)' }}>
-                {(t.variables || []).map((v) => (
-                  <div key={v} className="pt-2">
-                    <label className="text-[10px] font-medium" style={{ color: 'var(--text-secondary)' }}>{v}</label>
-                    <input
-                      value={variables[v] || ''}
-                      onChange={(e) => setVariables((prev) => ({ ...prev, [v]: e.target.value }))}
-                      placeholder={`输入 ${v}...`}
-                      className="w-full mt-1 px-2 py-1.5 rounded-lg text-xs"
-                      style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }}
-                    />
-                  </div>
-                ))}
-                <button
-                  onClick={() => handleUse(t)}
-                  className="w-full mt-1 px-3 py-2 rounded-lg text-xs font-medium text-white cursor-pointer transition-colors"
-                  style={{ background: 'var(--accent-500)' }}
-                >
-                  使用此模板
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ── Task Status ──
 
 const STATUS_CONFIG = {
@@ -235,8 +55,8 @@ function AIHubPage() {
 
   // Chat state
   const {
-    conversationId, messages, sending, activePlan, executing, templates,
-    sendMessage, executePlan, dismissPlan, newConversation, fetchTemplates,
+    conversationId, messages, sending,
+    sendMessage, newConversation,
     setSurfaceContext,
   } = useChatStore();
   const { fetchConversations } = useConversationsStore();
@@ -271,7 +91,6 @@ function AIHubPage() {
   // Init
   useEffect(() => {
     fetchConversations();
-    fetchTemplates();
     fetchTasks().catch(() => {});
     fetchTopics().catch(() => {});
   }, []);
@@ -279,7 +98,7 @@ function AIHubPage() {
   // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, pendingActions, executing]);
+  }, [messages, pendingActions]);
 
   useEffect(() => {
     if (activeTab === 'chat') inputRef.current?.focus();
@@ -330,26 +149,11 @@ function AIHubPage() {
     setPendingToolCalls(null);
   };
 
-  const handleExecutePlan = async () => {
-    try {
-      await executePlan(activePlan?.suggestedTopicId);
-      fetchConversations();
-    } catch (err) {
-      showToast(toFriendlyChatError(err), 'error');
-    }
-  };
-
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
-  };
-
-  const handleTemplateSelect = (prompt) => {
-    setInput(prompt);
-    setActiveTab('chat');
-    inputRef.current?.focus();
   };
 
   // ── Task handlers ──
@@ -521,11 +325,6 @@ function AIHubPage() {
                     ))}
                   </div>
 
-                  {/* Templates */}
-                  <div className="w-full mt-4">
-                    <TemplateSelector templates={templates} onSelect={handleTemplateSelect} />
-                  </div>
-
                   {/* Recent tasks preview */}
                   {tasks.length > 0 && (
                     <div className="w-full mt-4">
@@ -568,56 +367,6 @@ function AIHubPage() {
               ) : (
                 <>
                   {messages.map((msg, i) => {
-                    if (msg.message_type === 'plan_proposal') {
-                      const isLatestPlan = !messages.slice(i + 1).some((m) => m.message_type === 'plan_confirmed');
-                      return (
-                        <div key={msg.id || i} className="flex gap-3">
-                          <div className="w-7 h-7 rounded-full flex-none flex items-center justify-center mt-0.5" style={{ background: 'var(--bg-muted)' }}>
-                            <Bot className="w-4 h-4" style={{ color: 'var(--text-primary)' }} />
-                          </div>
-                          <div className="max-w-[85%]">
-                            <PlanProposalCard
-                              message={msg}
-                              onExecute={isLatestPlan && activePlan ? handleExecutePlan : null}
-                              onDismiss={isLatestPlan && activePlan ? dismissPlan : null}
-                              executing={executing}
-                            />
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    if (msg.message_type === 'step_progress') {
-                      return (
-                        <div key={msg.id || i} className="ml-10">
-                          <StepProgressMessage message={msg} />
-                        </div>
-                      );
-                    }
-
-                    if (msg.message_type === 'plan_complete') {
-                      return (
-                        <div key={msg.id || i} className="flex gap-3">
-                          <div className="w-7 h-7 rounded-full flex-none flex items-center justify-center mt-0.5" style={{ background: 'rgba(34,197,94,0.1)' }}>
-                            <Bot className="w-4 h-4" style={{ color: '#22c55e' }} />
-                          </div>
-                          <div className="max-w-[85%]">
-                            <PlanCompleteMessage message={msg} />
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    if (msg.message_type === 'plan_confirmed') {
-                      return (
-                        <div key={msg.id || i} className="flex justify-end gap-3">
-                          <div className="px-3 py-1.5 rounded-xl text-xs" style={{ background: 'var(--accent-blue-subtle)', color: 'var(--accent-600)' }}>
-                            已确认执行计划
-                          </div>
-                        </div>
-                      );
-                    }
-
                     return (
                       <div key={msg.id || i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                         {msg.role === 'assistant' && (
@@ -655,7 +404,7 @@ function AIHubPage() {
                         <div className="space-y-1.5 mb-3">
                           {pendingActions.map((action) => (
                             <div key={action.id} className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-primary)' }}>
-                              {action.side_effect === 'destructive' ? (
+                              {action.risk_level === 'confirm_warn' ? (
                                 <ShieldAlert className="w-3.5 h-3.5 flex-none" style={{ color: '#EF4444' }} />
                               ) : (
                                 <ShieldCheck className="w-3.5 h-3.5 flex-none" style={{ color: 'var(--warning)' }} />
@@ -674,14 +423,6 @@ function AIHubPage() {
                           </button>
                         </div>
                       </div>
-                    </div>
-                  )}
-
-                  {/* Execution progress */}
-                  {executing && (
-                    <div className="ml-10 flex items-center gap-2 text-xs" style={{ color: 'var(--accent-500)' }}>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>正在执行计划...</span>
                     </div>
                   )}
                 </>
@@ -717,7 +458,7 @@ function AIHubPage() {
                   aria-label="Chat input"
                   placeholder={pendingActions ? '请先确认或取消待执行操作' : '输入问题或描述研究任务...'}
                   rows={1}
-                  disabled={!!pendingActions || executing}
+                  disabled={!!pendingActions}
                   className="textarea flex-1 resize-none text-sm px-2 py-2 disabled:opacity-50"
                   style={{ maxHeight: '120px' }}
                   onInput={(e) => {
@@ -727,7 +468,7 @@ function AIHubPage() {
                 />
                 <button
                   onClick={handleSend}
-                  disabled={!input.trim() || sending || !!pendingActions || executing}
+                  disabled={!input.trim() || sending || !!pendingActions}
                   aria-label="Send message"
                   className="btn btn-primary flex-none w-9 h-9 rounded-lg flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
                 >
@@ -735,7 +476,7 @@ function AIHubPage() {
                 </button>
               </div>
               <p className="text-xs px-1 mt-1" style={{ color: 'var(--text-tertiary)' }}>
-                Enter 发送 | Shift+Enter 换行 | 输入研究意图将自动生成执行计划
+                Enter 发送 | Shift+Enter 换行
               </p>
             </div>
           </>

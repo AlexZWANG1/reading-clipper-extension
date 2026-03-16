@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Minus, Send, Loader2, Check, Trash2, ShieldCheck, Wrench, Play, XCircle, ChevronDown, ChevronRight } from 'lucide-react';
+import { MessageCircle, X, Minus, Send, Loader2, Check, Trash2, ShieldCheck, Wrench, ChevronDown, ChevronRight } from 'lucide-react';
 import { useSurfaceContext } from '../hooks/useSurfaceContext';
 import { useChatStore } from '../lib/store';
 import { chatApi } from '../lib/api';
@@ -55,54 +55,6 @@ function ToolCallLog({ toolCalls }) {
   );
 }
 
-function PlanProposal({ plan, onExecute, onDismiss, executing }) {
-  if (!plan) return null;
-
-  return (
-    <div
-      className="rounded-xl px-3 py-2.5"
-      style={{
-        background: 'var(--ai-accent-subtle)',
-        border: '1px solid var(--ai-accent)',
-      }}
-    >
-      <div className="flex items-center gap-1.5 mb-2">
-        <Play size={14} style={{ color: 'var(--ai-accent)' }} />
-        <span className="text-xs font-medium" style={{ color: 'var(--ai-accent)' }}>
-          执行计划
-        </span>
-      </div>
-      <div className="text-xs mb-2.5 space-y-1" style={{ color: 'var(--text-primary)' }}>
-        {plan.planDisplay?.summary && <p>{plan.planDisplay.summary}</p>}
-        {plan.planSpec?.steps?.map((step, i) => (
-          <div key={step.id || i} style={{ color: 'var(--text-secondary)' }}>
-            {i + 1}. {step.title}
-          </div>
-        ))}
-      </div>
-      <div className="flex gap-2">
-        <button
-          onClick={onExecute}
-          disabled={executing}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs text-white disabled:opacity-50"
-          style={{ background: 'var(--ai-accent)' }}
-        >
-          {executing ? <Loader2 size={10} className="animate-spin" /> : <Play size={10} />}
-          执行
-        </button>
-        <button
-          onClick={onDismiss}
-          disabled={executing}
-          className="px-2.5 py-1 rounded-md text-xs"
-          style={{ color: 'var(--text-secondary)', background: 'var(--bg-muted)' }}
-        >
-          取消
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export default function GlobalChatPanel() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
@@ -119,7 +71,7 @@ export default function GlobalChatPanel() {
   const surfaceContext = useSurfaceContext();
   const {
     messages, sending, sendMessage, mode, setMode, setSurfaceContext, newConversation,
-    activePlan, executing, executePlan, dismissPlan, surfaceContext: storedContext,
+    surfaceContext: storedContext,
   } = useChatStore();
 
   // Update surface context when route changes
@@ -136,7 +88,7 @@ export default function GlobalChatPanel() {
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, pendingActions, activePlan]);
+  }, [messages, pendingActions]);
 
   // Focus input when panel opens
   useEffect(() => {
@@ -214,14 +166,6 @@ export default function GlobalChatPanel() {
     setPendingMessages(null);
     setPendingToolCalls(null);
     setError(null);
-  };
-
-  const handleExecutePlan = async () => {
-    try {
-      await executePlan(storedContext?.topicId || null);
-    } catch (err) {
-      setError(err?.message || '计划执行失败');
-    }
   };
 
   const handleKeyDown = (e) => {
@@ -354,7 +298,7 @@ export default function GlobalChatPanel() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-        {messages.length === 0 && !sending && !pendingActions && !activePlan && (
+        {messages.length === 0 && !sending && !pendingActions && (
           <div
             className="text-center text-sm mt-8"
             style={{ color: 'var(--text-tertiary)' }}
@@ -392,31 +336,6 @@ export default function GlobalChatPanel() {
             </div>
           );
         })}
-
-        {/* Plan proposal */}
-        {activePlan && (
-          <PlanProposal
-            plan={activePlan}
-            onExecute={handleExecutePlan}
-            onDismiss={dismissPlan}
-            executing={executing}
-          />
-        )}
-
-        {/* Executing plan indicator */}
-        {executing && !activePlan && (
-          <div
-            className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
-            style={{
-              background: 'var(--ai-accent-subtle)',
-              border: '1px solid var(--ai-accent)',
-              color: 'var(--ai-accent)',
-            }}
-          >
-            <Loader2 size={12} className="animate-spin" />
-            计划执行中...
-          </div>
-        )}
 
         {/* Pending write actions confirmation */}
         {pendingActions && (
@@ -500,9 +419,9 @@ export default function GlobalChatPanel() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={pendingActions ? '请先确认或取消操作' : executing ? '计划执行中...' : '输入消息...'}
+          placeholder={pendingActions ? '请先确认或取消操作' : '输入消息...'}
           rows={1}
-          disabled={sending || !!pendingActions || executing}
+          disabled={sending || !!pendingActions}
           className="flex-1 resize-none text-sm rounded-lg px-3 py-2 outline-none disabled:opacity-50"
           style={{
             background: 'var(--surface-raised)',
@@ -516,7 +435,7 @@ export default function GlobalChatPanel() {
         />
         <button
           onClick={handleSend}
-          disabled={!input.trim() || sending || !!pendingActions || executing}
+          disabled={!input.trim() || sending || !!pendingActions}
           className="p-2 rounded-lg transition-colors disabled:opacity-40 flex items-center justify-center"
           style={{ background: 'var(--ai-accent)', color: '#fff' }}
         >

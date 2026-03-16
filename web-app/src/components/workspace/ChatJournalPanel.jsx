@@ -9,7 +9,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
     Send, Loader2, Check, Trash2, ShieldCheck, Wrench,
-    Play, XCircle, ChevronDown, ChevronRight, BookOpen,
+    ChevronDown, ChevronRight, BookOpen,
 } from 'lucide-react';
 import { useSurfaceContext } from '../../hooks/useSurfaceContext';
 import { useChatStore, useWorkspaceStore } from '../../lib/store';
@@ -65,48 +65,6 @@ function ToolCallLog({ toolCalls }) {
     );
 }
 
-function PlanProposal({ plan, onExecute, onDismiss, executing }) {
-    if (!plan) return null;
-
-    return (
-        <div className="rounded-xl px-3 py-2.5" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid var(--accent-400)' }}>
-            <div className="flex items-center gap-1.5 mb-2">
-                <Play size={14} style={{ color: 'var(--accent-400)' }} />
-                <span className="text-xs font-medium" style={{ color: 'var(--accent-400)' }}>
-                    执行计划
-                </span>
-            </div>
-            <div className="text-xs mb-2.5 space-y-1" style={{ color: 'var(--text-0)' }}>
-                {plan.planDisplay?.summary && <p>{plan.planDisplay.summary}</p>}
-                {plan.planSpec?.steps?.map((step, i) => (
-                    <div key={step.id || i} style={{ color: 'var(--text-2)' }}>
-                        {i + 1}. {step.title}
-                    </div>
-                ))}
-            </div>
-            <div className="flex gap-2">
-                <button
-                    onClick={onExecute}
-                    disabled={executing}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs text-white disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
-                    style={{ background: 'var(--accent-500)' }}
-                >
-                    {executing ? <Loader2 size={10} className="animate-spin" /> : <Play size={10} />}
-                    执行
-                </button>
-                <button
-                    onClick={onDismiss}
-                    disabled={executing}
-                    className="px-2.5 py-1 rounded-md text-xs cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    style={{ color: 'var(--text-2)', background: 'var(--surface-1)' }}
-                >
-                    取消
-                </button>
-            </div>
-        </div>
-    );
-}
-
 function JournalBlock({ content, timestamp }) {
     const [expanded, setExpanded] = useState(false);
 
@@ -154,7 +112,7 @@ export default function ChatJournalPanel({ className }) {
     const surfaceContext = useSurfaceContext();
     const {
         messages, sending, sendMessage, mode, setMode, setSurfaceContext, newConversation,
-        activePlan, executing, executePlan, dismissPlan, surfaceContext: storedContext,
+        surfaceContext: storedContext,
     } = useChatStore();
 
     const autonomyLevel = useWorkspaceStore(s => s.autonomyLevel);
@@ -168,7 +126,7 @@ export default function ChatJournalPanel({ className }) {
     // Auto-scroll
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, pendingActions, activePlan]);
+    }, [messages, pendingActions]);
 
     // Clear error after 5s
     useEffect(() => {
@@ -280,14 +238,6 @@ export default function ChatJournalPanel({ className }) {
         setError(null);
     };
 
-    const handleExecutePlan = async () => {
-        try {
-            await executePlan(storedContext?.topicId || null);
-        } catch (err) {
-            setError(err?.message || '计划执行失败');
-        }
-    };
-
     const handleKeyDown = (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -296,7 +246,7 @@ export default function ChatJournalPanel({ className }) {
     };
 
     const hasMessages = messages.length > 0;
-    const inputDisabled = sending || !!pendingActions || executing;
+    const inputDisabled = sending || !!pendingActions;
 
     const surfaceLabel = {
         workspace: '工作区',
@@ -358,7 +308,7 @@ export default function ChatJournalPanel({ className }) {
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-                {!hasMessages && !sending && !pendingActions && !activePlan && (
+                {!hasMessages && !sending && !pendingActions && (
                     <div className="flex flex-col items-center justify-center h-full gap-2" style={{ color: 'var(--text-2)' }}>
                         <span className="text-sm">有什么可以帮你的？</span>
                         <span className="text-xs" style={{ color: 'var(--text-2)' }}>
@@ -392,16 +342,6 @@ export default function ChatJournalPanel({ className }) {
                         </div>
                     );
                 })}
-
-                {/* Plan proposal */}
-                {activePlan && (
-                    <PlanProposal
-                        plan={activePlan}
-                        onExecute={handleExecutePlan}
-                        onDismiss={dismissPlan}
-                        executing={executing}
-                    />
-                )}
 
                 {/* Write confirmation */}
                 {pendingActions && (

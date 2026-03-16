@@ -15,7 +15,7 @@ export default function AnimatedNodeWrapper({ animationState, onAnimationEnd, ch
             return () => clearTimeout(timer);
         }
         if (animationState === 'rejecting') {
-            const timer = setTimeout(() => onAnimationEnd?.('rejected'), 200);
+            const timer = setTimeout(() => onAnimationEnd?.('rejected'), 300);
             return () => clearTimeout(timer);
         }
         if (animationState === 'committing') {

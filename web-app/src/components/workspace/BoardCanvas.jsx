@@ -63,6 +63,7 @@ const NODE_DIMS = {
     questionNode: { width: NODE_WIDTH, height: 160 },
     hypothesisNode: { width: NODE_WIDTH, height: 200 },
     evidenceNode: { width: 280, height: 180 },
+    draftNode: { width: 280, height: 140 },
 };
 
 function getLayoutedElements(nodes, edges, direction = 'TB') {
@@ -372,7 +373,17 @@ function BoardCanvasInner({ topicId, onBoardLoaded, onOpenReaderAtQuote, dragCar
         try {
             const data = await boardsApi.getDrafts(boardId);
             if (data.ok && data.drafts?.length > 0) {
-                setPendingDraft(data.drafts[0]);
+                const draft = data.drafts[0];
+                // Filter out already-accepted changes for partially_accepted drafts
+                const accepted = new Set(draft.accepted_changes?.accepted || []);
+                if (accepted.size > 0) {
+                    draft.changes = (draft.changes || []).filter((_, i) => !accepted.has(i));
+                }
+                if (draft.changes?.length > 0) {
+                    setPendingDraft(draft);
+                } else {
+                    setPendingDraft(null);
+                }
             } else {
                 setPendingDraft(null);
             }
@@ -389,105 +400,87 @@ function BoardCanvasInner({ topicId, onBoardLoaded, onOpenReaderAtQuote, dragCar
     }, [boardInvalidateCounter, fetchDrafts]);
 
     // ========= Draft Handlers =========
+    // Track draft animation state separately (draft nodes live in useMemo, not in nodes state)
+    const [draftAnimState, setDraftAnimState] = useState(null); // 'committing' | 'rejecting' | null
+
     const handleCommitAll = useCallback(async (draftId) => {
         try {
-            // Trigger commit animation on draft nodes
-            const draftNodeIds = nodes.filter(n => n.data?.isDraft).map(n => n.id);
-            setNodes(ns => ns.map(n =>
-                draftNodeIds.includes(n.id) ? { ...n, data: { ...n.data, animationState: 'committing' } } : n
-            ));
+            setDraftAnimState('committing');
             await boardsApi.commitDraft(boardId, draftId);
+            // Reload board FIRST — new real nodes land in correct dagre positions
+            await loadBoard();
+            // THEN clear draft — draft overlays disappear, real nodes already in place
             setPendingDraft(null);
-            invalidateBoard();
-            // Reload after animation settles
-            setTimeout(() => loadBoard(), 500);
+            setDraftAnimState(null);
         } catch (err) {
             console.error('Commit draft failed:', err);
+            setDraftAnimState(null);
             showToast('提交草稿失败', 'error');
         }
-    }, [boardId, nodes, setNodes, loadBoard, showToast, invalidateBoard]);
+    }, [boardId, loadBoard, showToast]);
 
     const handleRejectAll = useCallback(async (draftId) => {
         try {
-            // Trigger reject animation on draft nodes
-            const draftNodeIds = nodes.filter(n => n.data?.isDraft).map(n => n.id);
-            setNodes(ns => ns.map(n =>
-                draftNodeIds.includes(n.id) ? { ...n, data: { ...n.data, animationState: 'rejecting' } } : n
-            ));
-            // Wait for animation, then remove
+            setDraftAnimState('rejecting');
+            // Wait for animation (300ms to match CSS), then remove
             setTimeout(async () => {
                 await boardsApi.rejectDraft(boardId, draftId);
                 setPendingDraft(null);
-                setNodes(ns => ns.filter(n => !draftNodeIds.includes(n.id)));
-            }, 200);
+                setDraftAnimState(null);
+            }, 300);
         } catch (err) {
             console.error('Reject draft failed:', err);
+            setDraftAnimState(null);
             showToast('拒绝草稿失败', 'error');
         }
-    }, [boardId, nodes, setNodes, showToast]);
+    }, [boardId, showToast]);
 
     const handleReview = useCallback(() => {
         if (!pendingDraft?.changes?.length) return;
-        const firstDraft = pendingDraft.changes.findIndex(c => c.action === 'create_node');
-        if (firstDraft >= 0) {
-            const firstChange = pendingDraft.changes[firstDraft];
-            const draftOrder = pendingDraft.changes
-                .slice(0, firstDraft + 1)
-                .filter(c => c.action === 'create_node').length - 1;
-            const parentNode = firstChange?.parent_id ? nodes.find(n => n.id === firstChange.parent_id) : null;
-            const x = parentNode ? parentNode.position.x + 40 : 120 + (draftOrder % 3) * 340;
-            const y = parentNode
-                ? parentNode.position.y + 210 + (draftOrder % 2) * 24
-                : 120 + Math.floor(draftOrder / 3) * 180;
-            setCenter(x + 120, y + 70, { zoom: 1.2, duration: 350 });
+        const firstDraftIdx = pendingDraft.changes.findIndex(c => c.action === 'create_node');
+        if (firstDraftIdx >= 0) {
+            // Find the first draft node in the rendered nodes list
+            const draftNode = nodes.find(n => n.id === `draft-${firstDraftIdx}`);
+            if (draftNode) {
+                setCenter(draftNode.position.x + 120, draftNode.position.y + 70, { zoom: 1.2, duration: 350 });
+            }
         }
     }, [pendingDraft, nodes, setCenter]);
 
     const handleAcceptNode = useCallback(async (draftNodeId) => {
         if (!pendingDraft) return;
         const idx = parseInt(draftNodeId.replace('draft-', ''), 10);
-        // Trigger commit animation
-        setNodes(ns => ns.map(n =>
-            n.id === draftNodeId ? { ...n, data: { ...n.data, animationState: 'committing' } } : n
-        ));
         try {
             await boardsApi.commitDraft(boardId, pendingDraft.id, [idx]);
+            // Reload board — new real node lands in correct position
+            await loadBoard();
             const remaining = (pendingDraft.changes || []).filter((_, i) => i !== idx);
             if (remaining.length === 0) {
                 setPendingDraft(null);
             } else {
                 setPendingDraft({ ...pendingDraft, changes: remaining });
             }
-            invalidateBoard();
-            setTimeout(() => loadBoard(), 500);
         } catch (err) {
             console.error('Accept node failed:', err);
             showToast('接受节点失败', 'error');
         }
-    }, [boardId, pendingDraft, setNodes, loadBoard, showToast, invalidateBoard]);
+    }, [boardId, pendingDraft, loadBoard, showToast]);
 
     const handleRejectNode = useCallback(async (draftNodeId) => {
         if (!pendingDraft) return;
         const idx = parseInt(draftNodeId.replace('draft-', ''), 10);
-        // Trigger reject animation
-        setNodes(ns => ns.map(n =>
-            n.id === draftNodeId ? { ...n, data: { ...n.data, animationState: 'rejecting' } } : n
-        ));
-        setTimeout(async () => {
-            setNodes(ns => ns.filter(n => n.id !== draftNodeId));
-            const remaining = (pendingDraft.changes || []).filter((_, i) => i !== idx);
-            if (remaining.length === 0) {
-                try {
-                    await boardsApi.rejectDraft(boardId, pendingDraft.id);
-                } catch (err) {
-                    console.error('Reject draft failed:', err);
-                }
-                setPendingDraft(null);
-            } else {
-                setPendingDraft({ ...pendingDraft, changes: remaining });
+        const remaining = (pendingDraft.changes || []).filter((_, i) => i !== idx);
+        if (remaining.length === 0) {
+            try {
+                await boardsApi.rejectDraft(boardId, pendingDraft.id);
+            } catch (err) {
+                console.error('Reject draft failed:', err);
             }
-        }, 200);
-    }, [boardId, pendingDraft, setNodes]);
+            setPendingDraft(null);
+        } else {
+            setPendingDraft({ ...pendingDraft, changes: remaining });
+        }
+    }, [boardId, pendingDraft]);
 
     // ========= Node Action Callbacks =========
     const handleNodeUpdate = useCallback(async (nodeId, updates) => {
@@ -810,32 +803,81 @@ function BoardCanvasInner({ topicId, onBoardLoaded, onOpenReaderAtQuote, dragCar
             return applyFocus(node);
         });
 
-        const draftNodes = (pendingDraft?.changes || [])
+        // ── Draft nodes: include in dagre layout for automatic overlap-free positioning ──
+        const draftChanges = (pendingDraft?.changes || []);
+        if (draftChanges.length === 0) return mapped;
+
+        // Build temp_id → draft node ID map
+        const tempIdToDraftId = {};
+        draftChanges.forEach((change, i) => {
+            if (change.action === 'create_node' && change.temp_id) {
+                tempIdToDraftId[change.temp_id] = `draft-${i}`;
+            }
+        });
+
+        // Resolve a ref that may be a real UUID, $temp ref, or temp_id string
+        const realNodeIds = new Set(mapped.map(n => n.id));
+        const resolveDraftRef = (ref) => {
+            if (!ref) return null;
+            if (ref.startsWith('$')) return tempIdToDraftId[ref.slice(1)] || null;
+            if (tempIdToDraftId[ref]) return tempIdToDraftId[ref];
+            if (realNodeIds.has(ref)) return ref;
+            return null;
+        };
+
+        // Create draft ReactFlow nodes (position will be set by dagre)
+        const createNodeChanges = draftChanges
             .map((change, changeIndex) => ({ change, changeIndex }))
-            .filter(({ change }) => change.action === 'create_node')
-            .map(({ change, changeIndex }, draftOrder) => {
-                const parentNode = change.parent_id ? nodes.find(n => n.id === change.parent_id) : null;
-                const position = parentNode
-                    ? { x: parentNode.position.x + 40, y: parentNode.position.y + 210 + (draftOrder % 2) * 24 }
-                    : { x: 120 + (draftOrder % 3) * 340, y: 120 + Math.floor(draftOrder / 3) * 180 };
-                return {
-                    id: `draft-${changeIndex}`,
-                    type: 'draftNode',
-                    position,
-                    data: {
-                        text: change.text || change.claim || '',
-                        node_type: change.node_type,
-                        onAccept: handleAcceptNode,
-                        onReject: handleRejectNode,
-                        isDraft: true,
-                    },
-                };
-            });
+            .filter(({ change }) => change.action === 'create_node');
 
-        return [...mapped, ...draftNodes];
-    }, [nodes, edges, handleNodeUpdate, handleDeleteNode, createChildNode, handleEdgeUpdate, focusedChainIds, pendingDraft, handleAcceptNode, handleRejectNode, lod]);
+        const draftNodes = createNodeChanges.map(({ change, changeIndex }) => ({
+            id: `draft-${changeIndex}`,
+            type: 'draftNode',
+            position: { x: 0, y: 0 },
+            data: {
+                text: change.text || change.claim || '',
+                node_type: change.node_type,
+                onAccept: handleAcceptNode,
+                onReject: handleRejectNode,
+                isDraft: true,
+                animationState: draftAnimState,
+            },
+        }));
 
-    // ========= Edge Focus Styling =========
+        // Build draft edges for dagre (parent→child + explicit create_edge)
+        const draftLayoutEdges = [];
+        draftChanges.forEach((change, i) => {
+            if (change.action === 'create_node' && change.parent_id) {
+                const parentResolved = resolveDraftRef(change.parent_id);
+                if (parentResolved) {
+                    draftLayoutEdges.push({
+                        id: `draft-layout-${i}`,
+                        source: parentResolved,
+                        target: `draft-${i}`,
+                    });
+                }
+            }
+            if (change.action === 'create_edge') {
+                const source = resolveDraftRef(change.source_node_id);
+                const target = resolveDraftRef(change.target_node_id);
+                if (source && target) {
+                    draftLayoutEdges.push({
+                        id: `draft-layout-edge-${i}`,
+                        source,
+                        target,
+                    });
+                }
+            }
+        });
+
+        // Run dagre on combined real + draft nodes/edges → zero overlap guaranteed
+        const allNodes = [...mapped, ...draftNodes];
+        const allEdges = [...edges, ...draftLayoutEdges];
+        const { nodes: layouted } = getLayoutedElements(allNodes, allEdges, 'TB');
+        return layouted;
+    }, [nodes, edges, handleNodeUpdate, handleDeleteNode, createChildNode, handleEdgeUpdate, focusedChainIds, pendingDraft, handleAcceptNode, handleRejectNode, lod, draftAnimState]);
+
+    // ========= Edge Focus Styling + Draft Edges =========
     const styledEdges = useMemo(() => {
         const hypoStateMap = {};
         nodes.forEach(n => {
@@ -844,7 +886,7 @@ function BoardCanvasInner({ topicId, onBoardLoaded, onOpenReaderAtQuote, dragCar
             }
         });
 
-        return edges.map(edge => {
+        const styled = edges.map(edge => {
             let extraStyle = {};
             let animated = edge.animated || false;
 
@@ -875,7 +917,70 @@ function BoardCanvasInner({ topicId, onBoardLoaded, onOpenReaderAtQuote, dragCar
                 style: { ...(edge.style || {}), ...extraStyle, transition: 'opacity 0.3s ease' },
             };
         });
-    }, [edges, nodes, focusedChainIds]);
+
+        // ── Draft edges: parent→child + explicit create_edge ──
+        const draftEdges = [];
+        const draftChanges = pendingDraft?.changes || [];
+        const tempIdToDraftId = {};
+        draftChanges.forEach((c, i) => {
+            if (c.action === 'create_node' && c.temp_id) {
+                tempIdToDraftId[c.temp_id] = `draft-${i}`;
+            }
+        });
+
+        const resolveDraftRef = (ref) => {
+            if (!ref) return null;
+            if (ref.startsWith('$')) {
+                return tempIdToDraftId[ref.slice(1)] || null;
+            }
+            if (tempIdToDraftId[ref]) return tempIdToDraftId[ref];
+            // real node id — check it exists
+            if (nodes.some(n => n.id === ref)) return ref;
+            return null;
+        };
+
+        const draftEdgeStyle = {
+            stroke: 'var(--ai-accent, #8b5cf6)',
+            strokeWidth: 1.5,
+            strokeDasharray: '6 4',
+            opacity: 0.6,
+            transition: 'opacity 0.3s ease',
+        };
+
+        draftChanges.forEach((change, i) => {
+            // Implicit parent→child edges from create_node
+            if (change.action === 'create_node' && change.parent_id) {
+                const parentResolved = resolveDraftRef(change.parent_id);
+                if (parentResolved) {
+                    draftEdges.push({
+                        id: `draft-edge-parent-${i}`,
+                        source: parentResolved,
+                        target: `draft-${i}`,
+                        type: 'default',
+                        style: draftEdgeStyle,
+                        data: { isDraft: true },
+                    });
+                }
+            }
+            // Explicit create_edge actions
+            if (change.action === 'create_edge') {
+                const source = resolveDraftRef(change.source_node_id);
+                const target = resolveDraftRef(change.target_node_id);
+                if (source && target) {
+                    draftEdges.push({
+                        id: `draft-edge-${i}`,
+                        source,
+                        target,
+                        type: 'default',
+                        style: draftEdgeStyle,
+                        data: { isDraft: true },
+                    });
+                }
+            }
+        });
+
+        return [...styled, ...draftEdges];
+    }, [edges, nodes, focusedChainIds, pendingDraft]);
 
     // ========= Drag card → create Evidence =========
     const onDragOver = useCallback((event) => {

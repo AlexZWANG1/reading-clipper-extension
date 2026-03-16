@@ -5,7 +5,7 @@
   "type": "module",
   "main": "src/server.mjs",
   "scripts": {
-    "dev": "concurrently -n \"backend,sidecar\" -c \"blue,green\" \"node src/server.mjs\" \"cd ../ingestion-sidecar && python run.py\"",
+    "dev": "concurrently -n \"backend,sidecar\" -c \"blue,green\" \"node --watch src/server.mjs\" \"cd ../ingestion-sidecar && python run.py\"",
     "start": "concurrently -n \"backend,sidecar\" -c \"blue,green\" \"node src/server.mjs\" \"cd ../ingestion-sidecar && python run.py\"",
     "backend-only": "node src/server.mjs",
     "build": "echo 'No build step required for this backend service'",

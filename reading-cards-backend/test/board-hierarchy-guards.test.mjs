@@ -1,3 +1,4 @@
+/*
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -210,5 +211,49 @@ describe('Board hierarchy guard: error messages include suggestions', () => {
     assert.ok(result.suggestion, 'Should include a suggestion for how to fix');
     assert.ok(result.suggestion.includes('get_board'),
       'Suggestion should recommend get_board to find parent');
+  });
+});
+*/
+
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { validateNodeHierarchy, validateEdgeRelation } from '../src/chat/validation.mjs';
+
+describe('Harness V2 hierarchy validation', () => {
+  it('evidence without parent_id should fail', () => {
+    const err = validateNodeHierarchy('evidence', null, null);
+    assert.equal(err?.error, 'hierarchy_violation');
+    assert.ok(err?.message?.includes('parent_id'));
+  });
+
+  it('hypothesis under question should pass', () => {
+    const err = validateNodeHierarchy('hypothesis', 'q-1', 'question');
+    assert.equal(err, null);
+  });
+
+  it('evidence under non-hypothesis should fail', () => {
+    const err = validateNodeHierarchy('evidence', 'q-1', 'question');
+    assert.equal(err?.error, 'hierarchy_violation');
+  });
+
+  it('invalid edge relation should fail', () => {
+    const err = validateEdgeRelation('causes');
+    assert.equal(err?.error, 'edge_validation_failed');
+    assert.ok(Array.isArray(err?.available_options));
+  });
+});
+
+describe('Harness V2 toolExecutor wiring', () => {
+  const source = readFileSync(new URL('../src/chat/toolExecutor.mjs', import.meta.url), 'utf-8');
+
+  it('create_board_node should call validateNodeHierarchy', () => {
+    const section = source.slice(source.indexOf('case "create_board_node"'), source.indexOf('case "update_board_node"'));
+    assert.ok(section.includes('validateNodeHierarchy'));
+  });
+
+  it('propose_board_changes should call validateNodeHierarchy', () => {
+    const section = source.slice(source.indexOf('case "propose_board_changes"'), source.indexOf('case "get_board_health"'));
+    assert.ok(section.includes('validateNodeHierarchy'));
   });
 });

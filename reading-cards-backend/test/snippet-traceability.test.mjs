@@ -1,3 +1,4 @@
+/*
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -50,5 +51,38 @@ describe('Snippet traceability: source-level guards', () => {
       createCardSection.includes('snippet_warning'),
       'Failed snippet verification must return snippet_warning, not block the card'
     );
+  });
+});
+*/
+
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+describe('Harness V2 raw_snippet traceability', () => {
+  const source = readFileSync(
+    new URL('../src/chat/toolExecutor.mjs', import.meta.url), 'utf-8'
+  );
+
+  it('create_card should always run snippet verification (not gated by source_url)', () => {
+    const section = source.slice(
+      source.indexOf('case "create_card"'),
+      source.indexOf('case "list_topics"')
+    );
+    assert.ok(section.includes('verifyRawSnippetAgainstKnowledge'));
+    assert.ok(!section.includes('args.raw_snippet && args.source_url'));
+  });
+
+  it('verification should query chunks first, then materials excerpt', () => {
+    const verifySection = source.slice(source.indexOf('async function verifyRawSnippetAgainstKnowledge'));
+    assert.ok(verifySection.includes('.from("chunks")'));
+    assert.ok(verifySection.includes('.from("materials")'));
+    assert.ok(verifySection.includes('.ilike("excerpt"'));
+  });
+
+  it('verification should include recent-processing soft warning path', () => {
+    const verifySection = source.slice(source.indexOf('async function verifyRawSnippetAgainstKnowledge'));
+    assert.ok(verifySection.includes('processingMaterials'));
+    assert.ok(verifySection.includes('warning: "raw_snippet 未在已完成分块中找到匹配'));
   });
 });

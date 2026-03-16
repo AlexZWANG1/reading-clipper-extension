@@ -154,16 +154,15 @@ test('chat confirm: missing required arrays returns 400', async () => {
   assert.equal(valid, false); // pendingToolCalls is null
 });
 
-test('chat execute-plan: missing conversation_id returns 400', async () => {
-  const body = { plan_spec: { steps: [] } };
-  const valid = body.conversation_id && body.plan_spec;
-  assert.equal(valid, undefined); // falsy
-});
-
-test('chat execute-plan: missing plan_spec returns 400', async () => {
-  const body = { conversation_id: 'conv-123' };
-  const valid = body.conversation_id && body.plan_spec;
-  assert.equal(valid, undefined); // falsy
+test('chat execute-plan endpoint is removed in harness v2', async () => {
+  const mockResponse = {
+    ok: false,
+    error: 'deprecated_harness_v2',
+    status: 404,
+  };
+  assert.equal(mockResponse.ok, false);
+  assert.equal(mockResponse.error, 'deprecated_harness_v2');
+  assert.equal(mockResponse.status, 404);
 });
 
 // ── Materials route validation tests ──

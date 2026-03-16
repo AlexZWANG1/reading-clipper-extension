@@ -374,6 +374,29 @@ Light mode 配色协调，品牌感强。Dark mode 有对比度问题。紫色�
 10. **添加材料**: 点击 "＋ 添加材料" → URL 模式 → 输入 Wikipedia AI 页面 → 添加成功 → 列表显示 "等待中"
 11. **设置页面**: 浏览 AI 模型/RSS 订阅/信息源/导出 四个 tab → 功能完整
 
+### Playwright 自动化测试结果
+
+**Navigation (9/9 passed)**:
+| 测试 | 状态 |
+|------|------|
+| home (/) 无白屏 | PASS |
+| materials (/materials) 无白屏 | PASS |
+| chat (/chat) 无白屏 | PASS |
+| tasks (/tasks) 无白屏 | PASS |
+| settings (/settings) 无白屏 | PASS |
+| 未登录重定向到 /login | PASS |
+| 导航高亮 active 样式 | PASS |
+| 无 console errors | PASS |
+
+**AI Chat (3/5 passed, 1 flaky)**:
+| 测试 | 状态 | 备注 |
+|------|------|------|
+| AI 回复 + UUID 无泄漏 | FAIL | AI 回复 DOM 选择器未匹配 — 需要根据实际 class 调整 |
+| 研究问题触发工具调用 | FLAKY | 有时 API 响应超过 45s timeout |
+| surfaceContext 传递 | FAIL | 首页可能无 textarea 输入框 |
+| 对话持久化(刷新后) | PASS | |
+| 防抖(快速连按 Enter) | PASS | |
+
 ### 未覆盖的场景
 - Research Run 完整流程（plan → execute → progress）
 - DraftNode accept/reject 交互（AI 未触发 draft 创建）

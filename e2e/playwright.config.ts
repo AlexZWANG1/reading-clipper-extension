@@ -14,7 +14,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [
-    { name: 'setup', testMatch: /auth\.setup\.ts/, use: { storageState: undefined } },
+    { name: 'setup', testDir: '.', testMatch: /auth\.setup\.ts/, use: { storageState: undefined } },
     { name: 'tests', use: { ...devices['Desktop Chrome'] }, dependencies: ['setup'] },
   ],
   reporter: [

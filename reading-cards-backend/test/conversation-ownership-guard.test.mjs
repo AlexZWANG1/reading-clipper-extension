@@ -1,3 +1,4 @@
+/*
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -50,6 +51,31 @@ describe('conversation ownership guard', () => {
       section.includes('.maybeSingle()'),
       'confirmAndExecutePlan must verify the conversation belongs to current user'
     );
+  });
+});
+*/
+
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+describe('Harness V2 conversation ownership', () => {
+  const source = readFileSync(
+    new URL('../src/chat/orchestrator.mjs', import.meta.url),
+    'utf-8'
+  );
+
+  it('chatWithConversation should validate ownership via user_id filter', () => {
+    const section = source.slice(
+      source.indexOf('async function _chatWithConversationInner'),
+      source.indexOf('if (!convId)')
+    );
+    assert.ok(section.includes('.eq("id", convId)'));
+    assert.ok(section.includes('.eq("user_id", userId)'));
+  });
+
+  it('plan-specific confirmation entry should be removed', () => {
+    assert.ok(!source.includes('confirmAndExecutePlan'));
   });
 });
 

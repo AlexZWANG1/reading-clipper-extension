@@ -1,77 +1,82 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { estimateTokens, calculateBudget, buildHistoryWithinBudget } from '../src/chat/contextBudget.mjs';
+import {
+  buildContextMessages,
+  findTurnBoundary,
+  shouldCompact,
+  roughTokenEstimate,
+  trimMessagesForRetry,
+} from '../src/chat/contextManager.mjs';
 
-describe('estimateTokens', () => {
-  it('should estimate English text', () => {
-    const tokens = estimateTokens('Hello world this is a test');
-    assert.ok(tokens > 0, 'should return positive tokens');
-    assert.ok(tokens < 20, 'should be reasonable for short English');
+describe('contextManager: findTurnBoundary', () => {
+  it('returns a boundary that ends on a user message turn', () => {
+    const recentNewestFirst = [
+      { role: 'assistant', content: 'A3' },
+      { role: 'user', content: 'U2' },
+      { role: 'assistant', content: 'A2' },
+      { role: 'user', content: 'U1' },
+    ];
+    const boundary = findTurnBoundary(recentNewestFirst);
+    assert.equal(boundary, 4);
   });
 
-  it('should estimate Chinese text with higher ratio', () => {
-    const en = estimateTokens('Hello');
-    const cn = estimateTokens('你好世界');
-    // Chinese chars should produce more tokens per character
-    assert.ok(cn / 4 > en / 5, 'Chinese should have higher per-char token ratio');
-  });
-
-  it('should return 0 for empty input', () => {
-    assert.equal(estimateTokens(''), 0);
-    assert.equal(estimateTokens(null), 0);
-    assert.equal(estimateTokens(undefined), 0);
+  it('falls back to full length when no user message exists', () => {
+    const recentNewestFirst = [
+      { role: 'assistant', content: 'A2' },
+      { role: 'assistant', content: 'A1' },
+    ];
+    assert.equal(findTurnBoundary(recentNewestFirst), 2);
   });
 });
 
-describe('calculateBudget', () => {
-  it('should allocate budget with reserves', () => {
-    const { historyBudget, toolLoopReserve } = calculateBudget(128000, 2000, 3000);
-    assert.ok(historyBudget > 0, 'history budget should be positive');
-    assert.ok(historyBudget < 128000, 'should be less than total context');
-    assert.equal(toolLoopReserve, Math.floor(128000 * 0.25));
-    // historyBudget = 128000 - 2000 - 3000 - 32000 - 4096 = 86904
-    assert.equal(historyBudget, 86904);
-  });
-
-  it('should enforce minimum of 2000 tokens', () => {
-    const { historyBudget } = calculateBudget(5000, 3000, 3000);
-    assert.equal(historyBudget, 2000, 'should enforce minimum');
+describe('contextManager: buildContextMessages', () => {
+  it('keeps chronological order and prepends conversation summary', () => {
+    const historyNewestFirst = [
+      { role: 'assistant', content: 'A2', message_type: 'text' },
+      { role: 'user', content: 'U2', message_type: 'text' },
+      { role: 'assistant', content: 'A1', message_type: 'text' },
+      { role: 'user', content: 'U1', message_type: 'text' },
+    ];
+    const context = buildContextMessages(historyNewestFirst, '结构化摘要');
+    assert.equal(context[0].role, 'user');
+    assert.ok(context[0].content.includes('结构化摘要'));
+    assert.equal(context[1].content, 'U1');
+    assert.equal(context[4].content, 'A2');
   });
 });
 
-describe('buildHistoryWithinBudget', () => {
-  const makeMsg = (content, role = 'user') => ({ role, content });
-
-  it('should select messages within budget (newest first)', () => {
-    const messages = [
-      makeMsg('newest message'),  // index 0 = newest
-      makeMsg('middle message'),
-      makeMsg('oldest message'),
-    ];
-    const result = buildHistoryWithinBudget(messages, 1000, null);
-    assert.equal(result.length, 3, 'all should fit');
-    // Result should be in chronological order (oldest first)
-    assert.equal(result[0].content, 'oldest message');
-    assert.equal(result[2].content, 'newest message');
+describe('contextManager: compaction + token fallback helpers', () => {
+  it('shouldCompact returns false inside cooldown window', () => {
+    const now = Date.now();
+    const history = Array.from({ length: 80 }).map((_, i) => ({
+      role: i % 2 === 0 ? 'user' : 'assistant',
+      message_type: 'text',
+      content: `m-${i}`,
+      created_at: new Date(now - i * 1000).toISOString(),
+    }));
+    assert.equal(shouldCompact(history, null, now), false);
   });
 
-  it('should drop oldest when budget is tight', () => {
-    const messages = [
-      makeMsg('A'.repeat(500)),  // newest
-      makeMsg('B'.repeat(500)),
-      makeMsg('C'.repeat(500)),  // oldest
-    ];
-    // Budget only fits ~2 messages (500 chars * 0.25 = 125 tokens each)
-    const result = buildHistoryWithinBudget(messages, 260, null);
-    assert.ok(result.length < 3, 'should drop oldest');
-    assert.equal(result[result.length - 1].content, 'A'.repeat(500), 'newest should survive');
+  it('roughTokenEstimate returns positive numbers', () => {
+    const tokens = roughTokenEstimate([
+      { role: 'system', content: '规则' },
+      { role: 'user', content: 'hello world' },
+    ]);
+    assert.ok(tokens > 0);
   });
 
-  it('should prepend conversation summary', () => {
-    const messages = [makeMsg('hello')];
-    const result = buildHistoryWithinBudget(messages, 1000, 'Previous discussion about AI');
-    assert.equal(result[0].role, 'system');
-    assert.ok(result[0].content.includes('Previous discussion about AI'));
-    assert.equal(result[1].content, 'hello');
+  it('trimMessagesForRetry keeps system messages and drops half of non-system', () => {
+    const messages = [
+      { role: 'system', content: 'S1' },
+      { role: 'system', content: 'S2' },
+      { role: 'user', content: 'U1' },
+      { role: 'assistant', content: 'A1' },
+      { role: 'user', content: 'U2' },
+      { role: 'assistant', content: 'A2' },
+    ];
+    const trimmed = trimMessagesForRetry(messages);
+    assert.equal(trimmed[0].role, 'system');
+    assert.equal(trimmed[1].role, 'system');
+    assert.ok(trimmed.length < messages.length);
   });
 });

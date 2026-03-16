@@ -629,17 +629,6 @@ export const chatApi = {
         surface_context: surfaceContext || null,
       }),
     }),
-  executePlan: (conversationId, planSpec, planDisplay, topicId) =>
-    request('/v2/chat/execute-plan', {
-      method: 'POST',
-      body: JSON.stringify({
-        conversation_id: conversationId,
-        plan_spec: planSpec,
-        plan_display: planDisplay,
-        topic_id: topicId || null,
-      }),
-    }),
-  getTemplates: () => request('/v2/chat/templates'),
 };
 
 // ========= Conversations API =========

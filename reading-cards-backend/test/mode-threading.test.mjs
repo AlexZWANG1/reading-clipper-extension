@@ -1,3 +1,4 @@
+/*
 import assert from 'node:assert/strict';
 import { buildSystemPrompt } from '../src/chat/promptBuilder.mjs';
 
@@ -55,3 +56,32 @@ assert.ok(boardPrompt.includes('自动注入'), 'should tell AI that IDs are aut
 assert.ok(boardPrompt.includes('思维画板') || boardPrompt.includes('画板'), 'board surface should mention board');
 
 console.log('All prompt builder tests passed!');
+*/
+
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { buildSystemPrompt } from '../src/chat/promptBuilder.mjs';
+
+describe('Harness V2 prompt mode threading', () => {
+  it('chat mode should include read-only guidance', () => {
+    const prompt = buildSystemPrompt({ surfaceContext: null, mode: 'chat' });
+    assert.ok(prompt.includes('聊天模式'));
+    assert.ok(prompt.includes('不能执行会产生写入的操作'));
+  });
+
+  it('agent mode should include confirmation guidance', () => {
+    const prompt = buildSystemPrompt({ surfaceContext: null, mode: 'agent' });
+    assert.ok(prompt.includes('代理模式'));
+    assert.ok(prompt.includes('系统可能要求用户确认'));
+  });
+
+  it('context should mention ID auto-injection', () => {
+    const prompt = buildSystemPrompt({
+      surfaceContext: { surface: 'board', topicTitle: '测试主题', topicId: 'uuid-1', boardId: 'uuid-2' },
+      mode: 'auto',
+    });
+    assert.ok(prompt.includes('自动注入'));
+    assert.ok(!prompt.includes('uuid-1'));
+    assert.ok(!prompt.includes('uuid-2'));
+  });
+});

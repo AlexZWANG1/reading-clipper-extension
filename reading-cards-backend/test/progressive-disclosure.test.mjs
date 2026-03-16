@@ -1,3 +1,4 @@
+/*
 import assert from 'node:assert/strict';
 import { buildSystemPrompt } from '../src/chat/promptBuilder.mjs';
 
@@ -88,3 +89,34 @@ assert.ok(exploreLen < boardLen, `explore (${exploreLen}) should be shorter than
 console.log(`Token savings: explore=${exploreLen} chars, board=${boardLen} chars, delta=${boardLen - exploreLen} chars (~${Math.round((boardLen - exploreLen) * 0.4)} tokens saved)`);
 
 console.log('All progressive disclosure tests passed!');
+*/
+
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { buildSystemPrompt } from '../src/chat/promptBuilder.mjs';
+
+describe('Harness V2 minimal prompt disclosure', () => {
+  it('prompt should keep fixed role/context/rules sections', () => {
+    const prompt = buildSystemPrompt({ surfaceContext: null, mode: 'auto' });
+    assert.ok(prompt.includes('<role>'));
+    assert.ok(prompt.includes('<context>'));
+    assert.ok(prompt.includes('<rules>'));
+  });
+
+  it('prompt should no longer include legacy tool-group tags', () => {
+    const prompt = buildSystemPrompt({ surfaceContext: null, mode: 'auto' });
+    assert.ok(!prompt.includes('<data_model>'));
+    assert.ok(!prompt.includes('<epistemic_standards>'));
+    assert.ok(!prompt.includes('<absolute_prohibitions>'));
+  });
+
+  it('board context should only expose topic title, not internal ids', () => {
+    const prompt = buildSystemPrompt({
+      surfaceContext: { surface: 'board', topicTitle: '研究主题', topicId: 'tid', boardId: 'bid' },
+      mode: 'auto',
+    });
+    assert.ok(prompt.includes('研究主题'));
+    assert.ok(!prompt.includes('tid'));
+    assert.ok(!prompt.includes('bid'));
+  });
+});

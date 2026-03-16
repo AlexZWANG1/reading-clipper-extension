@@ -1,3 +1,4 @@
+/*
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildSystemPrompt, TOOL_GROUP_INSTRUCTIONS, MODE_INSTRUCTIONS } from '../src/chat/promptBuilder.mjs';
@@ -211,5 +212,33 @@ describe('Prompt: tool group instructions', () => {
   it('cards group instruction mentions card creation', () => {
     const prompt = buildPrompt({ toolGroup: 'cards' });
     assert.ok(prompt.includes('创建卡片'), 'cards instructions should mention card creation');
+  });
+});
+*/
+
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { buildSystemPrompt } from '../src/chat/promptBuilder.mjs';
+
+describe('Harness V2 prompt alignment', () => {
+  it('should provide fixed XML blocks', () => {
+    const prompt = buildSystemPrompt({ surfaceContext: null, mode: 'auto' });
+    assert.ok(prompt.includes('<role>'));
+    assert.ok(prompt.includes('<context>'));
+    assert.ok(prompt.includes('<rules>'));
+  });
+
+  it('rules should include key non-negotiables', () => {
+    const prompt = buildSystemPrompt({ surfaceContext: null, mode: 'auto' });
+    assert.ok(prompt.includes('不编造数据'));
+    assert.ok(prompt.includes('不主动创建卡片'));
+    assert.ok(prompt.includes('复杂任务先用文字说明计划步骤'));
+  });
+
+  it('mode guidance should be present for chat and agent', () => {
+    const chat = buildSystemPrompt({ surfaceContext: null, mode: 'chat' });
+    const agent = buildSystemPrompt({ surfaceContext: null, mode: 'agent' });
+    assert.ok(chat.includes('聊天模式'));
+    assert.ok(agent.includes('代理模式'));
   });
 });

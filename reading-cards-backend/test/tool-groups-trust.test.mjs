@@ -1,3 +1,4 @@
+/*
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { TOOL_DEFINITIONS, TOOL_MAP, getToolSideEffect, buildConfirmMessage } from '../src/chat/tools.mjs';
@@ -278,5 +279,63 @@ describe('Trust Invariant: every write/destructive tool has confirm_template', (
   it('buildConfirmMessage falls back for unknown tools', () => {
     const msg = buildConfirmMessage('unknown_tool', {});
     assert.ok(msg.includes('unknown_tool'), 'Should include tool name in fallback');
+  });
+});
+*/
+
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  TOOL_DEFINITIONS,
+  TOOL_MAP,
+  getToolRiskLevel,
+  isWriteCapableTool,
+  buildConfirmMessage,
+} from '../src/chat/tools.mjs';
+
+describe('Harness V2 tool metadata', () => {
+  it('every tool should have risk_level', () => {
+    const missing = TOOL_DEFINITIONS
+      .filter((t) => !t.risk_level)
+      .map((t) => t.function.name);
+    assert.deepStrictEqual(missing, []);
+  });
+
+  it('risk_level should only use supported values', () => {
+    const allowed = new Set(['auto', 'confirm', 'confirm_warn']);
+    const invalid = TOOL_DEFINITIONS
+      .filter((t) => !allowed.has(t.risk_level))
+      .map((t) => `${t.function.name}:${t.risk_level}`);
+    assert.deepStrictEqual(invalid, []);
+  });
+
+  it('TOOL_MAP should cover all tool definitions', () => {
+    for (const t of TOOL_DEFINITIONS) {
+      assert.ok(TOOL_MAP[t.function.name], `missing TOOL_MAP entry for ${t.function.name}`);
+    }
+  });
+});
+
+describe('Harness V2 runtime trust rules', () => {
+  it('write-capable auto tools should be blocked in chat mode', () => {
+    assert.equal(isWriteCapableTool('create_card'), true);
+    assert.equal(isWriteCapableTool('propose_board_changes'), true);
+    assert.equal(isWriteCapableTool('ingest_url'), true);
+  });
+
+  it('destructive tools should require confirm_warn', () => {
+    assert.equal(getToolRiskLevel('delete_board_node'), 'confirm_warn');
+    assert.equal(getToolRiskLevel('delete_board_edge'), 'confirm_warn');
+  });
+
+  it('board mutation tools should require confirmation', () => {
+    assert.equal(getToolRiskLevel('create_board_node'), 'confirm');
+    assert.equal(getToolRiskLevel('update_board_node'), 'confirm');
+    assert.equal(getToolRiskLevel('create_board_edge'), 'confirm');
+  });
+
+  it('buildConfirmMessage should include fallback tool name', () => {
+    const msg = buildConfirmMessage('unknown_tool', {});
+    assert.ok(msg.includes('unknown_tool'));
   });
 });

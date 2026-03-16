@@ -7,18 +7,22 @@ const RELATION_CONFIG = {
   supports: {
     label: '支持',
     icon: '↗',
-    bg: 'rgba(31,157,103,0.10)',
+    bg: 'rgba(31,157,103,0.12)',
     color: 'var(--workbench-green)',
-    borderColor: 'rgba(31,157,103,0.34)',
+    borderColor: 'rgba(31,157,103,0.40)',
     lineColor: 'var(--workbench-green)',
+    cardAccent: 'rgba(31,157,103,0.06)',
+    topBorderColor: 'rgba(31,157,103,0.35)',
   },
   refutes: {
     label: '反驳',
     icon: '↘',
-    bg: 'rgba(195,74,60,0.10)',
+    bg: 'rgba(195,74,60,0.12)',
     color: 'var(--workbench-red)',
-    borderColor: 'rgba(195,74,60,0.34)',
+    borderColor: 'rgba(195,74,60,0.40)',
     lineColor: 'var(--workbench-red)',
+    cardAccent: 'rgba(195,74,60,0.05)',
+    topBorderColor: 'rgba(195,74,60,0.35)',
   },
   neutral: {
     label: '中立',
@@ -27,6 +31,8 @@ const RELATION_CONFIG = {
     color: 'var(--workbench-text-muted)',
     borderColor: 'rgba(130,121,106,0.34)',
     lineColor: 'rgba(130,121,106,0.7)',
+    cardAccent: 'transparent',
+    topBorderColor: 'rgba(130,121,106,0.25)',
   },
 };
 
@@ -90,8 +96,12 @@ function EvidenceNode({ id, data, selected }) {
           borderRadius: 12,
           background: 'var(--workbench-card)',
           border: '1px solid var(--workbench-border)',
-          borderLeft: `2px solid ${relation.lineColor}`,
+          borderLeft: `3px solid ${relation.lineColor}`,
+          borderTop: `1px solid ${relation.topBorderColor}`,
           boxShadow: selected ? '0 0 0 2px rgba(47,128,255,0.2)' : 'var(--workbench-shadow-node)',
+          backgroundImage: relation.cardAccent !== 'transparent'
+            ? `linear-gradient(135deg, ${relation.cardAccent} 0%, transparent 60%)`
+            : undefined,
           width: '100%',
           height: '100%',
           minWidth: 220,
@@ -144,14 +154,14 @@ function EvidenceNode({ id, data, selected }) {
             name={`evidence_relation_${id}`}
             value={edgeRelation || 'neutral'}
             onChange={(e) => onEdgeUpdate?.(id, { relation_type: e.target.value })}
-            className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full cursor-pointer outline-none appearance-none border"
+            className="text-[10px] font-bold px-2 py-0.5 rounded-full cursor-pointer outline-none appearance-none border"
             style={{ background: relation.bg, color: relation.color, borderColor: relation.borderColor }}
             title="切换证据关系"
             aria-label="切换证据关系"
           >
-            <option value="supports">支持</option>
-            <option value="refutes">反驳</option>
-            <option value="neutral">中立</option>
+            <option value="supports">↗ 支持</option>
+            <option value="refutes">↘ 反驳</option>
+            <option value="neutral">· 中立</option>
           </select>
           {sourceName && (
             <span className="ml-auto text-[10px] truncate max-w-[110px]" style={{ color: 'var(--workbench-text-muted)' }} title={sourceName}>

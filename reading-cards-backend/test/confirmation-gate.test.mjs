@@ -1,3 +1,4 @@
+/*
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -66,5 +67,34 @@ describe('confirmation gate regression', () => {
       matches && matches.length >= 2,
       `Both chat() and chatWithConversation() must enforce mode==='chat' → 'explore'. Found ${matches?.length || 0} occurrences, expected ≥2`
     );
+  });
+});
+*/
+
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+describe('Harness V2 confirmation gate', () => {
+  const orchestratorSource = readFileSync(
+    new URL('../src/chat/orchestrator.mjs', import.meta.url), 'utf-8'
+  );
+  const toolExecutorSource = readFileSync(
+    new URL('../src/chat/toolExecutor.mjs', import.meta.url), 'utf-8'
+  );
+
+  it('orchestrator should delegate gating to executeToolCalls', () => {
+    assert.ok(orchestratorSource.includes('executeToolCalls'));
+    assert.ok(!orchestratorSource.includes('LOW_RISK_WRITES'));
+  });
+
+  it('executeToolCalls should produce pendingActions for confirm tools', () => {
+    assert.ok(toolExecutorSource.includes('pendingActions.push'));
+    assert.ok(toolExecutorSource.includes('buildConfirmMessage'));
+  });
+
+  it('chat mode should block write-capable operations at execution layer', () => {
+    assert.ok(toolExecutorSource.includes('blockedByChatMode'));
+    assert.ok(toolExecutorSource.includes('mode_restriction'));
   });
 });
