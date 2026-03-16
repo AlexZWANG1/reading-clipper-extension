@@ -18,15 +18,39 @@ import { ingestUrl } from "../services/ingestion.mjs";
 import { createDraft } from "../agents/draftEngine.mjs";
 import { getResearchState } from "../agents/researchContext.mjs";
 
+// ── Context auto-injection ─────────────────────────────
+// Maps surfaceContext fields to tool parameter names.
+// Any ID the frontend sends in surfaceContext is automatically injected
+// into matching tool parameters — AI never needs to extract UUIDs from prompt text.
+const CONTEXT_DEFAULTS = {
+  topicId:    { param: 'topic_id',    tools: ['semantic_search', 'search_cards', 'list_cards', 'list_documents', 'get_board_health', 'ingest_url'] },
+  boardId:    { param: 'board_id',    tools: ['get_board', 'propose_board_changes', 'create_board_node', 'create_board_edge'] },
+  materialId: { param: 'material_id', tools: ['semantic_search'] },
+};
+
+function applyContextDefaults(name, args, surfaceContext) {
+  if (!surfaceContext) return args;
+  let patched = args;
+  for (const [ctxKey, { param, tools }] of Object.entries(CONTEXT_DEFAULTS)) {
+    if (surfaceContext[ctxKey] && !patched[param] && tools.includes(name)) {
+      patched = { ...patched, [param]: surfaceContext[ctxKey] };
+    }
+  }
+  return patched;
+}
+
 /**
  * Execute a single tool call.
  * @param {string} name   - tool name (must match tools.mjs)
  * @param {Object} args   - parsed arguments from the LLM
- * @param {Object} ctx    - { supabase, userId, accessToken }
+ * @param {Object} ctx    - { supabase, userId, accessToken, surfaceContext }
  * @returns {Promise<Object>} result payload
  */
 export async function executeTool(name, args, ctx) {
-  const { supabase, userId, accessToken } = ctx;
+  const { supabase, userId, accessToken, surfaceContext } = ctx;
+
+  // Auto-inject IDs from surfaceContext into tool args
+  args = applyContextDefaults(name, args, surfaceContext);
 
   switch (name) {
     // ── Semantic Search ──
@@ -37,14 +61,16 @@ export async function executeTool(name, args, ctx) {
           min_score: args.min_score,
           topic_id: args.topic_id,
         });
+        const total = data.total || 0;
         return {
           results: data.results || [],
-          total: data.total || 0,
+          total,
           query: args.query,
+          ...(total === 0 ? { hint: "没有找到匹配的文档内容。尝试用不同关键词搜索，或用 search_cards 搜索卡片摘要。" } : {}),
         };
       } catch (error) {
         console.error('Semantic search error:', error);
-        return { error: error.message, results: [] };
+        return { error: error.message, results: [], hint: "语义搜索失败。尝试用 search_cards 按关键词搜索卡片摘要。" };
       }
     }
 
@@ -66,7 +92,7 @@ export async function executeTool(name, args, ctx) {
 
     case "get_card": {
       const card = await findCardById(supabase, args.card_id, userId);
-      if (!card) return { error: "card_not_found" };
+      if (!card) return { error: "card_not_found", hint: "调用 search_cards 按关键词搜索卡片，或 list_cards 查看所有卡片。" };
       return { card };
     }
 
@@ -123,7 +149,7 @@ export async function executeTool(name, args, ctx) {
 
     case "get_board": {
       const board = await getFullBoard(supabase, args.board_id, userId);
-      if (!board) return { error: "board_not_found" };
+      if (!board) return { error: "board_not_found", hint: "调用 list_boards 查看当前用户的所有画板，确认 board_id 是否正确。" };
       return { board };
     }
 
@@ -137,7 +163,7 @@ export async function executeTool(name, args, ctx) {
 
     case "get_document": {
       const doc = await getDocument(supabase, args.doc_id, userId);
-      if (!doc) return { error: "document_not_found" };
+      if (!doc) return { error: "document_not_found", hint: "调用 list_documents 查看当前主题下的文档。" };
       return { document: doc };
     }
 
@@ -157,7 +183,7 @@ export async function executeTool(name, args, ctx) {
         }
         return { items, count: items.length };
       } catch (error) {
-        return { error: error.message, items: [] };
+        return { error: error.message, items: [], hint: "检查 RSS URL 是否正确。确保 URL 指向有效的 RSS/Atom feed。" };
       }
     }
 
@@ -170,7 +196,7 @@ export async function executeTool(name, args, ctx) {
         });
         return result;
       } catch (error) {
-        return { error: error.message };
+        return { error: error.message, hint: "检查 URL 是否可访问。如果是付费内容，可能无法摄入。" };
       }
     }
 
@@ -322,7 +348,7 @@ export async function executeTool(name, args, ctx) {
           message: `已草拟 ${(args.changes || []).length} 个更改，请在画板上查看并确认。`,
         };
       } catch (err) {
-        return { error: err.message };
+        return { error: err.message, hint: "检查 board_id 是否正确，以及 changes 数组格式是否符合要求（每项需要 action 字段）。" };
       }
     }
 
@@ -342,7 +368,7 @@ export async function executeTool(name, args, ctx) {
     }
 
     default:
-      return { error: `unknown_tool: ${name}` };
+      return { error: `unknown_tool: ${name}`, hint: "此工具不存在。检查工具名称拼写是否正确。" };
   }
 }
 

@@ -9,14 +9,10 @@ import {
 } from "../services/supabase/tasks.mjs";
 import { addMessage } from "../services/supabase/conversations.mjs";
 import { executeTool } from "./toolExecutor.mjs";
-import { getToolSideEffect } from "./tools.mjs";
+import { TOOL_MAP, summarizeToolResult } from "./tools.mjs";
 import { createAIClientConfig, callChatAPI } from "../services/aiClient.mjs";
 
 const cancelledTaskIds = new Set();
-
-// Spec §12: Research runs may create but NOT delete existing data.
-// Block destructive tools during automated plan execution.
-const BLOCKED_IN_PLAN = new Set(['delete_board_node', 'delete_board_edge']);
 
 export function cancelExecution(taskId) {
   if (!taskId) return;
@@ -80,11 +76,10 @@ export async function executePlan({ task, planSpec, conversationId, supabase }) 
       });
 
       try {
-        // Guard: block destructive tools during automated plan execution (Spec §12)
-        if (BLOCKED_IN_PLAN.has(planStep.tool)) {
+        // Guard: only plan_allowed tools can run during automated execution (Spec §12)
+        if (TOOL_MAP[planStep.tool] && !TOOL_MAP[planStep.tool].plan_allowed) {
           throw new Error(
-            `Tool "${planStep.tool}" is blocked during plan execution. ` +
-            `Research runs may create data but cannot delete existing nodes/edges.`
+            `工具 "${planStep.tool}" 在计划执行中不允许使用。研究计划只能创建数据，不能删除已有节点/边。`
           );
         }
 
@@ -93,7 +88,10 @@ export async function executePlan({ task, planSpec, conversationId, supabase }) 
 
         // Execute tool
         const toolResult = await Promise.race([
-          executeTool(planStep.tool, resolvedInput, { supabase, userId }),
+          executeTool(planStep.tool, resolvedInput, {
+            supabase, userId,
+            surfaceContext: { topicId: task.topic_id || null },
+          }),
           new Promise((_, reject) =>
             setTimeout(() => reject(new Error("Tool execution timeout (60s)")), 60000)
           ),
@@ -106,7 +104,7 @@ export async function executePlan({ task, planSpec, conversationId, supabase }) 
         await updateStep(supabase, stepRecord.id, {
           status: "completed",
           tool_output: toolResult,
-          output_summary: summarizeToolOutput(planStep.tool, toolResult),
+          output_summary: summarizeToolResult(planStep.tool, toolResult),
           completed_at: new Date().toISOString(),
         });
 
@@ -115,14 +113,14 @@ export async function executePlan({ task, planSpec, conversationId, supabase }) 
           step_id: planStep.id,
           tool: planStep.tool,
           status: "completed",
-          summary: summarizeToolOutput(planStep.tool, toolResult),
+          summary: summarizeToolResult(planStep.tool, toolResult),
         });
 
         // Write progress message to conversation
         if (conversationId) {
           await addMessage(supabase, conversationId, {
             role: 'assistant',
-            content: `**${planStep.title}** — ${summarizeToolOutput(planStep.tool, toolResult)}`,
+            content: `**${planStep.title}** — ${summarizeToolResult(planStep.tool, toolResult)}`,
             message_type: 'step_progress',
             metadata: { step_id: planStep.id, step_index: i, tool: planStep.tool, status: 'completed' },
           });
@@ -288,29 +286,3 @@ function safeStringify(obj, maxChars = 3000) {
   return full.slice(0, maxChars) + '...(已截断)';
 }
 
-/**
- * Summarize tool output into a short string.
- */
-function summarizeToolOutput(tool, result) {
-  if (!result) return "无结果";
-  if (result.error) return `错误: ${result.error}`;
-
-  switch (tool) {
-    case "fetch_rss":
-      return `抓取了 ${result.items?.length || 0} 条 RSS 条目`;
-    case "semantic_search":
-      return `找到 ${result.total || result.results?.length || 0} 条相关内容`;
-    case "search_cards":
-      return `找到 ${result.count || result.cards?.length || 0} 张相关卡片`;
-    case "ingest_url":
-      return `已摄入: ${result.title || result.material_id || "unknown"}`;
-    case "create_card":
-      return `已创建卡片: ${result.card?.title || result.message || ""}`;
-    case "list_cards":
-      return `列出 ${result.total || result.cards?.length || 0} 张卡片`;
-    case "list_topics":
-      return `列出 ${result.topics?.length || 0} 个主题`;
-    default:
-      return safeStringify(result, 100);
-  }
-}

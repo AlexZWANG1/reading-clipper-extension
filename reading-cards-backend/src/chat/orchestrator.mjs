@@ -4,7 +4,7 @@
 // Tool groups prevent AI from accessing write tools when user is only querying.
 
 import { createAIClientConfig, callChatAPI } from "../services/aiClient.mjs";
-import { getToolSideEffect, buildConfirmMessage } from "./tools.mjs";
+import { getToolSideEffect, buildConfirmMessage, summarizeToolResult } from "./tools.mjs";
 import { executeTool } from "./toolExecutor.mjs";
 import { generatePlan, generateConversationTitle } from "./planner.mjs";
 import { executePlan, cancelExecution } from "./executor.mjs";
@@ -18,7 +18,17 @@ import { inferToolGroup, getToolsForGroup } from "./toolGroups.mjs";
 import { getResearchState, loadUserMethodology, computeResearchState } from "../agents/researchContext.mjs";
 import { estimateTokens, calculateBudget, buildHistoryWithinBudget } from "./contextBudget.mjs";
 
-const MAX_TOOL_ROUNDS = 6;
+const MAX_TOOL_ROUNDS = 12;
+
+// P01 — Per-conversation serial lock
+const conversationLocks = new Map();
+
+// P06 — Dedup guard for conversation summary generation
+const summaryInProgress = new Set();
+const summaryLastAttempt = new Map();
+
+// P24 — Low-risk writes that auto-execute without confirmation
+const LOW_RISK_WRITES = new Set(['create_card', 'ingest_url']);
 
 /**
  * Run a chat turn with dynamic prompt and scoped tools.
@@ -105,17 +115,18 @@ export async function chat({ messages, userId, supabase, accessToken, onToolCall
 
     const toolCalls = assistantMsg.tool_calls;
     if (!toolCalls || toolCalls.length === 0) {
-      return { reply: assistantMsg.content || "", messages: currentMessages, toolCallLog, draftId };
+      return { reply: sanitizeReply(assistantMsg.content || ""), messages: currentMessages, toolCallLog, draftId };
     }
 
     // Split tool calls into write (need confirmation) and auto (safe to execute)
+    // P24: Low-risk writes (create_card, ingest_url) auto-execute without confirmation
     const writeToolCalls = toolCalls.filter((tc) => {
       const effect = getToolSideEffect(tc.function.name);
-      return effect === "write" || effect === "destructive";
+      return (effect === "write" || effect === "destructive") && !LOW_RISK_WRITES.has(tc.function.name);
     });
     const autoToolCalls = toolCalls.filter((tc) => {
       const effect = getToolSideEffect(tc.function.name);
-      return effect === "read_only" || effect === "draft";
+      return effect === "read_only" || effect === "draft" || LOW_RISK_WRITES.has(tc.function.name);
     });
 
     // Auto-execute read_only + draft tools immediately
@@ -126,7 +137,7 @@ export async function chat({ messages, userId, supabase, accessToken, onToolCall
         try { args = JSON.parse(tc.function.arguments || "{}"); } catch {}
         try {
           const rawResult = await executeTool(tc.function.name, args, {
-            supabase, userId, accessToken,
+            supabase, userId, accessToken, surfaceContext: enrichedSurfaceContext,
           });
           const compressed = compressToolResult(tc.function.name, rawResult);
           autoResults.push({
@@ -138,7 +149,7 @@ export async function chat({ messages, userId, supabase, accessToken, onToolCall
             id: tc.id,
             tool: tc.function.name,
             args,
-            result_summary: summarizeResult(rawResult),
+            result_summary: summarizeToolResult(tc.function.name, rawResult),
             status: rawResult.error ? "error" : "completed",
           };
           toolCallLog.push(logEntry);
@@ -240,17 +251,35 @@ export async function chat({ messages, userId, supabase, accessToken, onToolCall
     }
   }
 
-  // Exhausted rounds — one final call without tools
+  // Exhausted rounds — inject last-round warning, then one final call without tools
+  currentMessages.push({
+    role: "system",
+    content: "这是你的最后一轮。请基于已获取的信息，直接回复用户。不要再调用工具。"
+  });
   const finalResponse = await callChatAPI(aiConfig, currentMessages);
   const finalMsg = finalResponse.choices?.[0]?.message;
   if (finalMsg) currentMessages.push(finalMsg);
 
   return {
-    reply: finalMsg?.content || "Sorry, I could not complete the request.",
+    reply: sanitizeReply(finalMsg?.content || "Sorry, I could not complete the request."),
     messages: currentMessages,
     toolCallLog,
     draftId,
   };
+}
+
+// ── Reply sanitization — code-enforced guardrail against UUID/tool name leakage ──
+const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+
+function sanitizeReply(text) {
+  if (!text) return text;
+  // Replace UUIDs that leak into natural language (not inside JSON/code blocks)
+  return text.replace(UUID_REGEX, (match, offset) => {
+    // Skip if inside a code block (crude heuristic: preceded by ` or ")
+    const before = text[offset - 1];
+    if (before === '"' || before === '`' || before === "'") return match;
+    return '[…]';
+  });
 }
 
 function isBoardMutation(toolName) {
@@ -261,7 +290,7 @@ function isBoardMutation(toolName) {
 /**
  * Continue after user confirms pending write actions.
  */
-export async function chatConfirm({ messages, pendingToolCalls, confirmedIds, userId, supabase }) {
+export async function chatConfirm({ messages, pendingToolCalls, confirmedIds, userId, supabase, toolGroup, surfaceContext }) {
   const aiConfig = await createAIClientConfig(userId, supabase);
 
   const assistantMsg = {
@@ -289,7 +318,7 @@ export async function chatConfirm({ messages, pendingToolCalls, confirmedIds, us
       try { args = JSON.parse(tc.function.arguments || "{}"); } catch { args = {}; }
 
       try {
-        const result = await executeTool(tc.function.name, args, { supabase, userId });
+        const result = await executeTool(tc.function.name, args, { supabase, userId, surfaceContext });
         toolCallLog.push({
           id: tc.id,
           tool: tc.function.name,
@@ -321,13 +350,13 @@ export async function chatConfirm({ messages, pendingToolCalls, confirmedIds, us
 
   currentMessages.push(...toolResults);
 
-  // Continue the normal loop — use full tool set since user already confirmed
-  const allTools = getToolsForGroup('full');
+  // Continue the normal loop — use scoped tool set (preserve original toolGroup, not escalate to 'full')
+  const scopedTools = getToolsForGroup(toolGroup || 'explore');
   let rounds = 0;
   while (rounds < MAX_TOOL_ROUNDS) {
     rounds++;
 
-    const response = await callWithTools(aiConfig, currentMessages, allTools);
+    const response = await callWithTools(aiConfig, currentMessages, scopedTools);
     const choice = response.choices?.[0];
     if (!choice) throw new Error("Empty response from AI");
 
@@ -336,7 +365,7 @@ export async function chatConfirm({ messages, pendingToolCalls, confirmedIds, us
 
     const nextToolCalls = nextMsg.tool_calls;
     if (!nextToolCalls || nextToolCalls.length === 0) {
-      return { reply: nextMsg.content || "", messages: currentMessages, toolCallLog };
+      return { reply: sanitizeReply(nextMsg.content || ""), messages: currentMessages, toolCallLog };
     }
 
     const hasMoreWrites = nextToolCalls.some((tc) => {
@@ -368,7 +397,7 @@ export async function chatConfirm({ messages, pendingToolCalls, confirmedIds, us
     }
 
     // All read_only — execute
-    const results = await executeAllTools(nextToolCalls, { supabase, userId });
+    const results = await executeAllTools(nextToolCalls, { supabase, userId, surfaceContext });
     currentMessages.push(...results);
 
     for (let i = 0; i < nextToolCalls.length; i++) {
@@ -392,7 +421,7 @@ export async function chatConfirm({ messages, pendingToolCalls, confirmedIds, us
   if (finalMsg) currentMessages.push(finalMsg);
 
   return {
-    reply: finalMsg?.content || "Sorry, I could not complete the request.",
+    reply: sanitizeReply(finalMsg?.content || "Sorry, I could not complete the request."),
     messages: currentMessages,
     toolCallLog,
   };
@@ -444,31 +473,28 @@ function compressToolResult(toolName, result) {
     case 'list_topics':
       return { topics: result.topics?.map(t => ({ id: t.id, title: t.title, card_count: t.card_count })) };
 
-    default:
-      return result;
+    default: {
+      // P09: Generic compression — truncate arrays and long strings
+      if (typeof result !== 'object' || result === null) return result;
+      const compressed = {};
+      for (const [key, value] of Object.entries(result)) {
+        if (Array.isArray(value) && value.length > 10) {
+          compressed[key] = value.slice(0, 10).map(item => {
+            if (typeof item === 'object' && item !== null) {
+              return { id: item.id, title: item.title, text: (item.text || item.summary || '').slice(0, 100) };
+            }
+            return typeof item === 'string' ? item.slice(0, 100) : item;
+          });
+          compressed[`${key}_total`] = value.length;
+        } else if (typeof value === 'string' && value.length > 500) {
+          compressed[key] = value.slice(0, 500) + '...';
+        } else {
+          compressed[key] = value;
+        }
+      }
+      return compressed;
+    }
   }
-}
-
-function summarizeArgs(args) {
-  if (!args) return '';
-  const entries = Object.entries(args);
-  if (entries.length === 0) return '';
-  return entries
-    .slice(0, 3)
-    .map(([k, v]) => `${k}=${typeof v === 'string' ? v.slice(0, 30) : JSON.stringify(v).slice(0, 30)}`)
-    .join(', ');
-}
-
-function summarizeResult(result) {
-  if (!result) return 'null';
-  if (result.error) return `error: ${result.error}`;
-  const keys = Object.keys(result);
-  return keys.slice(0, 3).map(k => {
-    const v = result[k];
-    if (Array.isArray(v)) return `${k}: ${v.length} items`;
-    if (typeof v === 'string') return `${k}: ${v.slice(0, 40)}`;
-    return `${k}: ${JSON.stringify(v).slice(0, 40)}`;
-  }).join(', ');
 }
 
 async function executeAllTools(toolCalls, ctx) {
@@ -494,61 +520,6 @@ function callWithTools(aiConfig, messages, scopedTools) {
   });
 }
 
-/**
- * Summarize a tool result for display.
- */
-function summarizeToolResult(tool, result) {
-  if (!result) return "无结果";
-  if (result.error) return `错误: ${result.error}`;
-
-  switch (tool) {
-    case "fetch_rss":
-      return `抓取了 ${result.items?.length || 0} 条 RSS 条目`;
-    case "semantic_search":
-      return `找到 ${result.total || result.results?.length || 0} 条相关内容`;
-    case "search_cards":
-      return `找到 ${result.count || result.cards?.length || 0} 张相关卡片`;
-    case "ingest_url":
-      return `已摄入: ${result.title || result.material_id || "unknown"}`;
-    case "create_card": {
-      const summary = `已创建卡片: ${result.card?.title || result.message || ""}`;
-      return result.snippet_warning ? `${summary} ⚠ ${result.snippet_warning}` : summary;
-    }
-    case "list_cards":
-      return `列出 ${result.total || result.cards?.length || 0} 张卡片`;
-    case "list_topics":
-      return `列出 ${result.topics?.length || 0} 个主题`;
-    case "list_boards":
-      return `列出 ${result.boards?.length || 0} 个论证板`;
-    case "get_board":
-      return `加载论证板: ${result.board?.title || ""}`;
-    case "list_documents":
-      return `列出 ${result.documents?.length || 0} 份文档`;
-    case "get_document":
-      return `加载文档: ${result.document?.title || ""}`;
-    case "list_sources":
-      return `列出 ${result.sources?.length || 0} 个来源`;
-    case "get_card":
-      return result.card ? `卡片: ${result.card.title || result.card.summary?.slice(0, 30) || ""}` : "未找到";
-    case "create_board_node":
-      return result.message || "节点已创建";
-    case "update_board_node":
-      return result.message || "节点已更新";
-    case "delete_board_node":
-      return result.message || "节点已删除";
-    case "create_board_edge":
-      return result.message || "关系已创建";
-    case "delete_board_edge":
-      return result.message || "关系已删除";
-    case "propose_board_changes":
-      return `草拟了 ${result.changes_count || 0} 个更改 (draft: ${result.draft_id || "?"})`;
-    case "get_board_health":
-      return `假说: ${result.total_hypotheses || 0}, 盲点: ${result.blind_spots || 0}`;
-    default:
-      return JSON.stringify(result).slice(0, 80);
-  }
-}
-
 // ══════════════════════════════════════════════════════
 // Conversation-aware chat (primary entry point)
 // ══════════════════════════════════════════════════════
@@ -568,25 +539,63 @@ function summarizeToolResult(tool, result) {
  * @returns {Promise<Object>}
  */
 export async function chatWithConversation({ conversationId, userMessage, userId, supabase, accessToken, surfaceContext, mode }) {
-  const adminSb = supabaseAdmin;
+  // P01 — Per-conversation serial lock
+  const lockKey = conversationId || 'new';
+  while (conversationLocks.has(lockKey)) {
+    await conversationLocks.get(lockKey);
+  }
+  let releaseLock;
+  const lockPromise = new Promise(r => { releaseLock = r; });
+  conversationLocks.set(lockKey, lockPromise);
+
+  try {
+  return await _chatWithConversationInner({ conversationId, userMessage, userId, supabase, accessToken, surfaceContext, mode });
+  } finally {
+    conversationLocks.delete(lockKey);
+    releaseLock();
+  }
+}
+
+async function _chatWithConversationInner({ conversationId, userMessage, userId, supabase, accessToken, surfaceContext, mode }) {
+  const userSb = supabase;
   let convId = conversationId;
   let isNewConversation = false;
 
+  // Guard against stale/foreign conversation ids (e.g. after account switch).
+  // If conversation is not visible to current user, start a fresh conversation.
+  if (convId) {
+    const { data: ownedConv, error: convCheckError } = await userSb
+      .from("conversations")
+      .select("id")
+      .eq("id", convId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (convCheckError) {
+      throw new Error(`会话校验失败: ${convCheckError.message}`);
+    }
+
+    if (!ownedConv) {
+      console.warn(`[orchestrator] Conversation ${convId} is not accessible by user ${userId}; creating a new conversation.`);
+      convId = null;
+    }
+  }
+
   if (!convId) {
-    const conv = await createConversation(adminSb, userId);
+    const conv = await createConversation(userSb, userId);
     convId = conv.id;
     isNewConversation = true;
   }
 
   // Persist user message
-  await addMessage(adminSb, convId, {
+  await addMessage(userSb, convId, {
     role: "user",
     content: userMessage,
     message_type: "text",
   });
 
   // Load conversation history (newest-first after P0-1 fix)
-  const history = await listMessages(adminSb, convId, { limit: 200 });
+  const history = await listMessages(userSb, convId, { limit: 200 });
 
   // Build system prompt and scoped tools (needed for budget calculation)
   const topicId = surfaceContext?.topicId || null;
@@ -617,17 +626,26 @@ export async function chatWithConversation({ conversationId, userMessage, userId
     .find(m => m.message_type === 'conversation_summary')?.content || null;
 
   // Convert DB messages to chat format, preserving tool call history
+  // P08: Keep last 3 tool_calls messages with compressed results, older ones get brief summary
+  // Note: history is newest-first, so first tool_calls encountered are the most recent
+  let toolCallCount = 0;
   const chatMessages = history
     .filter((m) => m.role === "user" || m.role === "assistant")
     .map((m) => {
-      // For tool_calls messages, include a compressed summary
       if (m.message_type === 'tool_calls' && m.metadata?.tool_calls) {
-        return {
-          role: m.role,
-          content: m.metadata.tool_calls
-            .map(tc => `[Tool: ${tc.tool}(${summarizeArgs(tc.args)}) → ${tc.result_summary || 'done'}]`)
-            .join('\n'),
-        };
+        toolCallCount++;
+        if (toolCallCount <= 3) {
+          // Recent: keep compressed results
+          return {
+            role: m.role,
+            content: m.metadata.tool_calls
+              .map(tc => `[Tool: ${tc.tool}] → ${JSON.stringify(tc.result_summary || 'done').slice(0, 300)}`)
+              .join('\n'),
+          };
+        } else {
+          // Older: brief summary only
+          return { role: m.role, content: `[之前的工具调用: ${m.metadata.tool_calls.map(tc => tc.tool).join(', ')}]` };
+        }
       }
       return { role: m.role, content: m.content };
     });
@@ -654,7 +672,7 @@ export async function chatWithConversation({ conversationId, userMessage, userId
       );
 
       const planMessage = formatPlanProposalMessage(planDisplay, planSpec);
-      await addMessage(adminSb, convId, {
+      await addMessage(userSb, convId, {
         role: "assistant",
         content: planMessage,
         message_type: "plan_proposal",
@@ -664,7 +682,7 @@ export async function chatWithConversation({ conversationId, userMessage, userId
       // Auto-title
       if (isNewConversation) {
         generateConversationTitle(userMessage, userId, supabase)
-          .then((t) => updateConversation(adminSb, userId, convId, { title: t }))
+          .then((t) => updateConversation(userSb, userId, convId, { title: t }))
           .catch((err) => console.error("[orchestrator] Auto-title failed:", err.message));
       }
 
@@ -681,7 +699,7 @@ export async function chatWithConversation({ conversationId, userMessage, userId
       console.error("Plan generation failed, returning AI response as text:", err);
       // Persist error to conversation so user sees what happened
       try {
-        await addMessage(adminSb, convId, {
+        await addMessage(userSb, convId, {
           role: "assistant",
           content: `计划生成失败: ${err.message}`,
           message_type: "error",
@@ -699,7 +717,7 @@ export async function chatWithConversation({ conversationId, userMessage, userId
 
   // Persist tool call visibility messages
   if (toolCallLog.length > 0) {
-    await addMessage(adminSb, convId, {
+    await addMessage(userSb, convId, {
       role: "assistant",
       content: formatToolCallLog(toolCallLog),
       message_type: "tool_calls",
@@ -709,7 +727,7 @@ export async function chatWithConversation({ conversationId, userMessage, userId
 
   // Persist assistant reply
   if (result.reply) {
-    await addMessage(adminSb, convId, {
+    await addMessage(userSb, convId, {
       role: "assistant",
       content: result.reply,
       message_type: "text",
@@ -720,7 +738,7 @@ export async function chatWithConversation({ conversationId, userMessage, userId
   // Auto-title
   if (isNewConversation) {
     generateConversationTitle(userMessage, userId, supabase)
-      .then((t) => updateConversation(adminSb, userId, convId, { title: t }))
+      .then((t) => updateConversation(userSb, userId, convId, { title: t }))
       .catch((err) => console.error("[orchestrator] Auto-title failed:", err.message));
   }
 
@@ -731,9 +749,16 @@ export async function chatWithConversation({ conversationId, userMessage, userId
     ? history.filter(m => m.message_type === 'text' && m.created_at > existingSummary.created_at).length
     : Infinity;
 
-  if (textMessageCount > 20 && summaryAge > 10) {
-    generateConversationSummary(adminSb, convId, history, userId, supabase)
-      .catch(err => console.error('[orchestrator] Summary generation failed:', err.message));
+  // P06: Dedup guard — skip if already in progress or attempted < 5 min ago
+  const summaryRecentlyAttempted = summaryLastAttempt.has(convId) &&
+    (Date.now() - summaryLastAttempt.get(convId)) < 5 * 60 * 1000;
+
+  if (textMessageCount > 20 && summaryAge > 10 && !summaryInProgress.has(convId) && !summaryRecentlyAttempted) {
+    summaryInProgress.add(convId);
+    summaryLastAttempt.set(convId, Date.now());
+    generateConversationSummary(userSb, convId, history, userId, supabase)
+      .catch(err => console.error('[orchestrator] Summary generation failed:', err.message))
+      .finally(() => summaryInProgress.delete(convId));
   }
 
   return {
@@ -784,6 +809,20 @@ async function generateConversationSummary(supabase, convId, history, userId, su
  */
 export async function confirmAndExecutePlan({ conversationId, planSpec, planDisplay, topicId, userId, supabase }) {
   const adminSb = supabaseAdmin;
+
+  const { data: ownedConv, error: convCheckError } = await supabase
+    .from("conversations")
+    .select("id")
+    .eq("id", conversationId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (convCheckError) {
+    throw new Error(`会话校验失败: ${convCheckError.message}`);
+  }
+  if (!ownedConv) {
+    throw new Error("会话不存在或无权限");
+  }
 
   await addMessage(adminSb, conversationId, {
     role: "user",

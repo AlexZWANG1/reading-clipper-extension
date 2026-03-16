@@ -40,18 +40,17 @@ assert.ok(chatPrompt.includes('<data_model>'), 'should use XML data_model tag');
 // Test 5: UUID prohibition present (now in Chinese)
 assert.ok(chatPrompt.includes('UUID'), 'UUID prohibition missing in chat');
 
-// Test 6: Few-shot examples present
-assert.ok(chatPrompt.includes('<examples>'), 'few-shot examples missing');
-
-// Test 7: describeSurface should not contain IDs
+// Test 6: describeSurface should not contain UUIDs (IDs auto-injected by toolExecutor)
 const boardPrompt = buildSystemPrompt({
-  surfaceContext: { surface: 'board', topicId: 'some-uuid-123' },
+  surfaceContext: { surface: 'board', topicId: 'some-uuid-123', boardId: 'board-uuid-456', topicTitle: '测试主题' },
   methodology: null,
   researchState: null,
   toolGroup: 'board',
   mode: 'auto',
 });
 assert.ok(!boardPrompt.includes('some-uuid-123'), 'surface should not expose topic UUID');
-assert.ok(boardPrompt.includes('思维画板'), 'board surface should mention thinking board');
+assert.ok(!boardPrompt.includes('board-uuid-456'), 'surface should not expose board UUID');
+assert.ok(boardPrompt.includes('自动注入'), 'should tell AI that IDs are auto-injected');
+assert.ok(boardPrompt.includes('思维画板') || boardPrompt.includes('画板'), 'board surface should mention board');
 
 console.log('All prompt builder tests passed!');

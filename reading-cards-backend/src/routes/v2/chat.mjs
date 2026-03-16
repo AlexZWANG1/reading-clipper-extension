@@ -90,7 +90,7 @@ chatRouter.post("/", async (req, res) => {
  */
 chatRouter.post("/confirm", async (req, res) => {
   try {
-    const { messages, pendingToolCalls, confirmedIds } = req.body;
+    const { messages, pendingToolCalls, confirmedIds, toolGroup, surface_context } = req.body;
 
     if (!Array.isArray(messages) || !Array.isArray(pendingToolCalls) || !Array.isArray(confirmedIds)) {
       return res.status(400).json({
@@ -105,6 +105,8 @@ chatRouter.post("/confirm", async (req, res) => {
       confirmedIds,
       userId: req.user.id,
       supabase: req.supabase,
+      toolGroup,
+      surfaceContext: surface_context || null,
     });
 
     res.json({

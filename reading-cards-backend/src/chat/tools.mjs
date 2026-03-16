@@ -27,6 +27,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "read_only",
+    plan_allowed: true,
     task_auto: true,
     task_phases: ["filter"],
     task_capability: "search",
@@ -47,6 +48,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "read_only",
+    plan_allowed: true,
     task_auto: true,
     task_phases: ["filter"],
     task_capability: "search",
@@ -55,7 +57,7 @@ export const TOOL_DEFINITIONS = [
     type: "function",
     function: {
       name: "list_cards",
-      description: "List the user's reading cards, optionally filtered by topic.",
+      description: "列出用户的知识卡片，可按主题筛选。返回: {cards: [{id, title, summary, topic_id, fact_or_view}], total: number}",
       parameters: {
         type: "object",
         properties: {
@@ -66,6 +68,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "read_only",
+    plan_allowed: true,
     task_auto: true,
     task_phases: [],
     task_capability: "knowledge_read",
@@ -74,7 +77,7 @@ export const TOOL_DEFINITIONS = [
     type: "function",
     function: {
       name: "get_card",
-      description: "Get a single card by its ID.",
+      description: "获取单张卡片的详细信息。返回: {card: {id, title, summary, key_points, raw_snippet, fact_or_view, source_name, source_url}}",
       parameters: {
         type: "object",
         properties: {
@@ -84,6 +87,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "read_only",
+    plan_allowed: true,
     task_auto: true,
     task_phases: [],
     task_capability: "knowledge_read",
@@ -92,10 +96,11 @@ export const TOOL_DEFINITIONS = [
     type: "function",
     function: {
       name: "list_topics",
-      description: "List all of the user's topics with card counts.",
+      description: "列出用户的所有主题及卡片数量。返回: {topics: [{id, title, card_count}]}",
       parameters: { type: "object", properties: {}, required: [] },
     },
     side_effect: "read_only",
+    plan_allowed: true,
     task_auto: true,
     task_phases: [],
     task_capability: "knowledge_read",
@@ -104,7 +109,7 @@ export const TOOL_DEFINITIONS = [
     type: "function",
     function: {
       name: "list_sources",
-      description: "List the user's information sources, optionally filtered by category or status.",
+      description: "列出用户的信息来源，可按类别或状态筛选。返回: {sources: [{id, name, url, category, status}]}",
       parameters: {
         type: "object",
         properties: {
@@ -115,6 +120,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "read_only",
+    plan_allowed: true,
     task_auto: true,
     task_phases: [],
     task_capability: "knowledge_read",
@@ -123,10 +129,11 @@ export const TOOL_DEFINITIONS = [
     type: "function",
     function: {
       name: "list_boards",
-      description: "List the user's thinking boards.",
+      description: "列出用户的所有思维画板。返回: {boards: [{id, title, topic_id}]}",
       parameters: { type: "object", properties: {}, required: [] },
     },
     side_effect: "read_only",
+    plan_allowed: true,
     task_auto: true,
     task_phases: [],
     task_capability: "knowledge_read",
@@ -135,7 +142,7 @@ export const TOOL_DEFINITIONS = [
     type: "function",
     function: {
       name: "get_board",
-      description: "Get a thinking board with all its nodes and edges.",
+      description: "获取思维画板的完整节点和边数据。返回: {board: {id, title, nodes: [{id, node_type, content, parent_id, status}], edges: [{source_node_id, target_node_id, relation_type}]}}",
       parameters: {
         type: "object",
         properties: {
@@ -145,6 +152,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "read_only",
+    plan_allowed: true,
     task_auto: true,
     task_phases: [],
     task_capability: "knowledge_read",
@@ -153,7 +161,7 @@ export const TOOL_DEFINITIONS = [
     type: "function",
     function: {
       name: "list_documents",
-      description: "List the user's documents (stories), optionally filtered by topic.",
+      description: "列出用户的研究文档，可按主题筛选。返回: {documents: [{id, title, topic_id}]}",
       parameters: {
         type: "object",
         properties: {
@@ -163,6 +171,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "read_only",
+    plan_allowed: true,
     task_auto: true,
     task_phases: [],
     task_capability: "knowledge_read",
@@ -171,7 +180,7 @@ export const TOOL_DEFINITIONS = [
     type: "function",
     function: {
       name: "get_document",
-      description: "Get a single document by its ID, including questions, hypotheses, and story units.",
+      description: "获取单个文档的完整内容，包括问题、假说和章节。返回: {document: {id, title, content, topic_id}}",
       parameters: {
         type: "object",
         properties: {
@@ -181,6 +190,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "read_only",
+    plan_allowed: true,
     task_auto: true,
     task_phases: [],
     task_capability: "knowledge_read",
@@ -192,7 +202,7 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "fetch_rss",
       description:
-        "Fetch items from one or more RSS feeds. Returns a list of articles with title, URL, summary, and publish date. Use this to collect fresh content from RSS sources.",
+        "从 RSS 源抓取文章列表，返回标题、URL、摘要和发布时间。可用关键词过滤。",
       parameters: {
         type: "object",
         properties: {
@@ -212,6 +222,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "read_only",
+    plan_allowed: true,
     task_auto: true,
     task_phases: ["collect"],
     task_capability: "content_fetch",
@@ -221,7 +232,7 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "ingest_url",
       description:
-        "Ingest a URL into the user's knowledge base. Extracts content, creates a material record, and triggers chunking + embedding. Returns the material ID.",
+        "将 URL 内容摄入知识库。提取内容、创建材料记录并触发分块和嵌入。",
       parameters: {
         type: "object",
         properties: {
@@ -233,6 +244,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "write",
+    plan_allowed: true,
     confirm_template: "摄入 URL: {url}",
     task_auto: true,
     task_phases: ["materialize"],
@@ -245,7 +257,7 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "create_card",
       description:
-        "从源材料（文章、论文、文档）中提取并保存知识卡片。仅在用户明确要求提取、保存或创建卡片时使用。不要用此工具存储你自己的分析、总结或回答——那些属于你的文字回复。返回: {card: {id, title, summary}, message: string}",
+        `从源材料中提取并保存知识卡片。\n\n触发条件（必须全部满足）：\n1. 用户使用了"保存""创建卡片""提取""摘录"等明确存储意图的词\n2. 有明确的源材料（URL、文章、或对话中引用的文档）\n3. summary 和 key_points 基于源材料原文，不是 AI 的推理\n\n不触发：用户说"总结/分析/解释" → 用文字回复，不创建卡片`,
       parameters: {
         type: "object",
         properties: {
@@ -292,6 +304,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "write",
+    plan_allowed: true,
     confirm_template: "创建卡片到主题「{topic_title}」: \"{summary}\"",
     task_auto: true,
     task_phases: ["cardify"],
@@ -301,7 +314,7 @@ export const TOOL_DEFINITIONS = [
     type: "function",
     function: {
       name: "create_board_node",
-      description: "Create a new node on a thinking board. Node types: question, hypothesis, evidence.",
+      description: "在思维画板上创建新节点。节点类型：question、hypothesis、evidence。",
       parameters: {
         type: "object",
         properties: {
@@ -315,6 +328,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "write",
+    plan_allowed: true,
     confirm_template: "创建{node_type}节点: \"{text}\"",
     task_auto: false,
     task_phases: ["synthesize"],
@@ -324,7 +338,7 @@ export const TOOL_DEFINITIONS = [
     type: "function",
     function: {
       name: "update_board_node",
-      description: "Update an existing node on a thinking board. Can update text, status, confidence, priority, hypo_state.",
+      description: "更新画板上已有节点的文本、状态、置信度等属性。",
       parameters: {
         type: "object",
         properties: {
@@ -339,6 +353,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "write",
+    plan_allowed: false,
     confirm_template: "更新节点内容",
     task_auto: false,
     task_phases: ["synthesize"],
@@ -348,7 +363,7 @@ export const TOOL_DEFINITIONS = [
     type: "function",
     function: {
       name: "delete_board_node",
-      description: "Delete a node from a thinking board. This also removes all child nodes and connected edges.",
+      description: "删除画板节点及其所有子节点和连接的边。",
       parameters: {
         type: "object",
         properties: {
@@ -358,6 +373,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "destructive",
+    plan_allowed: false,
     confirm_template: "删除节点及其所有子节点",
     task_auto: false,
     task_phases: [],
@@ -367,7 +383,7 @@ export const TOOL_DEFINITIONS = [
     type: "function",
     function: {
       name: "create_board_edge",
-      description: "Create an edge between two nodes on a thinking board. Typically links a hypothesis to an evidence node with a relation type.",
+      description: "在画板节点之间创建关系边（supports/refutes/neutral）。",
       parameters: {
         type: "object",
         properties: {
@@ -380,6 +396,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "write",
+    plan_allowed: true,
     confirm_template: "创建{relation_type}关系边",
     task_auto: false,
     task_phases: ["synthesize"],
@@ -390,7 +407,7 @@ export const TOOL_DEFINITIONS = [
     type: "function",
     function: {
       name: "delete_board_edge",
-      description: "Delete an edge (relationship) from a thinking board.",
+      description: "删除画板上的关系边。",
       parameters: {
         type: "object",
         properties: {
@@ -400,6 +417,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "destructive",
+    plan_allowed: false,
     confirm_template: "删除关系边",
     task_auto: false,
     task_phases: [],
@@ -442,6 +460,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "draft",
+    plan_allowed: false,
     task_auto: false,
     task_phases: ["synthesize"],
     task_capability: "structure_mutation",
@@ -453,7 +472,7 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "get_board_health",
       description:
-        "Get the argument health status for a topic's thinking board. Returns per-hypothesis evidence balance (supports vs refutes), bias warnings, blind spots, and orphan card count. No AI call needed — pure data computation.",
+        "获取主题的论证健康状态。返回: {total_hypotheses, total_evidence, blind_spots, hypotheses_summary: [{text, support, refute, status}], unanswered_questions}。纯数据计算，无 AI 调用。",
       parameters: {
         type: "object",
         properties: {
@@ -463,6 +482,7 @@ export const TOOL_DEFINITIONS = [
       },
     },
     side_effect: "read_only",
+    plan_allowed: true,
     task_auto: true,
     task_phases: [],
     task_capability: "knowledge_read",
@@ -486,6 +506,7 @@ export const TOOL_DEFINITIONS = [
       }
     },
     side_effect: "read_only",
+    plan_allowed: false,
     task_auto: false,
     task_phases: [],
     task_capability: "meta",
@@ -507,4 +528,60 @@ export function buildConfirmMessage(name, args) {
   const tmpl = TOOL_MAP[name]?.confirm_template;
   if (!tmpl) return `执行 ${name}`;
   return tmpl.replace(/\{(\w+)\}/g, (_, key) => args[key] ?? key);
+}
+
+/**
+ * Summarize a tool result into a short display string.
+ * Single source of truth — used by orchestrator and executor.
+ */
+export function summarizeToolResult(tool, result) {
+  if (!result) return "无结果";
+  if (result.error) return `错误: ${result.error}`;
+
+  switch (tool) {
+    case "fetch_rss":
+      return `抓取了 ${result.items?.length || 0} 条 RSS 条目`;
+    case "semantic_search":
+      return `找到 ${result.total || result.results?.length || 0} 条相关内容`;
+    case "search_cards":
+      return `找到 ${result.count || result.cards?.length || 0} 张相关卡片`;
+    case "ingest_url":
+      return `已摄入: ${result.title || result.material_id || "unknown"}`;
+    case "create_card": {
+      const summary = `已创建卡片: ${result.card?.title || result.message || ""}`;
+      return result.snippet_warning ? `${summary} ⚠ ${result.snippet_warning}` : summary;
+    }
+    case "list_cards":
+      return `列出 ${result.total || result.cards?.length || 0} 张卡片`;
+    case "list_topics":
+      return `列出 ${result.topics?.length || 0} 个主题`;
+    case "list_boards":
+      return `列出 ${result.boards?.length || 0} 个论证板`;
+    case "get_board":
+      return `加载论证板: ${result.board?.title || ""}`;
+    case "list_documents":
+      return `列出 ${result.documents?.length || 0} 份文档`;
+    case "get_document":
+      return `加载文档: ${result.document?.title || ""}`;
+    case "list_sources":
+      return `列出 ${result.sources?.length || 0} 个来源`;
+    case "get_card":
+      return result.card ? `卡片: ${result.card.title || result.card.summary?.slice(0, 30) || ""}` : "未找到";
+    case "create_board_node":
+      return result.message || "节点已创建";
+    case "update_board_node":
+      return result.message || "节点已更新";
+    case "delete_board_node":
+      return result.message || "节点已删除";
+    case "create_board_edge":
+      return result.message || "关系已创建";
+    case "delete_board_edge":
+      return result.message || "关系已删除";
+    case "propose_board_changes":
+      return `草拟了 ${result.changes_count || 0} 个更改`;
+    case "get_board_health":
+      return `假说: ${result.total_hypotheses || 0}, 盲点: ${result.blind_spots || 0}`;
+    default:
+      return JSON.stringify(result).slice(0, 80);
+  }
 }
