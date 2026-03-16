@@ -37,7 +37,7 @@ function TopicCard({ topic, onEdit, onDelete }) {
         <div className="relative">
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+            className="p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
             aria-label="Open topic actions"
             style={{ color: 'var(--text-2)' }}
           >
@@ -49,7 +49,7 @@ function TopicCard({ topic, onEdit, onDelete }) {
               <div className="absolute right-0 top-full mt-1 rounded-lg shadow-lg py-1 z-20 min-w-[120px] glass-surface">
                 <button
                   onClick={() => { onEdit(topic); setMenuOpen(false); }}
-                  className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors"
+                  className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors cursor-pointer"
                   style={{ color: 'var(--text-1)' }}
                 >
                   <Edit3 className="w-4 h-4" />
@@ -57,7 +57,7 @@ function TopicCard({ topic, onEdit, onDelete }) {
                 </button>
                 <button
                   onClick={() => { onDelete(topic.id); setMenuOpen(false); }}
-                  className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors"
+                  className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors cursor-pointer"
                   style={{ color: '#FB7185' }}
                 >
                   <Trash2 className="w-4 h-4" />
@@ -127,7 +127,7 @@ function CreateTopicModal({ isOpen, onClose, onSubmit, editingTopic }) {
           <h2 className="text-xl font-semibold" style={{ color: 'var(--text-0)' }}>
             {editingTopic ? '编辑 Topic' : '新建 Topic'}
           </h2>
-          <button onClick={onClose} className="p-2 rounded-lg transition-colors" aria-label="Close topic modal" style={{ color: 'var(--text-2)' }}>
+          <button onClick={onClose} className="p-2 rounded-lg transition-colors cursor-pointer" aria-label="Close topic modal" style={{ color: 'var(--text-2)' }}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -170,7 +170,7 @@ function CreateTopicModal({ isOpen, onClose, onSubmit, editingTopic }) {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2.5 font-medium rounded-xl transition-colors"
+              className="flex-1 px-4 py-2.5 font-medium rounded-xl transition-colors cursor-pointer"
               style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-1)', border: '1px solid var(--stroke-0)' }}
             >
               取消
@@ -178,7 +178,7 @@ function CreateTopicModal({ isOpen, onClose, onSubmit, editingTopic }) {
             <button
               type="submit"
               disabled={!title.trim() || loading}
-              className="flex-1 px-4 py-2.5 font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-2.5 font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
               style={{ background: 'var(--accent-600)', color: 'white' }}
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -245,7 +245,7 @@ function TopicsPage() {
         </div>
         <button
           onClick={() => { setEditingTopic(null); setModalOpen(true); }}
-          className="flex items-center gap-2 px-4 py-2.5 font-medium rounded-xl transition-colors btn-press"
+          className="flex items-center gap-2 px-4 py-2.5 font-medium rounded-xl transition-colors btn-press cursor-pointer"
           style={{ background: 'var(--accent-600)', color: 'white' }}
         >
           <Plus className="w-5 h-5" />
@@ -272,7 +272,7 @@ function TopicsPage() {
           <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>创建一个 Topic 来组织你的知识卡片</p>
           <button
             onClick={() => setModalOpen(true)}
-            className="mt-4 px-4 py-2 rounded-lg font-medium transition-colors"
+            className="mt-4 px-4 py-2.5 rounded-lg font-medium transition-colors cursor-pointer"
             style={{ background: 'var(--accent-600)', color: 'white' }}
           >
             创建第一个 Topic

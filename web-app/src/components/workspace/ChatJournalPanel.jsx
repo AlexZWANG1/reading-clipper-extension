@@ -248,7 +248,9 @@ export default function ChatJournalPanel({ className }) {
         setConfirming(true);
         try {
             const confirmedIds = pendingActions.map((a) => a.id);
-            const data = await chatApi.confirm(pendingMessages, pendingToolCalls, confirmedIds);
+            const data = await chatApi.confirm(pendingMessages, pendingToolCalls, confirmedIds, {
+                surfaceContext: storedContext,
+            });
             setPendingActions(null);
             setPendingMessages(null);
             setPendingToolCalls(null);

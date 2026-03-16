@@ -78,9 +78,10 @@ function ConversationSidebar() {
         </span>
         <button
           onClick={handleNewConversation}
-          className="p-1.5 rounded-lg transition-colors hover:bg-black/5"
+          className="p-1.5 rounded-lg cursor-pointer transition-colors hover:bg-[var(--surface-50)]"
           style={{ color: 'var(--accent-500)' }}
           title="新会话"
+          aria-label="新建会话"
         >
           <Plus className="w-4 h-4" />
         </button>
@@ -135,10 +136,10 @@ function ConversationSidebar() {
                           outline: 'none',
                         }}
                       />
-                      <button onClick={handleSaveRename} className="p-0.5" style={{ color: '#22c55e' }}>
+                      <button onClick={handleSaveRename} className="p-1.5 cursor-pointer transition-colors rounded" style={{ color: '#22c55e' }} aria-label="确认重命名">
                         <Check className="w-3 h-3" />
                       </button>
-                      <button onClick={handleCancelRename} className="p-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                      <button onClick={handleCancelRename} className="p-1.5 cursor-pointer transition-colors rounded" style={{ color: 'var(--text-tertiary)' }} aria-label="取消重命名">
                         <X className="w-3 h-3" />
                       </button>
                     </div>
@@ -157,15 +158,17 @@ function ConversationSidebar() {
                       <div className="hidden group-hover:flex items-center gap-0.5">
                         <button
                           onClick={(e) => handleStartRename(e, conv)}
-                          className="p-1 rounded transition-colors hover:bg-black/5"
+                          className="p-1.5 rounded cursor-pointer transition-colors hover:bg-[var(--surface-50)]"
                           style={{ color: 'var(--text-tertiary)' }}
+                          aria-label="重命名会话"
                         >
                           <Pencil className="w-3 h-3" />
                         </button>
                         <button
                           onClick={(e) => handleDelete(e, conv.id)}
-                          className="p-1 rounded transition-colors hover:bg-red-50"
+                          className="p-1.5 rounded cursor-pointer transition-colors hover:bg-[rgba(195,58,48,0.06)]"
                           style={{ color: '#ef4444' }}
+                          aria-label="删除会话"
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>

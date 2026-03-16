@@ -1,11 +1,14 @@
-// ========= DocumentView — Structured Research Report (Spec §4, §14) =========
-// Stage 1: Auto-generated read-only report from Q→H→E board data.
+// ========= DocumentView — Editable Research Report (Spec §4, §14) =========
+// Two-face ("一体两面") of the same board data as BoardCanvas.
 // Each question becomes a section, hypotheses become subsections with
 // evidence bullets and confidence indicators.
-// Same data as structure view — both read from board nodes/edges.
+// Editing here saves via boardsApi and syncs back to BoardCanvas.
 
-import { useState, useEffect, useMemo } from 'react';
-import { Loader2, FileText, AlertTriangle, CheckCircle, HelpCircle } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import {
+    Loader2, FileText, AlertTriangle, CheckCircle, HelpCircle,
+    Plus, Trash2, ChevronDown,
+} from 'lucide-react';
 import { boardsApi } from '../../lib/api';
 import { useWorkspaceStore } from '../../lib/store';
 import { BOARD_PALETTE } from './BoardCanvas';
@@ -23,13 +26,70 @@ function getConfidence(level) {
     return CONFIDENCE_LABELS[level] || CONFIDENCE_LABELS[0];
 }
 
-export default function DocumentView({ topicId, className }) {
+const HYPO_STATES = [
+    { value: 'pending', label: '待验证', color: 'var(--text-2)' },
+    { value: 'supported', label: '已支持', color: '#18A06A' },
+    { value: 'refuted', label: '已否定', color: '#C33A30' },
+    { value: 'revised', label: '已修订', color: '#D97706' },
+];
+
+const RELATION_TYPES = [
+    { value: 'supports', label: '支持', color: BOARD_PALETTE.evidence, symbol: '✓' },
+    { value: 'refutes', label: '反驳', color: BOARD_PALETTE.refute, symbol: '✗' },
+    { value: 'neutral', label: '中立', color: BOARD_PALETTE.neutral, symbol: '–' },
+];
+
+// ─── Inline editable text ───
+function InlineEdit({ value, onSave, className, style, tag: Tag = 'span', placeholder = '点击编辑...' }) {
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft] = useState(value);
+    const inputRef = useRef(null);
+
+    useEffect(() => { setDraft(value); }, [value]);
+    useEffect(() => { if (editing && inputRef.current) inputRef.current.focus(); }, [editing]);
+
+    const commit = () => {
+        setEditing(false);
+        const trimmed = draft.trim();
+        if (trimmed && trimmed !== value) onSave(trimmed);
+        else setDraft(value);
+    };
+
+    if (!editing) {
+        return (
+            <Tag
+                className={`cursor-text hover:bg-black/5 rounded px-0.5 -mx-0.5 transition-colors ${className || ''}`}
+                style={style}
+                onClick={() => setEditing(true)}
+                title="点击编辑"
+            >
+                {value || placeholder}
+            </Tag>
+        );
+    }
+
+    return (
+        <input
+            ref={inputRef}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value); setEditing(false); } }}
+            className={`outline-none bg-transparent border-b-2 w-full ${className || ''}`}
+            style={{ ...style, borderColor: 'var(--accent-400)' }}
+            placeholder={placeholder}
+        />
+    );
+}
+
+export default function DocumentView({ topicId, boardId, className }) {
     const [loading, setLoading] = useState(true);
     const [boardData, setBoardData] = useState(null);
     const [topicData, setTopicData] = useState(null);
     const boardRefreshToken = useWorkspaceStore(s => s.boardRefreshToken);
+    const invalidateBoard = useWorkspaceStore(s => s.invalidateBoard);
 
-    // Reload when topicId changes or board is invalidated (Spec §14)
+    // Reload when topicId changes or board is invalidated
     useEffect(() => {
         if (!topicId) return;
         setLoading(true);
@@ -42,16 +102,60 @@ export default function DocumentView({ topicId, className }) {
             .finally(() => setLoading(false));
     }, [topicId, boardRefreshToken]);
 
+    const resolvedBoardId = boardId || boardData?.id;
+
+    // ─── Node CRUD helpers ───
+    const updateNode = useCallback(async (nodeId, updates) => {
+        if (!resolvedBoardId) return;
+        try {
+            await boardsApi.updateNode(resolvedBoardId, nodeId, updates);
+            invalidateBoard();
+        } catch (err) {
+            console.error('DocumentView updateNode failed:', err);
+        }
+    }, [resolvedBoardId, invalidateBoard]);
+
+    const createNode = useCallback(async (data) => {
+        if (!resolvedBoardId) return null;
+        try {
+            const node = await boardsApi.createNode(resolvedBoardId, data);
+            invalidateBoard();
+            return node;
+        } catch (err) {
+            console.error('DocumentView createNode failed:', err);
+            return null;
+        }
+    }, [resolvedBoardId, invalidateBoard]);
+
+    const deleteNode = useCallback(async (nodeId) => {
+        if (!resolvedBoardId) return;
+        try {
+            await boardsApi.deleteNode(resolvedBoardId, nodeId);
+            invalidateBoard();
+        } catch (err) {
+            console.error('DocumentView deleteNode failed:', err);
+        }
+    }, [resolvedBoardId, invalidateBoard]);
+
+    const updateEdge = useCallback(async (edgeId, updates) => {
+        if (!resolvedBoardId) return;
+        try {
+            await boardsApi.updateEdge(resolvedBoardId, edgeId, updates);
+            invalidateBoard();
+        } catch (err) {
+            console.error('DocumentView updateEdge failed:', err);
+        }
+    }, [resolvedBoardId, invalidateBoard]);
+
     // Build tree structure from flat nodes/edges
-    const sections = useMemo(() => {
-        if (!boardData?.nodes?.length) return [];
+    const { sections, edgeMap } = useMemo(() => {
+        if (!boardData?.nodes?.length) return { sections: [], edgeMap: {} };
 
         const nodes = boardData.nodes;
         const edges = boardData.edges || [];
 
-        // Build parent→children map
-        const childrenMap = {}; // parentId → [child nodes]
-        const nodeMap = {};     // id → node
+        const childrenMap = {};
+        const nodeMap = {};
         const rootIds = new Set();
 
         nodes.forEach(n => {
@@ -64,13 +168,10 @@ export default function DocumentView({ topicId, className }) {
             }
         });
 
-        // Build edge relation map for evidence
-        const edgeRelMap = {}; // targetNodeId → relation_type
-        edges.forEach(e => {
-            edgeRelMap[e.target_node_id] = e.relation_type;
-        });
+        // Build edge map: targetNodeId → edge object
+        const eMap = {};
+        edges.forEach(e => { eMap[e.target_node_id] = e; });
 
-        // Recursive section builder
         function buildSection(node, depth = 0) {
             const children = childrenMap[node.id] || [];
             const hypotheses = children.filter(c => c.node_type === 'hypothesis');
@@ -86,7 +187,8 @@ export default function DocumentView({ topicId, className }) {
                         node: h,
                         evidence: evidence.map(e => ({
                             node: e,
-                            relation: edgeRelMap[e.id] || 'neutral',
+                            relation: eMap[e.id]?.relation_type || 'neutral',
+                            edgeId: eMap[e.id]?.id,
                         })),
                     };
                 }),
@@ -94,16 +196,15 @@ export default function DocumentView({ topicId, className }) {
             };
         }
 
-        // Start from root question nodes
         const rootNodes = nodes.filter(n => rootIds.has(n.id) && n.node_type === 'question');
-        return rootNodes.map(r => buildSection(r));
+        return { sections: rootNodes.map(r => buildSection(r)), edgeMap: eMap };
     }, [boardData]);
 
     if (loading) {
         return (
             <div className={`flex items-center justify-center h-full ${className || ''}`} style={{ background: 'var(--bg-0)' }}>
                 <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--accent-400)' }} />
-                <span className="ml-2 text-sm" style={{ color: 'var(--text-2)' }}>生成研究报告...</span>
+                <span className="ml-2 text-sm" style={{ color: 'var(--text-2)' }}>加载研究报告...</span>
             </div>
         );
     }
@@ -115,6 +216,13 @@ export default function DocumentView({ topicId, className }) {
                 <p className="text-sm" style={{ color: 'var(--text-2)' }}>
                     在论证板上添加问题和假说后，研究报告会自动生成
                 </p>
+                <button
+                    onClick={() => createNode({ node_type: 'question', content: '新研究问题', position_x: 0, position_y: 0 })}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+                    style={{ background: 'var(--accent-500)', color: '#fff' }}
+                >
+                    <Plus size={14} /> 添加第一个问题
+                </button>
             </div>
         );
     }
@@ -127,101 +235,277 @@ export default function DocumentView({ topicId, className }) {
                     {topicData?.title || '研究报告'}
                 </h1>
                 <p className="text-sm mb-8" style={{ color: 'var(--text-2)' }}>
-                    基于论证板数据自动生成 · {boardData.nodes.length} 个节点
+                    双击文本可直接编辑 · {boardData.nodes.length} 个节点
                 </p>
 
                 <div className="h-px mb-8" style={{ background: 'var(--stroke-0)' }} />
 
                 {/* Sections */}
                 {sections.map((section, i) => (
-                    <Section key={section.node.id} section={section} index={i + 1} />
+                    <Section
+                        key={section.node.id}
+                        section={section}
+                        index={i + 1}
+                        onUpdateNode={updateNode}
+                        onCreateNode={createNode}
+                        onDeleteNode={deleteNode}
+                        onUpdateEdge={updateEdge}
+                    />
                 ))}
+
+                {/* Add root question */}
+                <button
+                    onClick={() => createNode({ node_type: 'question', content: '新研究问题', position_x: 0, position_y: 100 * sections.length })}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors mt-4 cursor-pointer"
+                    style={{ color: 'var(--accent-400)', border: '1px dashed var(--stroke-1)' }}
+                >
+                    <Plus size={13} /> 添加问题
+                </button>
             </div>
         </div>
     );
 }
 
-function Section({ section, index, parentIndex = '' }) {
+function Section({ section, index, parentIndex = '', onUpdateNode, onCreateNode, onDeleteNode, onUpdateEdge }) {
     const { node, hypotheses, subSections, depth } = section;
     const sectionNum = parentIndex ? `${parentIndex}.${index}` : `${index}`;
-    const questionText = node.content?.text || node.content || '未命名问题';
+    const questionText = (typeof node.content === 'string' ? node.content : node.content?.text) || '未命名问题';
+    const [hovered, setHovered] = useState(false);
 
-    const HeadingTag = depth === 0 ? 'h2' : depth === 1 ? 'h3' : 'h4';
     const headingSize = depth === 0 ? 'text-xl' : depth === 1 ? 'text-lg' : 'text-base';
 
+    const handleSaveQuestion = (text) => {
+        onUpdateNode(node.id, { content: text });
+    };
+
+    const handleAddHypothesis = () => {
+        onCreateNode({
+            node_type: 'hypothesis',
+            claim: '新假说',
+            parent_id: node.id,
+            hypo_state: 'pending',
+            confidence: 0,
+            position_x: 0,
+            position_y: 0,
+        });
+    };
+
+    const handleAddSubQuestion = () => {
+        onCreateNode({
+            node_type: 'question',
+            content: '子问题',
+            parent_id: node.id,
+            position_x: 0,
+            position_y: 0,
+        });
+    };
+
     return (
-        <div className="mb-8">
-            <HeadingTag className={`${headingSize} font-bold mb-4`} style={{ color: 'var(--text-0)' }}>
-                <span style={{ color: 'var(--accent-400)' }}>{sectionNum}.</span>{' '}
-                {questionText}
-            </HeadingTag>
+        <div
+            className="mb-8 group/section"
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+        >
+            <div className="flex items-start gap-2">
+                <div className="flex-1">
+                    <span className={`${headingSize} font-bold`} style={{ color: 'var(--accent-400)' }}>{sectionNum}.</span>{' '}
+                    <InlineEdit
+                        value={questionText}
+                        onSave={handleSaveQuestion}
+                        className={`${headingSize} font-bold`}
+                        style={{ color: 'var(--text-0)' }}
+                        tag="span"
+                    />
+                </div>
+                {hovered && (
+                    <button
+                        onClick={() => { if (confirm('删除此问题及其所有子节点？')) onDeleteNode(node.id); }}
+                        className="shrink-0 p-1 rounded opacity-60 hover:opacity-100 transition-opacity cursor-pointer"
+                        style={{ color: '#C33A30' }}
+                        title="删除问题"
+                    >
+                        <Trash2 size={14} />
+                    </button>
+                )}
+            </div>
 
             {hypotheses.length === 0 && subSections.length === 0 && (
-                <p className="text-sm italic" style={{ color: 'var(--text-2)' }}>
+                <p className="text-sm italic mt-2" style={{ color: 'var(--text-2)' }}>
                     暂无假说或子问题
                 </p>
             )}
 
             {hypotheses.map((hypo, hi) => (
-                <HypothesisBlock key={hypo.node.id} hypo={hypo} index={hi + 1} />
+                <HypothesisBlock
+                    key={hypo.node.id}
+                    hypo={hypo}
+                    index={hi + 1}
+                    onUpdateNode={onUpdateNode}
+                    onCreateNode={onCreateNode}
+                    onDeleteNode={onDeleteNode}
+                    onUpdateEdge={onUpdateEdge}
+                    parentId={node.id}
+                />
             ))}
 
             {subSections.map((sub, si) => (
-                <Section key={sub.node.id} section={sub} index={si + 1} parentIndex={sectionNum} />
+                <Section
+                    key={sub.node.id}
+                    section={sub}
+                    index={si + 1}
+                    parentIndex={sectionNum}
+                    onUpdateNode={onUpdateNode}
+                    onCreateNode={onCreateNode}
+                    onDeleteNode={onDeleteNode}
+                    onUpdateEdge={onUpdateEdge}
+                />
             ))}
+
+            {/* Add buttons */}
+            {hovered && (
+                <div className="flex items-center gap-2 mt-3 ml-4">
+                    <button
+                        onClick={handleAddHypothesis}
+                        className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer"
+                        style={{ color: BOARD_PALETTE.hypothesis, border: `1px dashed ${BOARD_PALETTE.hypothesis}40` }}
+                    >
+                        <Plus size={11} /> 假说
+                    </button>
+                    <button
+                        onClick={handleAddSubQuestion}
+                        className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer"
+                        style={{ color: 'var(--accent-400)', border: '1px dashed var(--stroke-1)' }}
+                    >
+                        <Plus size={11} /> 子问题
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
 
-function HypothesisBlock({ hypo, index }) {
+function HypothesisBlock({ hypo, index, onUpdateNode, onCreateNode, onDeleteNode, onUpdateEdge, parentId }) {
     const { node, evidence } = hypo;
-    const claim = node.claim || node.content?.text || '未命名假说';
+    const claim = node.claim || (typeof node.content === 'string' ? node.content : node.content?.text) || '未命名假说';
     const state = node.hypo_state || 'pending';
     const confidence = getConfidence(node.confidence || 0);
     const ConfIcon = confidence.icon;
+    const [hovered, setHovered] = useState(false);
+    const [stateDropdown, setStateDropdown] = useState(false);
 
-    const stateLabel = {
-        pending: '待验证',
-        supported: '已支持',
-        refuted: '已否定',
-        revised: '已修订',
-    }[state] || state;
+    const currentState = HYPO_STATES.find(s => s.value === state) || HYPO_STATES[0];
 
-    const stateColor = {
-        pending: 'var(--text-2)',
-        supported: '#18A06A',
-        refuted: '#C33A30',
-        revised: '#D97706',
-    }[state] || 'var(--text-2)';
+    const handleSaveClaim = (text) => {
+        onUpdateNode(node.id, { claim: text });
+    };
+
+    const handleStateChange = (newState) => {
+        onUpdateNode(node.id, { hypo_state: newState });
+        setStateDropdown(false);
+    };
+
+    const handleConfidenceChange = (delta) => {
+        const newConf = Math.max(0, Math.min(5, (node.confidence || 0) + delta));
+        onUpdateNode(node.id, { confidence: newConf });
+    };
+
+    const handleAddEvidence = () => {
+        onCreateNode({
+            node_type: 'evidence',
+            content: '新证据',
+            parent_id: node.id,
+            evidence_type: 'manual',
+            position_x: 0,
+            position_y: 0,
+        });
+    };
 
     return (
-        <div className="ml-4 mb-6 pl-4" style={{ borderLeft: `2px solid ${BOARD_PALETTE.hypothesis}` }}>
+        <div
+            className="ml-4 mb-6 pl-4 group/hypo"
+            style={{ borderLeft: `2px solid ${BOARD_PALETTE.hypothesis}` }}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => { setHovered(false); setStateDropdown(false); }}
+        >
             {/* Hypothesis header */}
             <div className="flex items-start gap-2 mb-2">
-                <span className="text-sm font-semibold" style={{ color: 'var(--text-0)' }}>
+                <span className="text-sm font-semibold shrink-0" style={{ color: 'var(--text-0)' }}>
                     假说 {index}:
                 </span>
-                <span className="text-sm flex-1" style={{ color: 'var(--text-0)' }}>
-                    {claim}
-                </span>
+                <InlineEdit
+                    value={claim}
+                    onSave={handleSaveClaim}
+                    className="text-sm flex-1"
+                    style={{ color: 'var(--text-0)' }}
+                />
+                {hovered && (
+                    <button
+                        onClick={() => { if (confirm('删除此假说及其证据？')) onDeleteNode(node.id); }}
+                        className="shrink-0 p-1 rounded opacity-60 hover:opacity-100 transition-opacity cursor-pointer"
+                        style={{ color: '#C33A30' }}
+                        title="删除假说"
+                    >
+                        <Trash2 size={13} />
+                    </button>
+                )}
             </div>
 
-            {/* Status badges */}
+            {/* Status badges — editable */}
             <div className="flex items-center gap-3 mb-3">
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${stateColor}15`, color: stateColor }}>
-                    {stateLabel}
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10px]" style={{ color: confidence.color }}>
+                <div className="relative">
+                    <button
+                        onClick={() => setStateDropdown(!stateDropdown)}
+                        className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium cursor-pointer transition-colors"
+                        style={{ background: `${currentState.color}15`, color: currentState.color }}
+                    >
+                        {currentState.label}
+                        <ChevronDown size={10} />
+                    </button>
+                    {stateDropdown && (
+                        <>
+                            <div className="fixed inset-0 z-10" onClick={() => setStateDropdown(false)} />
+                            <div className="absolute left-0 top-full mt-1 rounded-lg shadow-lg py-1 z-20 min-w-[90px]" style={{ background: 'var(--surface-0)', border: '1px solid var(--stroke-0)' }}>
+                                {HYPO_STATES.map(s => (
+                                    <button
+                                        key={s.value}
+                                        onClick={() => handleStateChange(s.value)}
+                                        className="w-full px-3 py-1 text-left text-[11px] cursor-pointer transition-colors hover:bg-black/5"
+                                        style={{ color: s.color }}
+                                    >
+                                        {s.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                {/* Confidence — click to cycle */}
+                <button
+                    onClick={() => handleConfidenceChange(1)}
+                    onContextMenu={e => { e.preventDefault(); handleConfidenceChange(-1); }}
+                    className="inline-flex items-center gap-1 text-[10px] cursor-pointer transition-colors"
+                    style={{ color: confidence.color }}
+                    title="左键 +1 / 右键 -1"
+                >
                     <ConfIcon size={11} />
                     {confidence.text}
-                </span>
+                </button>
             </div>
 
             {/* Evidence list */}
             {evidence.length > 0 && (
                 <div className="space-y-2">
-                    {evidence.map(({ node: ev, relation }) => (
-                        <EvidenceBullet key={ev.id} evidence={ev} relation={relation} />
+                    {evidence.map(({ node: ev, relation, edgeId }) => (
+                        <EvidenceBullet
+                            key={ev.id}
+                            evidence={ev}
+                            relation={relation}
+                            edgeId={edgeId}
+                            onUpdateNode={onUpdateNode}
+                            onDeleteNode={onDeleteNode}
+                            onUpdateEdge={onUpdateEdge}
+                        />
                     ))}
                 </div>
             )}
@@ -231,28 +515,61 @@ function HypothesisBlock({ hypo, index }) {
                     暂无证据
                 </p>
             )}
+
+            {/* Add evidence button */}
+            {hovered && (
+                <button
+                    onClick={handleAddEvidence}
+                    className="flex items-center gap-1 px-2 py-1 mt-2 rounded text-[11px] font-medium transition-colors cursor-pointer"
+                    style={{ color: BOARD_PALETTE.evidence, border: `1px dashed ${BOARD_PALETTE.evidence}40` }}
+                >
+                    <Plus size={11} /> 证据
+                </button>
+            )}
         </div>
     );
 }
 
-function EvidenceBullet({ evidence, relation }) {
-    const text = evidence.content?.text || evidence.content || '';
+function EvidenceBullet({ evidence, relation, edgeId, onUpdateNode, onDeleteNode, onUpdateEdge }) {
+    const text = (typeof evidence.content === 'string' ? evidence.content : evidence.content?.text) || '';
     const cardTitle = evidence.card?.title;
     const sourceName = evidence.card?.source?.name;
+    const [hovered, setHovered] = useState(false);
 
-    const relationConfig = {
-        supports: { label: '支持', color: BOARD_PALETTE.evidence, symbol: '✓' },
-        refutes: { label: '反驳', color: BOARD_PALETTE.refute, symbol: '✗' },
-        neutral: { label: '中立', color: BOARD_PALETTE.neutral, symbol: '–' },
-    }[relation] || { label: '证据', color: BOARD_PALETTE.neutral, symbol: '•' };
+    const relationConfig = RELATION_TYPES.find(r => r.value === relation) || RELATION_TYPES[2];
+
+    const handleSaveContent = (newText) => {
+        onUpdateNode(evidence.id, { content: newText });
+    };
+
+    const cycleRelation = () => {
+        if (!edgeId) return;
+        const idx = RELATION_TYPES.findIndex(r => r.value === relation);
+        const next = RELATION_TYPES[(idx + 1) % RELATION_TYPES.length];
+        onUpdateEdge(edgeId, { relation_type: next.value });
+    };
 
     return (
-        <div className="flex items-start gap-2 py-1.5 px-3 rounded-lg text-xs" style={{ background: 'var(--surface-1)' }}>
-            <span className="shrink-0 font-bold mt-0.5" style={{ color: relationConfig.color }}>
+        <div
+            className="flex items-start gap-2 py-1.5 px-3 rounded-lg text-xs"
+            style={{ background: 'var(--surface-1)' }}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+        >
+            <button
+                onClick={cycleRelation}
+                className="shrink-0 font-bold mt-0.5 cursor-pointer transition-colors"
+                style={{ color: relationConfig.color }}
+                title="点击切换：支持/反驳/中立"
+            >
                 {relationConfig.symbol}
-            </span>
+            </button>
             <div className="flex-1 min-w-0">
-                <span style={{ color: 'var(--text-1)' }}>{text || '(无内容)'}</span>
+                <InlineEdit
+                    value={text || '(无内容)'}
+                    onSave={handleSaveContent}
+                    style={{ color: 'var(--text-1)' }}
+                />
                 {cardTitle && (
                     <span className="ml-1 text-[10px]" style={{ color: 'var(--accent-400)' }}>
                         [{cardTitle}]
@@ -264,9 +581,24 @@ function EvidenceBullet({ evidence, relation }) {
                     </span>
                 )}
             </div>
-            <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded" style={{ background: `${relationConfig.color}15`, color: relationConfig.color }}>
+            <span
+                onClick={cycleRelation}
+                className="shrink-0 text-[9px] px-1.5 py-0.5 rounded cursor-pointer"
+                style={{ background: `${relationConfig.color}15`, color: relationConfig.color }}
+                title="点击切换关系类型"
+            >
                 {relationConfig.label}
             </span>
+            {hovered && (
+                <button
+                    onClick={() => onDeleteNode(evidence.id)}
+                    className="shrink-0 p-0.5 rounded opacity-60 hover:opacity-100 transition-opacity cursor-pointer"
+                    style={{ color: '#C33A30' }}
+                    title="删除证据"
+                >
+                    <Trash2 size={11} />
+                </button>
+            )}
         </div>
     );
 }

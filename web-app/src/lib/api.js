@@ -621,10 +621,13 @@ export const chatApi = {
       method: 'POST',
       body: JSON.stringify({ messages }),
     }),
-  confirm: (messages, pendingToolCalls, confirmedIds) =>
+  confirm: (messages, pendingToolCalls, confirmedIds, { surfaceContext } = {}) =>
     request('/v2/chat/confirm', {
       method: 'POST',
-      body: JSON.stringify({ messages, pendingToolCalls, confirmedIds }),
+      body: JSON.stringify({
+        messages, pendingToolCalls, confirmedIds,
+        surface_context: surfaceContext || null,
+      }),
     }),
   executePlan: (conversationId, planSpec, planDisplay, topicId) =>
     request('/v2/chat/execute-plan', {

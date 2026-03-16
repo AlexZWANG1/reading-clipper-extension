@@ -7,9 +7,10 @@ import {
   User,
   Sparkles,
   FileText,
-  ListChecks,
+  Bot,
   Settings,
   Scale,
+  Rss,
 } from 'lucide-react';
 import { useAuthStore, useUIStore } from '../lib/store';
 import GlobalChatPanel from './GlobalChatPanel';
@@ -20,13 +21,14 @@ const navGroups = [
     title: 'Research',
     items: [
       { to: '/', icon: Folder, label: '研究主页', end: true },
-      { to: '/tasks', icon: ListChecks, label: '研究任务' },
+      { to: '/tasks', icon: Bot, label: 'AI 助手' },
     ],
   },
   {
     title: 'Library',
     items: [
       { to: '/materials', icon: FileText, label: '材料库' },
+      { to: '/rss', icon: Rss, label: '信息源' },
     ],
   },
 ];
@@ -46,7 +48,7 @@ function Layout() {
     navigate('/login');
   };
 
-  const isFullScreenPage = /^\/$|^\/topics\/[^/]+$|^\/cards$/.test(location.pathname);
+  const isFullScreenPage = /^\/$|^\/topics\/[^/]+$|^\/cards$|^\/tasks$/.test(location.pathname);
 
   return (
     <div className="h-screen flex flex-col lg:flex-row overflow-hidden" style={{ background: 'var(--bg-base)' }}>
@@ -61,8 +63,8 @@ function Layout() {
       >
         <button
           onClick={toggleSidebar}
-          className="p-2 -ml-2 rounded-lg transition-colors"
-          aria-label="Open navigation menu"
+          className="p-2.5 -ml-2 rounded-lg cursor-pointer transition-colors"
+          aria-label="打开菜单"
           style={{ color: 'var(--text-secondary)' }}
         >
           <Menu className="w-5 h-5" />
@@ -113,8 +115,8 @@ function Layout() {
           </div>
           <button
             onClick={toggleSidebar}
-            className="lg:hidden ml-auto p-1.5 transition-colors"
-            aria-label="Close navigation menu"
+            className="lg:hidden ml-auto p-2.5 cursor-pointer transition-colors"
+            aria-label="关闭菜单"
             style={{ color: 'var(--text-tertiary)' }}
           >
             <X className="w-5 h-5" />
@@ -199,8 +201,8 @@ function Layout() {
             </div>
             <button
               onClick={handleLogout}
-              className="p-2 rounded-lg transition-colors"
-              aria-label="Log out"
+              className="p-2 rounded-lg cursor-pointer transition-colors"
+              aria-label="退出登录"
               style={{ color: 'var(--text-tertiary)' }}
               title="Log out"
             >
@@ -225,7 +227,7 @@ function Layout() {
         )}
       </main>
 
-      <GlobalChatPanel />
+      {!/^\/tasks$|^\/chat$/.test(location.pathname) && <GlobalChatPanel />}
     </div>
   );
 }

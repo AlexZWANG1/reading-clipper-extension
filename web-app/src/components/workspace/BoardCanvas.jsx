@@ -160,7 +160,7 @@ export default function BoardCanvas({ topicId, onBoardLoaded, onOpenReaderAtQuot
 function BoardCanvasInner({ topicId, onBoardLoaded, onOpenReaderAtQuote, dragCardRef, focusCardId, className }) {
     const { screenToFlowPosition, setCenter } = useReactFlow();
     const { showToast } = useUIStore();
-    const { boardInvalidateCounter } = useChatStore();
+    const { boardInvalidateCounter, invalidateBoard } = useChatStore();
 
     // Board state
     const [boardId, setBoardId] = useState(null);
@@ -383,6 +383,11 @@ function BoardCanvasInner({ topicId, onBoardLoaded, onOpenReaderAtQuote, dragCar
 
     useEffect(() => { fetchDrafts(); }, [fetchDrafts]);
 
+    // Re-fetch drafts when board is invalidated (e.g. AI created a draft via chat)
+    useEffect(() => {
+        if (boardInvalidateCounter > 0) fetchDrafts();
+    }, [boardInvalidateCounter, fetchDrafts]);
+
     // ========= Draft Handlers =========
     const handleCommitAll = useCallback(async (draftId) => {
         try {
@@ -393,13 +398,14 @@ function BoardCanvasInner({ topicId, onBoardLoaded, onOpenReaderAtQuote, dragCar
             ));
             await boardsApi.commitDraft(boardId, draftId);
             setPendingDraft(null);
+            invalidateBoard();
             // Reload after animation settles
             setTimeout(() => loadBoard(), 500);
         } catch (err) {
             console.error('Commit draft failed:', err);
             showToast('提交草稿失败', 'error');
         }
-    }, [boardId, nodes, setNodes, loadBoard, showToast]);
+    }, [boardId, nodes, setNodes, loadBoard, showToast, invalidateBoard]);
 
     const handleRejectAll = useCallback(async (draftId) => {
         try {
@@ -422,13 +428,18 @@ function BoardCanvasInner({ topicId, onBoardLoaded, onOpenReaderAtQuote, dragCar
 
     const handleReview = useCallback(() => {
         if (!pendingDraft?.changes?.length) return;
-        const firstDraft = pendingDraft.changes.findIndex(c => c.action === 'add_node');
+        const firstDraft = pendingDraft.changes.findIndex(c => c.action === 'create_node');
         if (firstDraft >= 0) {
-            const nodeId = `draft-${firstDraft}`;
-            const node = nodes.find(n => n.id === nodeId);
-            if (node) {
-                setCenter(node.position.x + 100, node.position.y + 50, { zoom: 1.2, duration: 350 });
-            }
+            const firstChange = pendingDraft.changes[firstDraft];
+            const draftOrder = pendingDraft.changes
+                .slice(0, firstDraft + 1)
+                .filter(c => c.action === 'create_node').length - 1;
+            const parentNode = firstChange?.parent_id ? nodes.find(n => n.id === firstChange.parent_id) : null;
+            const x = parentNode ? parentNode.position.x + 40 : 120 + (draftOrder % 3) * 340;
+            const y = parentNode
+                ? parentNode.position.y + 210 + (draftOrder % 2) * 24
+                : 120 + Math.floor(draftOrder / 3) * 180;
+            setCenter(x + 120, y + 70, { zoom: 1.2, duration: 350 });
         }
     }, [pendingDraft, nodes, setCenter]);
 
@@ -447,12 +458,13 @@ function BoardCanvasInner({ topicId, onBoardLoaded, onOpenReaderAtQuote, dragCar
             } else {
                 setPendingDraft({ ...pendingDraft, changes: remaining });
             }
+            invalidateBoard();
             setTimeout(() => loadBoard(), 500);
         } catch (err) {
             console.error('Accept node failed:', err);
             showToast('接受节点失败', 'error');
         }
-    }, [boardId, pendingDraft, setNodes, loadBoard, showToast]);
+    }, [boardId, pendingDraft, setNodes, loadBoard, showToast, invalidateBoard]);
 
     const handleRejectNode = useCallback(async (draftNodeId) => {
         if (!pendingDraft) return;
@@ -799,18 +811,26 @@ function BoardCanvasInner({ topicId, onBoardLoaded, onOpenReaderAtQuote, dragCar
         });
 
         const draftNodes = (pendingDraft?.changes || [])
-            .filter(c => c.action === 'add_node')
-            .map((c, i) => ({
-                id: `draft-${i}`,
-                type: 'draftNode',
-                position: { x: 400 + i * 50, y: 500 + i * 80 },
-                data: {
-                    text: c.text || c.claim || '',
-                    node_type: c.node_type,
-                    onAccept: handleAcceptNode,
-                    onReject: handleRejectNode,
-                },
-            }));
+            .map((change, changeIndex) => ({ change, changeIndex }))
+            .filter(({ change }) => change.action === 'create_node')
+            .map(({ change, changeIndex }, draftOrder) => {
+                const parentNode = change.parent_id ? nodes.find(n => n.id === change.parent_id) : null;
+                const position = parentNode
+                    ? { x: parentNode.position.x + 40, y: parentNode.position.y + 210 + (draftOrder % 2) * 24 }
+                    : { x: 120 + (draftOrder % 3) * 340, y: 120 + Math.floor(draftOrder / 3) * 180 };
+                return {
+                    id: `draft-${changeIndex}`,
+                    type: 'draftNode',
+                    position,
+                    data: {
+                        text: change.text || change.claim || '',
+                        node_type: change.node_type,
+                        onAccept: handleAcceptNode,
+                        onReject: handleRejectNode,
+                        isDraft: true,
+                    },
+                };
+            });
 
         return [...mapped, ...draftNodes];
     }, [nodes, edges, handleNodeUpdate, handleDeleteNode, createChildNode, handleEdgeUpdate, focusedChainIds, pendingDraft, handleAcceptNode, handleRejectNode, lod]);
@@ -1280,7 +1300,7 @@ function BoardCanvasInner({ topicId, onBoardLoaded, onOpenReaderAtQuote, dragCar
             {/* Health Sidebar overlay (Spec §4, §11) */}
             {boardId && (
                 <div className="absolute top-4 right-4 z-10">
-                    <HealthSidebar boardId={boardId} invalidateCounter={0} />
+                    <HealthSidebar boardId={boardId} invalidateCounter={boardInvalidateCounter} />
                 </div>
             )}
         </div>

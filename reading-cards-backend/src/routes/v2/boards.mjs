@@ -20,7 +20,7 @@ import {
     getOrCreateBoardByTopic,
 } from "../../services/supabase/boards.mjs";
 import { listPendingDrafts, commitDraft, rejectDraft } from "../../agents/draftEngine.mjs";
-import { getResearchState, loadUserMethodology } from "../../agents/researchContext.mjs";
+import { getResearchState, loadUserMethodology, computeResearchState } from "../../agents/researchContext.mjs";
 
 const router = express.Router();
 
@@ -49,7 +49,7 @@ router.get("/", async (req, res) => {
  */
 router.get("/:id", async (req, res) => {
     try {
-        const board = await getFullBoard(req.supabase, req.params.id);
+        const board = await getFullBoard(req.supabase, req.params.id, req.user.id);
         if (!board) {
             return res.status(404).json({ ok: false, error: "画板不存在" });
         }
@@ -245,7 +245,8 @@ router.get("/:boardId/health", async (req, res) => {
             methodologyConfig = methodology?.config || null;
         } catch { /* ignore */ }
 
-        const state = await getResearchState(req.supabase, board.topic_id, methodologyConfig);
+        const state = await getResearchState(req.supabase, board.topic_id, methodologyConfig, 0);
+        res.set('Cache-Control', 'no-store');
         res.json({ ok: true, health: state });
     } catch (error) {
         console.error("获取画板健康状态失败：", error);
@@ -282,6 +283,15 @@ router.post("/:boardId/drafts/:draftId/commit", async (req, res) => {
             req.params.draftId,
             accepted_indices || null
         );
+        const board = await getBoardById(req.supabase, req.params.boardId);
+        if (board?.topic_id) {
+            let methodologyConfig = null;
+            try {
+                const methodology = await loadUserMethodology(req.supabase, req.user.id);
+                methodologyConfig = methodology?.config || null;
+            } catch { /* ignore */ }
+            await computeResearchState(req.supabase, board.topic_id, methodologyConfig);
+        }
         res.json({ ok: true, ...result });
     } catch (error) {
         console.error("提交草稿失败：", error);

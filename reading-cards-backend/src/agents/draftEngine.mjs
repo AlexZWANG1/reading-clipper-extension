@@ -83,6 +83,12 @@ export async function commitDraft(supabase, draftId, acceptedIndices = null) {
     if (change.action === 'create_node') {
       const parentId = resolveRef(change.parent_id, idMap);
       const cardId = resolveRef(change.card_id, idMap);
+      if (change.parent_id && !parentId) {
+        throw new Error(`Unresolved parent reference: ${change.parent_id}`);
+      }
+      if (change.card_id && !cardId) {
+        throw new Error(`Unresolved card reference: ${change.card_id}`);
+      }
 
       // Build content based on node type
       const content = {};
@@ -108,6 +114,9 @@ export async function commitDraft(supabase, draftId, acceptedIndices = null) {
       const node = await createNode(supabase, draft.board_id, nodeData);
       if (change.temp_id) {
         idMap[change.temp_id] = node.id;
+      }
+      if (change.__temp_id) {
+        idMap[change.__temp_id] = node.id;
       }
       createdNodes.push(node);
 
@@ -189,9 +198,31 @@ export async function listPendingDrafts(supabase, boardId) {
  */
 function resolveRef(value, idMap) {
   if (!value) return value;
-  if (typeof value === 'string' && value.startsWith('$')) {
-    const key = value.slice(1);
-    return idMap[key] || value;
+  if (typeof value === 'string') {
+    const key = parseDraftRefKey(value);
+    if (key) {
+      return idMap[key] || null;
+    }
   }
   return value;
+}
+
+function parseDraftRefKey(value) {
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  // $t1
+  if (raw.startsWith('$')) {
+    return raw.slice(1).trim() || null;
+  }
+
+  // {{new_node:t1}}
+  const braceMatch = raw.match(/^\{\{\s*new_node\s*:\s*([^}]+)\s*\}\}$/i);
+  if (braceMatch) return braceMatch[1].trim() || null;
+
+  // __new_node__, __new_node__:t1
+  const legacyMatch = raw.match(/^__new_node__(?::(.+))?$/i);
+  if (legacyMatch) return (legacyMatch[1] || '').trim() || '__new_node__';
+
+  return null;
 }

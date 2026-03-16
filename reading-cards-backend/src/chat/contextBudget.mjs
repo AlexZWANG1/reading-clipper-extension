@@ -4,16 +4,17 @@
 
 /**
  * Estimate token count for a string.
- * Chinese: ~0.7 tokens per character
- * English/other: ~0.25 tokens per character (~1.3 per word)
+ * Chinese: ~1.5 tokens per character (CJK tokenizers split aggressively)
+ * English/other: ~0.3 tokens per character (~1.3 per word)
+ * Includes 10% safety margin.
  */
 export function estimateTokens(text) {
   if (!text) return 0;
   let tokens = 0;
   for (const char of text) {
-    tokens += /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/.test(char) ? 0.7 : 0.25;
+    tokens += /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/.test(char) ? 1.5 : 0.3;
   }
-  return Math.ceil(tokens);
+  return Math.ceil(tokens * 1.1);
 }
 
 /**
@@ -25,7 +26,7 @@ export function estimateTokens(text) {
  * @returns {{ historyBudget: number, toolLoopReserve: number }}
  */
 export function calculateBudget(contextWindow, systemPromptTokens, toolDefinitionTokens) {
-  const toolLoopReserve = Math.floor(contextWindow * 0.25);
+  const toolLoopReserve = 8000; // Fixed 8K tokens for tool call loop
   const outputReserve = 4096;
   const historyBudget = contextWindow - systemPromptTokens - toolDefinitionTokens - toolLoopReserve - outputReserve;
   return {

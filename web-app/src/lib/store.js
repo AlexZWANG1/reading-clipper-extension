@@ -651,6 +651,15 @@ export const useChatStore = create((set, get) => ({
       const { touchConversation } = useConversationsStore.getState();
       touchConversation(newConvId, { title: result.reply?.slice(0, 30) });
 
+      // Refresh board if the turn produced board mutations/drafts.
+      const hasBoardMutation = (result.tool_call_log || []).some((tc) =>
+        ['propose_board_changes', 'create_board_node', 'update_board_node', 'delete_board_node', 'create_board_edge', 'delete_board_edge']
+          .includes(tc.tool) && tc.status === 'completed'
+      );
+      if (result.draft_id || hasBoardMutation) {
+        get().invalidateBoard();
+      }
+
       return result;
     } catch (error) {
       // Remove optimistic message on failure

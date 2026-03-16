@@ -147,7 +147,7 @@ function TopicsSidebar({
           <div className="flex items-center gap-2 mb-3">
             <button
               onClick={() => onTopicSelect('')}
-              className="p-1.5 rounded-lg transition-colors shrink-0 hover:bg-slate-100"
+              className="p-2 rounded-lg transition-colors shrink-0 hover:bg-slate-100 cursor-pointer"
               style={{ color: 'var(--workbench-text-muted)' }}
               aria-label="Back to topics list"
               title="返回 Topics 列表"
@@ -189,7 +189,7 @@ function TopicsSidebar({
           <div className="flex gap-1">
             <button
               onClick={() => setShowAllCards(false)}
-              className="flex-1 text-xs py-1.5 rounded-lg font-medium transition-colors"
+              className="flex-1 text-xs py-2 rounded-lg font-medium transition-colors cursor-pointer"
               style={{
                 background: !showAllCards ? 'var(--workbench-card)' : 'transparent',
                 border: !showAllCards ? '1px solid var(--workbench-border)' : '1px solid transparent',
@@ -198,7 +198,7 @@ function TopicsSidebar({
             >当前 Topic</button>
             <button
               onClick={() => setShowAllCards(true)}
-              className="flex-1 text-xs py-1.5 rounded-lg font-medium transition-colors"
+              className="flex-1 text-xs py-2 rounded-lg font-medium transition-colors cursor-pointer"
               style={{
                 background: showAllCards ? 'var(--workbench-card)' : 'transparent',
                 border: showAllCards ? '1px solid var(--workbench-border)' : '1px solid transparent',
@@ -251,7 +251,7 @@ function TopicsSidebar({
                       <a
                         href={buildHighlightUrl(card.source_url, card.raw_snippet)}
                         target="_blank" rel="noopener noreferrer"
-                        className="opacity-0 group-hover/card:opacity-100 transition-all p-0.5 shrink-0"
+                        className="opacity-0 group-hover/card:opacity-100 transition-all p-1.5 shrink-0"
                         aria-label="Open original source in a new tab"
                         style={{ color: 'var(--workbench-blue-ink)' }}
                         title="跳转原文"
@@ -305,7 +305,7 @@ function TopicsSidebar({
           <button
             onClick={() => setIsCreatingTopic(true)}
             disabled={isCreatingTopic}
-            className="btn btn-primary inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-opacity-80 disabled:opacity-50"
+            className="btn btn-primary inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-opacity-80 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
             style={{ background: 'var(--interactive-primary)', color: 'white' }}
             aria-label="Create topic"
             title="新建 Topic"
@@ -333,10 +333,10 @@ function TopicsSidebar({
               style={{ background: 'var(--workbench-card)', border: '1px solid var(--workbench-border)', color: 'var(--workbench-text)', '--tw-ring-color': 'var(--interactive-primary)' }}
             />
             <div className="flex items-center gap-2">
-              <button onClick={handleCreateTopic} disabled={isSubmitting || !newTopicTitle.trim()} className="btn btn-primary flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded text-sm transition-colors disabled:opacity-50" style={{ background: 'var(--interactive-primary)', color: 'white' }}>
+              <button onClick={handleCreateTopic} disabled={isSubmitting || !newTopicTitle.trim()} className="btn btn-primary flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded text-sm transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed" style={{ background: 'var(--interactive-primary)', color: 'white' }}>
                 <Check className="w-3.5 h-3.5" /> {isSubmitting ? '创建中...' : '创建'}
               </button>
-              <button onClick={() => { setNewTopicTitle(''); setIsCreatingTopic(false); }} disabled={isSubmitting} className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded text-sm transition-colors disabled:opacity-50" style={{ background: 'var(--workbench-card-soft)', color: 'var(--workbench-text-soft)', border: '1px solid var(--workbench-border)' }}>
+              <button onClick={() => { setNewTopicTitle(''); setIsCreatingTopic(false); }} disabled={isSubmitting} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded text-sm transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed" style={{ background: 'var(--workbench-card-soft)', color: 'var(--workbench-text-soft)', border: '1px solid var(--workbench-border)' }}>
                 <X className="w-3.5 h-3.5" /> 取消
               </button>
             </div>
@@ -387,10 +387,10 @@ function TopicsSidebar({
                       style={{ background: 'var(--workbench-card)', border: '1px solid var(--workbench-border)', color: 'var(--workbench-text)', '--tw-ring-color': 'var(--interactive-primary)' }}
                     />
                     <div className="flex items-center gap-2">
-                      <button onClick={handleSaveEdit} disabled={isSubmitting || !editingTopicTitle.trim()} className="btn btn-primary flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-xs transition-colors disabled:opacity-50" style={{ background: 'var(--interactive-primary)', color: 'white' }}>
+                      <button onClick={handleSaveEdit} disabled={isSubmitting || !editingTopicTitle.trim()} className="btn btn-primary flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded text-xs transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed" style={{ background: 'var(--interactive-primary)', color: 'white' }}>
                         <Check className="w-3 h-3" /> {isSubmitting ? '保存中...' : '保存'}
                       </button>
-                      <button onClick={() => { setEditingTopicId(null); setEditingTopicTitle(''); }} disabled={isSubmitting} className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-xs transition-colors disabled:opacity-50" style={{ background: 'var(--workbench-card-soft)', color: 'var(--workbench-text-soft)', border: '1px solid var(--workbench-border)' }}>
+                      <button onClick={() => { setEditingTopicId(null); setEditingTopicTitle(''); }} disabled={isSubmitting} className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded text-xs transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed" style={{ background: 'var(--workbench-card-soft)', color: 'var(--workbench-text-soft)', border: '1px solid var(--workbench-border)' }}>
                         <X className="w-3 h-3" /> 取消
                       </button>
                     </div>
@@ -408,7 +408,7 @@ function TopicsSidebar({
                             onTopicSelect(topic.id);
                           }
                         }}
-                        className="w-full flex items-center gap-2 p-2 rounded-lg transition-all hover:bg-opacity-80"
+                        className="w-full flex items-center gap-2 p-2 rounded-lg transition-all hover:bg-opacity-80 cursor-pointer"
                         style={{ background: 'transparent', border: '1px solid transparent' }}
                       >
                         {topicCards.length > 0 && (
@@ -416,7 +416,7 @@ function TopicsSidebar({
                             type="button"
                             aria-label="Toggle topic cards"
                             onClick={(e) => { e.stopPropagation(); toggleTopic(topic.id); }}
-                            className="shrink-0 p-0.5 hover:bg-opacity-50 rounded"
+                            className="shrink-0 p-1.5 hover:bg-opacity-50 rounded cursor-pointer transition-colors"
                           >
                             {isExpanded ? <ChevronDown className="w-4 h-4" style={{ color: 'var(--workbench-text-muted)' }} /> : <ChevronRight className="w-4 h-4" style={{ color: 'var(--workbench-text-muted)' }} />}
                           </button>
@@ -445,7 +445,7 @@ function TopicsSidebar({
 
                       <button
                         onClick={(e) => { e.stopPropagation(); setShowMenuForTopic(showMenuForTopic === topic.id ? null : topic.id); }}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 rounded opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer transition-colors"
                         aria-label="Open topic actions"
                         title="Open topic actions"
                         style={{ background: 'var(--workbench-card)' }}
@@ -455,10 +455,10 @@ function TopicsSidebar({
 
                       {showMenuForTopic === topic.id && (
                         <div className="absolute right-0 top-full mt-1 z-10 rounded-lg shadow-lg py-1 min-w-[120px]" style={{ background: 'var(--workbench-card)', border: '1px solid var(--workbench-border)' }}>
-                          <button onClick={() => { setEditingTopicId(topic.id); setEditingTopicTitle(topic.title); setShowMenuForTopic(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-opacity-80" style={{ color: 'var(--workbench-text-soft)' }}>
+                          <button onClick={() => { setEditingTopicId(topic.id); setEditingTopicTitle(topic.title); setShowMenuForTopic(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-opacity-80 cursor-pointer" style={{ color: 'var(--workbench-text-soft)' }}>
                             <Edit3 className="w-4 h-4" /> 编辑
                           </button>
-                          <button onClick={() => handleDeleteTopic(topic.id, topic.title)} className="w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-opacity-80" style={{ color: 'var(--error)' }}>
+                          <button onClick={() => handleDeleteTopic(topic.id, topic.title)} className="w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-opacity-80 cursor-pointer" style={{ color: 'var(--error)' }}>
                             <Trash2 className="w-4 h-4" /> 删除
                           </button>
                         </div>
@@ -472,7 +472,7 @@ function TopicsSidebar({
                           <button
                             key={card.id}
                             onClick={() => onCardSelect?.(card.id)}
-                            className="w-full text-left p-2 rounded text-xs transition-colors hover:bg-opacity-80"
+                            className="w-full text-left p-2 rounded text-xs transition-colors hover:bg-opacity-80 cursor-pointer"
                             style={{ background: 'var(--workbench-card-soft)', color: 'var(--workbench-text-soft)' }}
                           >
                             <p className="truncate font-medium mb-1">{card.title || '未命名卡片'}</p>
@@ -484,7 +484,7 @@ function TopicsSidebar({
                         {topicCards.length > 5 && (
                           <button
                             onClick={() => onTopicSelect(topic.id)}
-                            className="w-full text-center text-xs py-1.5 rounded transition-colors"
+                            className="w-full text-center text-xs py-2 rounded transition-colors cursor-pointer"
                             style={{ color: 'var(--workbench-blue-ink)' }}
                           >
                             查看全部 {topicCards.length} 张卡片 →
@@ -513,7 +513,7 @@ function TopicsSidebar({
                     onTopicSelect('uncategorized');
                   }
                 }}
-                className="w-full flex items-center gap-2 p-2 rounded-lg transition-all hover:bg-opacity-80"
+                className="w-full flex items-center gap-2 p-2 rounded-lg transition-all hover:bg-opacity-80 cursor-pointer"
                 style={{ background: 'transparent', border: '1px solid transparent' }}
               >
                 <div className="w-2 h-2 rounded-full shrink-0" style={{ background: 'var(--workbench-text-muted)' }} />

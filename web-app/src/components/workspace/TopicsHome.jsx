@@ -96,7 +96,7 @@ export default function TopicsHome() {
     };
 
     return (
-        <div className="max-w-5xl mx-auto px-6 py-8">
+        <div className="max-w-5xl mx-auto px-6 py-8 h-full overflow-y-auto">
             {/* Header */}
             <div className="flex items-center justify-between mb-8">
                 <div>
@@ -170,7 +170,7 @@ export default function TopicsHome() {
                     </button>
 
                     {inboxExpanded && (
-                        <div className="mt-2 p-4 rounded-xl space-y-2" style={{ background: 'var(--surface-1)', border: '1px solid var(--stroke-0)' }}>
+                        <div className="mt-2 p-4 rounded-xl space-y-2 max-h-80 overflow-y-auto" style={{ background: 'var(--surface-1)', border: '1px solid var(--stroke-0)' }}>
                             {uncategorizedCards.map(card => (
                                 <div key={card.id} className="flex items-start gap-2 p-2 rounded-lg text-xs" style={{ background: 'var(--surface-0)' }}>
                                     <span

@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from 'react';
 import {
   Send, Bot, User, Loader2, Trash2, ShieldCheck, ShieldAlert,
   X, Check, ListChecks, ChevronRight, Sparkles, PlayCircle,
+  BookOpen, Globe,
 } from 'lucide-react';
-import { chatApi } from '../lib/api';
+import { chatApi, topicsApi } from '../lib/api';
 import { useUIStore, useChatStore, useConversationsStore } from '../lib/store';
 import ConversationSidebar from '../components/ConversationSidebar';
 import ChatMessage from '../components/ChatMessage';
@@ -107,7 +108,7 @@ function PlanProposalCard({ message, onExecute, onDismiss, executing }) {
           <button
             onClick={onExecute}
             disabled={executing}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-all disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ background: 'var(--accent-500)' }}
           >
             {executing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
@@ -116,7 +117,7 @@ function PlanProposalCard({ message, onExecute, onDismiss, executing }) {
           <button
             onClick={onDismiss}
             disabled={executing}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer disabled:cursor-not-allowed"
             style={{ color: 'var(--text-secondary)', background: 'var(--bg-muted)' }}
           >
             <X className="w-3.5 h-3.5" />
@@ -239,7 +240,7 @@ function TemplateSelector({ templates, onSelect }) {
                 ))}
                 <button
                   onClick={() => handleUse(t)}
-                  className="w-full mt-1 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+                  className="w-full mt-1 px-3 py-2 rounded-lg text-xs font-medium text-white cursor-pointer transition-colors"
                   style={{ background: 'var(--accent-500)' }}
                 >
                   使用此模板
@@ -259,6 +260,7 @@ function ChatPage() {
   const {
     conversationId, messages, sending, activePlan, executing, templates,
     sendMessage, executePlan, dismissPlan, newConversation, fetchTemplates,
+    setSurfaceContext, surfaceContext: storedContext,
   } = useChatStore();
   const { fetchConversations } = useConversationsStore();
   const { showToast } = useUIStore();
@@ -268,8 +270,26 @@ function ChatPage() {
   const [pendingMessages, setPendingMessages] = useState(null);
   const [pendingToolCalls, setPendingToolCalls] = useState(null);
   const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [topics, setTopics] = useState([]);
+  const [selectedTopicId, setSelectedTopicId] = useState(null); // null = free mode
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Load topics for the topic selector
+  useEffect(() => {
+    topicsApi.list({ with_count: true })
+      .then(data => setTopics(data.topics || []))
+      .catch(() => {});
+  }, []);
+
+  // Update surfaceContext when topic selection changes
+  useEffect(() => {
+    if (selectedTopicId) {
+      setSurfaceContext({ surface: 'topic', topicId: selectedTopicId });
+    } else {
+      setSurfaceContext({ surface: 'general' });
+    }
+  }, [selectedTopicId]);
 
   useEffect(() => {
     fetchConversations();
@@ -311,7 +331,9 @@ function ChatPage() {
 
     try {
       const confirmedIds = pendingActions.map((a) => a.id);
-      const data = await chatApi.confirm(pendingMessages, pendingToolCalls, confirmedIds);
+      const data = await chatApi.confirm(pendingMessages, pendingToolCalls, confirmedIds, {
+        surfaceContext: storedContext,
+      });
       setPendingActions(null);
       setPendingMessages(null);
       setPendingToolCalls(null);
@@ -373,20 +395,54 @@ function ChatPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setSidebarVisible(!sidebarVisible)}
-              className="p-1.5 rounded-lg transition-colors hover:bg-black/5 hidden lg:block"
+              className="p-2 rounded-lg transition-colors hover:bg-black/5 hidden lg:block cursor-pointer"
               style={{ color: 'var(--text-tertiary)' }}
+              aria-label="Toggle conversation sidebar"
             >
               <ListChecks className="w-4 h-4" />
             </button>
             <h1 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
               AI 对话
             </h1>
+            {/* Topic mode selector */}
+            <div className="flex items-center gap-1.5 ml-2">
+              <div
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs"
+                style={{
+                  background: selectedTopicId ? 'var(--accent-blue-subtle)' : 'var(--bg-muted)',
+                  border: '1px solid var(--border-primary)',
+                }}
+              >
+                {selectedTopicId ? (
+                  <BookOpen className="w-3 h-3" style={{ color: 'var(--accent-600)' }} />
+                ) : (
+                  <Globe className="w-3 h-3" style={{ color: 'var(--text-tertiary)' }} />
+                )}
+                <select
+                  value={selectedTopicId || ''}
+                  onChange={(e) => setSelectedTopicId(e.target.value || null)}
+                  className="bg-transparent text-xs cursor-pointer outline-none"
+                  style={{
+                    color: selectedTopicId ? 'var(--accent-600)' : 'var(--text-secondary)',
+                    border: 'none',
+                  }}
+                  aria-label="选择研究主题"
+                >
+                  <option value="">自由模式</option>
+                  {topics.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.title}{t.card_count != null ? ` (${t.card_count})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
           <div className="flex items-center gap-1">
             {hasMessages && (
               <button
                 onClick={() => { newConversation(); setPendingActions(null); }}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs transition-colors cursor-pointer"
                 style={{ color: 'var(--text-secondary)', background: 'var(--bg-muted)' }}
               >
                 <Trash2 className="w-3 h-3" />
@@ -404,7 +460,9 @@ function ChatPage() {
                 <Bot className="w-6 h-6" style={{ color: 'var(--text-primary)' }} />
               </div>
               <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
-                问我任何关于你的阅读笔记的问题，或发起一个研究任务
+                {selectedTopicId
+                  ? `已选定主题「${topics.find(t => t.id === selectedTopicId)?.title || ''}」— AI 将基于该主题下的材料回答问题`
+                  : '自由模式 — 问我任何关于你的阅读笔记的问题，或选择一个主题进行深度问答'}
               </p>
 
               {/* Quick prompts */}
@@ -413,7 +471,7 @@ function ChatPage() {
                   <button
                     key={prompt}
                     onClick={() => { setInput(prompt); inputRef.current?.focus(); }}
-                    className="px-3 py-1.5 rounded-full text-xs transition-colors"
+                    className="px-3 py-2 rounded-full text-xs transition-colors cursor-pointer"
                     style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)' }}
                   >
                     {prompt}
@@ -531,11 +589,11 @@ function ChatPage() {
                       ))}
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={handleConfirm} disabled={sending} className="btn btn-primary flex items-center gap-1.5">
+                      <button onClick={handleConfirm} disabled={sending} className="btn btn-primary flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed">
                         {sending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                         确认执行
                       </button>
-                      <button onClick={handleCancelActions} disabled={sending} className="btn btn-secondary flex items-center gap-1.5">
+                      <button onClick={handleCancelActions} disabled={sending} className="btn btn-secondary flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed">
                         <X className="w-3 h-3" />
                         取消
                       </button>
@@ -596,7 +654,7 @@ function ChatPage() {
               onClick={handleSend}
               disabled={!input.trim() || sending || !!pendingActions || executing}
               aria-label="Send message"
-              className="btn btn-primary flex-none w-9 h-9 rounded-lg flex items-center justify-center"
+              className="btn btn-primary flex-none w-9 h-9 rounded-lg flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
             >
               <Send className="w-4 h-4" />
             </button>

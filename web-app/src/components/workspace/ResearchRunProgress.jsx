@@ -39,7 +39,7 @@ export default function ResearchRunProgress({ className }) {
     };
 
     const bgColor = isComplete ? 'rgba(24,160,106,0.06)'
-        : isFailed ? 'rgba(195,58,48,0.06)'
+        : isFailed ? 'color-mix(in srgb, var(--error) 6%, transparent)'
         : paused ? 'rgba(217,119,6,0.06)'
         : 'rgba(24,160,106,0.06)';
 
@@ -49,7 +49,7 @@ export default function ResearchRunProgress({ className }) {
                 {isComplete ? (
                     <CheckCircle size={14} style={{ color: '#18A06A' }} />
                 ) : isFailed ? (
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ background: '#C33A30' }} />
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ background: 'var(--error)' }} />
                 ) : (
                     <div className="w-2.5 h-2.5 rounded-full" style={{ background: paused ? '#D97706' : '#18A06A', animation: paused ? 'none' : 'nodePulse 1.5s infinite' }} />
                 )}
@@ -71,16 +71,18 @@ export default function ResearchRunProgress({ className }) {
                         <>
                             <button
                                 onClick={() => setPaused(!paused)}
-                                className="p-1.5 rounded-lg transition-colors hover:bg-blue-500/10"
+                                className="p-2 rounded-lg cursor-pointer transition-colors hover:bg-blue-500/10"
                                 style={{ color: 'var(--text-2)' }}
+                                aria-label={paused ? '继续' : '暂停'}
                                 title={paused ? '继续' : '暂停'}
                             >
                                 {paused ? <Play size={14} /> : <Pause size={14} />}
                             </button>
                             <button
                                 onClick={handleStop}
-                                className="p-1.5 rounded-lg transition-colors hover:bg-red-500/10"
-                                style={{ color: '#C33A30' }}
+                                className="p-2 rounded-lg cursor-pointer transition-colors hover:bg-red-500/10"
+                                style={{ color: 'var(--error)' }}
+                                aria-label="停止"
                                 title="停止"
                             >
                                 <Square size={14} />

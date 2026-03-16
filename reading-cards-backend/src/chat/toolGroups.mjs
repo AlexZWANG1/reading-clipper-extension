@@ -1,47 +1,42 @@
 // ========= Tool Groups & Dynamic Tool Selection =========
-// Scopes the AI's available tools based on conversation context and surface.
-// Prevents AI from accessing write tools when user is only querying.
+// Scopes available tools by context and user intent.
 
 import { TOOL_DEFINITIONS } from './tools.mjs';
 
-// ── Group Definitions ──────────────────────────────────
-
 const TOOL_GROUPS = {
-  // Read-only tools — safe default, no mutations possible
+  // Safe default: read-only.
   explore: [
     'semantic_search', 'search_cards', 'list_cards', 'get_card',
-    'list_topics', 'list_sources', 'list_boards', 'get_board',
-    'list_documents', 'get_document', 'get_board_health', 'request_plan',
+    'list_topics', 'list_materials', 'get_material',
+    'get_board', 'get_board_health', 'request_plan',
   ],
 
-  // Board-focused tools — creation goes through propose_board_changes (draft, not direct mutation)
-  // Spec §11 Board: direct node/edge creation is FORBIDDEN — must use draft system.
-  // update/delete of EXISTING nodes requires approval (confirmation gate handles this).
+  // Board-focused flow (draft-first for structural changes).
+  // get_material included so AI can trace evidence back to source.
   board: [
     'get_board', 'get_board_health', 'propose_board_changes',
     'search_cards', 'semantic_search', 'get_card', 'list_cards',
-    'list_topics', 'list_boards',
-    'update_board_node', 'delete_board_node', 'delete_board_edge',
+    'get_material', 'list_topics',
     'request_plan',
   ],
 
-  // Card creation context
+  // Card creation flow.
   cards: [
     'create_card', 'search_cards', 'list_cards', 'get_card',
-    'semantic_search', 'list_topics', 'request_plan',
+    'semantic_search', 'list_topics', 'list_materials', 'get_material',
+    'request_plan',
   ],
 
-  // Content ingestion context
+  // Ingestion flow.
   ingest: [
     'ingest_url', 'fetch_rss', 'semantic_search', 'search_cards',
-    'list_cards', 'list_topics', 'request_plan',
+    'list_cards', 'list_topics', 'list_materials', 'get_material',
+    'request_plan',
   ],
 
-  // All tools — only used during plan execution
-  full: null, // null means "use all TOOL_DEFINITIONS"
+  // Full access (used by planner/executor only).
+  full: null,
 };
-
-// ── Keyword patterns for group inference ──────────────
 
 const GROUP_PATTERNS = [
   {
@@ -50,7 +45,7 @@ const GROUP_PATTERNS = [
   },
   {
     group: 'cards',
-    pattern: /创建.*卡片|create\s*card|保存.*卡|save.*card|生成.*卡片|generate\s*card|新建.*卡片|摘录/i,
+    pattern: /创建.*卡片|create\s*card|保存.*卡|save.*card|生成.*卡片|generate\s*card|新建.*卡片|摘录|新增.*卡片/i,
   },
   {
     group: 'ingest',
@@ -58,70 +53,57 @@ const GROUP_PATTERNS = [
   },
 ];
 
-// ── Public API ──────────────────────────────────────────
-
 /**
  * Infer which tool group to use based on user message and surface context.
  *
  * Priority:
- *   1. Surface context (if on board page → board tools)
- *   2. Keyword detection
- *   3. Default → explore (read-only, safe)
- *
- * @param {string} userMessage
- * @param {Object|null} surfaceContext - { surface: 'board'|'reader'|'cards'|'general', ... }
- * @returns {string} group name
+ * 1. Surface context
+ * 2. Keyword detection
+ * 3. Safe default (explore)
  */
 export function inferToolGroup(userMessage, surfaceContext) {
-  // Priority 1: Surface context drives tool selection
+  const fromKeywords = inferByKeywords(userMessage);
+
   if (surfaceContext?.surface === 'board') return 'board';
+  if (surfaceContext?.surface === 'workspace') {
+    // Workspace defaults to board, but should still respect card/ingest intent.
+    return fromKeywords || 'board';
+  }
   if (surfaceContext?.surface === 'reader') {
-    const wantsCreate = /创建|保存|提取|制作|create|save|extract|摘录/i.test(userMessage);
+    const wantsCreate = /创建|保存|提取|制作|create|save|extract|摘录/i.test(userMessage || '');
     return wantsCreate ? 'cards' : 'explore';
   }
 
-  // Priority 2: Keyword-based detection from user message
-  if (userMessage) {
-    for (const { group, pattern } of GROUP_PATTERNS) {
-      if (pattern.test(userMessage)) return group;
-    }
-  }
-
-  // Priority 3: Safe default — read-only
+  if (fromKeywords) return fromKeywords;
   return 'explore';
 }
 
+function inferByKeywords(userMessage) {
+  if (!userMessage) return null;
+  for (const { group, pattern } of GROUP_PATTERNS) {
+    if (pattern.test(userMessage)) return group;
+  }
+  return null;
+}
+
 /**
- * Get the filtered TOOL_DEFINITIONS array for a given group.
- *
- * @param {string} groupName - 'explore'|'board'|'cards'|'ingest'|'full'
- * @returns {Array} filtered tool definitions
+ * Get filtered tool definitions for the given group.
  */
 export function getToolsForGroup(groupName) {
   const allowedNames = TOOL_GROUPS[groupName];
   if (allowedNames === null || allowedNames === undefined) {
-    return TOOL_DEFINITIONS.map(t => ({ type: t.type, function: t.function }));
+    return TOOL_DEFINITIONS.map((t) => ({ type: t.type, function: t.function }));
   }
   const allowedSet = new Set(allowedNames);
   return TOOL_DEFINITIONS
-    .filter(t => allowedSet.has(t.function.name))
-    .map(t => ({ type: t.type, function: t.function }));
+    .filter((t) => allowedSet.has(t.function.name))
+    .map((t) => ({ type: t.type, function: t.function }));
 }
 
-/**
- * Get the group definition (list of tool names) for debugging/testing.
- *
- * @param {string} groupName
- * @returns {string[]|null}
- */
 export function getGroupDefinition(groupName) {
   return TOOL_GROUPS[groupName] ?? null;
 }
 
-/**
- * List all available group names.
- * @returns {string[]}
- */
 export function listGroups() {
   return Object.keys(TOOL_GROUPS);
 }

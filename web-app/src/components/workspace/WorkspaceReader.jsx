@@ -282,11 +282,11 @@ export default function WorkspaceReader({
                 <div className="text-center">
                     <p className="text-red-500 mb-4">{error || '材料不存在'}</p>
                     {isEmbedded ? (
-                        <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg" style={{ background: 'var(--accent-500)', color: '#fff' }}>
+                        <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg cursor-pointer transition-colors" style={{ background: 'var(--accent-500)', color: '#fff' }}>
                             关闭
                         </button>
                     ) : (
-                        <button onClick={onClose} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
+                        <button onClick={onClose} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm cursor-pointer transition-colors hover:bg-indigo-700">
                             返回材料库
                         </button>
                     )}
@@ -304,8 +304,9 @@ export default function WorkspaceReader({
                 {isEmbedded ? (
                     <button
                         onClick={onClose}
-                        className="p-1.5 rounded-lg transition-colors hover:bg-blue-500/10"
+                        className="p-2 rounded-lg cursor-pointer transition-colors hover:bg-blue-500/10"
                         style={{ color: 'var(--text-2)' }}
+                        aria-label="关闭"
                         title="关闭阅读器"
                     >
                         <X className="w-4 h-4" />
@@ -313,7 +314,7 @@ export default function WorkspaceReader({
                 ) : (
                     <button
                         onClick={onClose}
-                        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
+                        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 cursor-pointer transition-colors"
                     >
                         <ArrowLeft className="w-4 h-4" />
                         材料库
@@ -348,20 +349,20 @@ export default function WorkspaceReader({
                             <button
                                 onClick={handleFocusSearch}
                                 disabled={focusLoading || !focusQuery.trim()}
-                                className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-50 flex items-center gap-1"
+                                className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center gap-1"
                                 style={{ background: 'var(--accent-500)', color: '#fff' }}
                             >
                                 {focusLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                                 聚焦
                             </button>
-                            <button onClick={clearFocus} className="p-1.5 rounded-lg" style={{ color: 'var(--text-2)' }}>
+                            <button onClick={clearFocus} className="p-2 rounded-lg cursor-pointer transition-colors hover:bg-blue-500/10" style={{ color: 'var(--text-2)' }} aria-label="关闭">
                                 <X className="w-4 h-4" />
                             </button>
                         </div>
                     ) : (
                         <button
                             onClick={() => setShowFocusInput(true)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg cursor-pointer transition-colors"
                             style={{ color: 'var(--accent-400)', border: '1px solid var(--stroke-0)' }}
                         >
                             <Search className="w-3.5 h-3.5" />
@@ -371,7 +372,7 @@ export default function WorkspaceReader({
 
                     <button
                         onClick={() => setShowAIPanel(!showAIPanel)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg cursor-pointer transition-colors"
                         style={{
                             color: showAIPanel ? 'var(--accent-400)' : 'var(--text-2)',
                             border: `1px solid ${showAIPanel ? 'var(--accent-400)' : 'var(--stroke-0)'}`,
@@ -387,8 +388,9 @@ export default function WorkspaceReader({
                             href={material.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg cursor-pointer transition-colors"
                             style={{ color: 'var(--text-2)', border: '1px solid var(--stroke-0)' }}
+                            aria-label="打开原文"
                         >
                             <ExternalLink className="w-3.5 h-3.5" />
                             原文
@@ -402,7 +404,7 @@ export default function WorkspaceReader({
                 <div className="flex items-center gap-3 px-4 py-2 text-sm flex-shrink-0" style={{ background: 'rgba(249,115,22,0.08)', borderBottom: '1px solid var(--stroke-0)', color: 'var(--accent-400)' }}>
                     <Search className="w-4 h-4 flex-shrink-0" />
                     <span>已为「{focusQuery}」高亮 {focusChunkIds.length} 个相关段落</span>
-                    <button onClick={clearFocus} className="ml-auto text-xs" style={{ color: 'var(--accent-400)' }}>
+                    <button onClick={clearFocus} className="ml-auto text-xs cursor-pointer transition-colors hover:opacity-80" style={{ color: 'var(--accent-400)' }}>
                         清除聚焦
                     </button>
                 </div>
@@ -504,7 +506,7 @@ export default function WorkspaceReader({
                             <>
                                 <div className="flex items-center justify-between mb-4">
                                     <h3 className="text-base font-semibold" style={{ color: 'var(--text-0)' }}>创建证据卡</h3>
-                                    <button onClick={() => setCreatingCard(false)} className="p-1 rounded" style={{ color: 'var(--text-2)' }}>
+                                    <button onClick={() => setCreatingCard(false)} className="p-2 rounded cursor-pointer transition-colors hover:bg-blue-500/10" style={{ color: 'var(--text-2)' }} aria-label="关闭">
                                         <X className="w-4 h-4" />
                                     </button>
                                 </div>
@@ -551,14 +553,14 @@ export default function WorkspaceReader({
                                 <div className="flex justify-end gap-3">
                                     <button
                                         onClick={() => setCreatingCard(false)}
-                                        className="px-4 py-2 text-sm rounded-lg"
+                                        className="px-4 py-2 text-sm rounded-lg cursor-pointer transition-colors hover:opacity-80"
                                         style={{ color: 'var(--text-1)' }}
                                     >
                                         取消
                                     </button>
                                     <button
                                         onClick={handleConfirmCard}
-                                        className="px-4 py-2 text-sm rounded-lg"
+                                        className="px-4 py-2 text-sm rounded-lg cursor-pointer transition-colors hover:opacity-90"
                                         style={{ background: 'var(--accent-500)', color: '#fff' }}
                                     >
                                         保存卡片

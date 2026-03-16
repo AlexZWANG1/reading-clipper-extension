@@ -15,7 +15,7 @@ import {
   Loader2,
   CheckCircle,
 } from 'lucide-react';
-import { materialsApi } from '../lib/api';
+import { materialsApi, topicsApi } from '../lib/api';
 import { useUIStore } from '../lib/store';
 import { extractHostname } from '../lib/ui-utils';
 
@@ -28,25 +28,42 @@ export default function MaterialsPage() {
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [topics, setTopics] = useState([]);
+  const [selectedTopicId, setSelectedTopicId] = useState(topicId || 'all');
 
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadType, setUploadType] = useState('url');
   const [uploadUrl, setUploadUrl] = useState('');
   const [uploadText, setUploadText] = useState('');
-  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadFiles, setUploadFiles] = useState([]); // Array of File objects
   const [uploadTitle, setUploadTitle] = useState('');
+  const [uploadTopicId, setUploadTopicId] = useState(topicId || '');
   const [uploading, setUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const loadRequestRef = useRef(0);
+
+  // Load topics for filter
+  useEffect(() => {
+    topicsApi.list().then(data => setTopics(data.topics || [])).catch(() => {});
+  }, []);
+
+  // Sync URL topic param with selector
+  useEffect(() => {
+    if (topicId) setSelectedTopicId(topicId);
+  }, [topicId]);
 
   const loadMaterials = useCallback(async () => {
     const requestId = ++loadRequestRef.current;
     try {
       setLoading(true);
       const params = {};
-      if (topicId) params.topic_id = topicId;
+      if (selectedTopicId === 'uncategorized') {
+        params.topic_id = 'null'; // Backend should interpret as "no topic"
+      } else if (selectedTopicId !== 'all') {
+        params.topic_id = selectedTopicId;
+      }
       const response = await materialsApi.list(params);
       if (requestId !== loadRequestRef.current) return;
       setMaterials(response.materials || []);
@@ -57,7 +74,7 @@ export default function MaterialsPage() {
       if (requestId !== loadRequestRef.current) return;
       setLoading(false);
     }
-  }, [topicId]);
+  }, [selectedTopicId]);
 
   useEffect(() => {
     loadMaterials();
@@ -106,19 +123,34 @@ export default function MaterialsPage() {
   const handleDrop = async (e) => {
     e.preventDefault();
     setIsDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (!file) return;
-    if (file.size > 50 * 1024 * 1024) {
-      showToast('文件大小不能超过 50MB', 'error');
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+
+    // Validate all files first
+    const oversized = files.filter(f => f.size > 50 * 1024 * 1024);
+    if (oversized.length > 0) {
+      showToast(`${oversized.length} 个文件超过 50MB 限制`, 'error');
       return;
     }
-    try {
-      await materialsApi.upload(file, topicId || undefined);
-      showToast('文件上传成功，正在后台处理...', 'success');
+
+    let successCount = 0;
+    let failCount = 0;
+    for (const file of files) {
+      try {
+        const dropTopicId = selectedTopicId !== 'all' && selectedTopicId !== 'uncategorized' ? selectedTopicId : (topicId || undefined);
+        await materialsApi.upload(file, dropTopicId);
+        successCount++;
+      } catch (error) {
+        console.error('Drop upload failed:', file.name, error);
+        failCount++;
+      }
+    }
+
+    if (successCount > 0) {
+      showToast(`${successCount} 个文件上传成功${failCount > 0 ? `，${failCount} 个失败` : ''}，正在后台处理...`, failCount > 0 ? 'warning' : 'success');
       loadMaterials();
-    } catch (error) {
-      console.error('Drop upload failed:', error);
-      showToast('上传失败：' + (error.message || '未知错误'), 'error');
+    } else {
+      showToast('所有文件上传失败', 'error');
     }
   };
 
@@ -151,7 +183,7 @@ export default function MaterialsPage() {
       showToast('请输入文本内容', 'error');
       return;
     }
-    if (uploadType === 'file' && !uploadFile) {
+    if (uploadType === 'file' && uploadFiles.length === 0) {
       showToast('请选择文件', 'error');
       return;
     }
@@ -159,7 +191,7 @@ export default function MaterialsPage() {
     try {
       setUploading(true);
       let payload = {
-        topic_id: topicId || undefined,
+        topic_id: uploadTopicId || undefined,
         title: uploadTitle.trim() || undefined,
       };
 
@@ -171,12 +203,30 @@ export default function MaterialsPage() {
         payload.text = uploadText.trim();
       } else if (uploadType === 'file') {
         // Client-side size validation
-        if (uploadFile.size > 50 * 1024 * 1024) {
-          showToast('文件大小不能超过 50MB', 'error');
+        const oversized = uploadFiles.filter(f => f.size > 50 * 1024 * 1024);
+        if (oversized.length > 0) {
+          showToast(`${oversized.length} 个文件超过 50MB 限制`, 'error');
           return;
         }
-        // Use FormData upload for binary files (PDF, DOCX, etc.)
-        await materialsApi.upload(uploadFile, topicId || undefined);
+        // Upload each file sequentially
+        let successCount = 0;
+        let failCount = 0;
+        for (const file of uploadFiles) {
+          try {
+            await materialsApi.upload(file, uploadTopicId || undefined);
+            successCount++;
+          } catch (err) {
+            console.error('File upload failed:', file.name, err);
+            failCount++;
+          }
+        }
+        if (failCount > 0 && successCount === 0) {
+          showToast('所有文件上传失败', 'error');
+          return;
+        }
+        if (failCount > 0) {
+          showToast(`${successCount} 个成功，${failCount} 个失败`, 'warning');
+        }
         setUploadSuccess(true);
         setTimeout(() => {
           setShowUploadModal(false);
@@ -207,8 +257,9 @@ export default function MaterialsPage() {
     setUploadType('url');
     setUploadUrl('');
     setUploadText('');
-    setUploadFile(null);
+    setUploadFiles([]);
     setUploadTitle('');
+    setUploadTopicId(topicId || '');
   };
 
   const STATUS_LABELS = {
@@ -244,19 +295,36 @@ export default function MaterialsPage() {
         </button>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: 'var(--text-tertiary)' }} />
-        <input
-          id="materials-search"
-          name="materials_search"
-          type="text"
-          aria-label="Search materials"
-          placeholder="搜索材料..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="input w-full pl-11"
-        />
+      {/* Search + Topic filter */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: 'var(--text-tertiary)' }} />
+          <input
+            id="materials-search"
+            name="materials_search"
+            type="text"
+            aria-label="Search materials"
+            placeholder="搜索材料..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="input w-full pl-10"
+          />
+        </div>
+        {topics.length > 0 && (
+          <select
+            value={selectedTopicId}
+            onChange={(e) => setSelectedTopicId(e.target.value)}
+            className="input cursor-pointer"
+            style={{ width: 180 }}
+            aria-label="按研究主题筛选"
+          >
+            <option value="all">全部主题</option>
+            <option value="uncategorized">未归类</option>
+            {topics.map(t => (
+              <option key={t.id} value={t.id}>{t.title}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Materials list */}
@@ -292,11 +360,12 @@ export default function MaterialsPage() {
               statusColors={STATUS_COLORS}
               onDelete={handleDelete}
               onClick={() => navigate(`/materials/${material.id}`)}
+              topicName={selectedTopicId === 'all' ? topics.find(t => t.id === material.topic_id)?.title : null}
             />
           ))}
           {isDragOver && (
             <div className="text-center py-6 text-sm" style={{ color: 'var(--interactive-primary)' }}>
-              释放以上传文件
+              释放以上传文件（支持多个）
             </div>
           )}
         </div>
@@ -368,6 +437,24 @@ export default function MaterialsPage() {
                   />
                 </div>
 
+                {/* Topic selector */}
+                {topics.length > 0 && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>归属主题</label>
+                    <select
+                      value={uploadTopicId}
+                      onChange={(e) => setUploadTopicId(e.target.value)}
+                      className="input w-full cursor-pointer"
+                      aria-label="选择归属主题"
+                    >
+                      <option value="">不归类</option>
+                      {topics.map(t => (
+                        <option key={t.id} value={t.id}>{t.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 {/* URL input */}
                 {uploadType === 'url' && (
                   <div className="mb-5">
@@ -394,12 +481,20 @@ export default function MaterialsPage() {
                       name="material_upload_file"
                       aria-label="Material file upload"
                       type="file"
+                      multiple
                       accept=".pdf,.docx,.pptx,.txt,.md"
-                      onChange={(e) => setUploadFile(e.target.files[0])}
+                      onChange={(e) => setUploadFiles(Array.from(e.target.files))}
                       className="w-full px-3 py-2 rounded-lg text-sm"
                       style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)' }}
                     />
-                    <p className="text-xs mt-1.5" style={{ color: 'var(--text-tertiary)' }}>支持 PDF、Word、PPT、TXT、Markdown</p>
+                    <p className="text-xs mt-1.5" style={{ color: 'var(--text-tertiary)' }}>
+                      支持 PDF、Word、PPT、TXT、Markdown，可选择多个文件
+                    </p>
+                    {uploadFiles.length > 1 && (
+                      <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                        已选择 {uploadFiles.length} 个文件
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -448,7 +543,7 @@ export default function MaterialsPage() {
   );
 }
 
-function MaterialItem({ material, statusLabels, statusColors, onDelete, onClick }) {
+function MaterialItem({ material, statusLabels, statusColors, onDelete, onClick, topicName }) {
   const [showMenu, setShowMenu] = useState(false);
 
   const sourceTypeIcon = {
@@ -503,6 +598,15 @@ function MaterialItem({ material, statusLabels, statusColors, onDelete, onClick 
             >
               {statusLabels[material.ingestion_status] || '等待中'}
             </span>
+
+            {topicName && (
+              <span
+                className="px-1.5 py-0.5 rounded text-[11px] font-medium"
+                style={{ background: 'var(--accent-blue-subtle)', color: 'var(--accent-600)' }}
+              >
+                {topicName}
+              </span>
+            )}
           </div>
 
           {material.url && (

@@ -131,7 +131,7 @@ export default function GlobalChatPanel() {
     if (surfaceChanged || routeHasSpecificContext) {
       setSurfaceContext(surfaceContext);
     }
-  }, [surfaceContext.surface, surfaceContext.topicId, surfaceContext.materialId]);
+  }, [surfaceContext.surface, surfaceContext.topicId, surfaceContext.materialId, surfaceContext.boardId]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -182,7 +182,9 @@ export default function GlobalChatPanel() {
     setConfirming(true);
     try {
       const confirmedIds = pendingActions.map((a) => a.id);
-      const data = await chatApi.confirm(pendingMessages, pendingToolCalls, confirmedIds);
+      const data = await chatApi.confirm(pendingMessages, pendingToolCalls, confirmedIds, {
+        surfaceContext: storedContext,
+      });
       setPendingActions(null);
       setPendingMessages(null);
       setPendingToolCalls(null);

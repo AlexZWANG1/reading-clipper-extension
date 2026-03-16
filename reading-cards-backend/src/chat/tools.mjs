@@ -22,6 +22,7 @@ export const TOOL_DEFINITIONS = [
           limit: { type: "number", description: "Max results to return (default 10, max 20)" },
           min_score: { type: "number", description: "Minimum similarity score 0-1 (default 0.3)" },
           topic_id: { type: "string", description: "Optional: limit search to a specific topic" },
+          material_id: { type: "string", description: "Optional: limit search to chunks from a specific material (useful for reading a specific document)" },
         },
         required: ["query"],
       },
@@ -98,6 +99,48 @@ export const TOOL_DEFINITIONS = [
       name: "list_topics",
       description: "列出用户的所有主题及卡片数量。返回: {topics: [{id, title, card_count}]}",
       parameters: { type: "object", properties: {}, required: [] },
+    },
+    side_effect: "read_only",
+    plan_allowed: true,
+    task_auto: true,
+    task_phases: [],
+    task_capability: "knowledge_read",
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_materials",
+      description:
+        "列出用户已摄入的材料（文档、URL、文本）。可按 topic 筛选。返回: {materials: [{id, title, source_type, url, ingestion_status, word_count, chunk_count, topic_id, created_at}], total: number}",
+      parameters: {
+        type: "object",
+        properties: {
+          topic_id: { type: "string", description: "Optional: filter by topic ID" },
+          status: { type: "string", enum: ["pending", "processing", "completed", "failed"], description: "Optional: filter by ingestion status" },
+          limit: { type: "number", description: "Max materials to return (default 20, max 50)" },
+        },
+        required: [],
+      },
+    },
+    side_effect: "read_only",
+    plan_allowed: true,
+    task_auto: true,
+    task_phases: [],
+    task_capability: "knowledge_read",
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_material",
+      description:
+        "获取单个材料的详情，包括标题、来源、状态和摘要（前500字）。如需深入查看文档内容，请用 semantic_search 并传入 material_id 参数进行针对性搜索。返回: {material: {id, title, source_type, url, ingestion_status, word_count, chunk_count, topic_id, excerpt, created_at}}",
+      parameters: {
+        type: "object",
+        properties: {
+          material_id: { type: "string", description: "The material ID" },
+        },
+        required: ["material_id"],
+      },
     },
     side_effect: "read_only",
     plan_allowed: true,
@@ -555,6 +598,10 @@ export function summarizeToolResult(tool, result) {
       return `列出 ${result.total || result.cards?.length || 0} 张卡片`;
     case "list_topics":
       return `列出 ${result.topics?.length || 0} 个主题`;
+    case "list_materials":
+      return `列出 ${result.total || result.materials?.length || 0} 个材料`;
+    case "get_material":
+      return result.material ? `材料: ${result.material.title || ""}` : "未找到";
     case "list_boards":
       return `列出 ${result.boards?.length || 0} 个论证板`;
     case "get_board":

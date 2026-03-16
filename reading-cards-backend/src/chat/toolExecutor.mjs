@@ -23,16 +23,42 @@ import { getResearchState } from "../agents/researchContext.mjs";
 // Any ID the frontend sends in surfaceContext is automatically injected
 // into matching tool parameters — AI never needs to extract UUIDs from prompt text.
 const CONTEXT_DEFAULTS = {
-  topicId:    { param: 'topic_id',    tools: ['semantic_search', 'search_cards', 'list_cards', 'list_documents', 'get_board_health', 'ingest_url'] },
+  topicId:    { param: 'topic_id',    tools: ['semantic_search', 'search_cards', 'list_cards', 'list_documents', 'list_materials', 'get_board_health', 'ingest_url'] },
   boardId:    { param: 'board_id',    tools: ['get_board', 'propose_board_changes', 'create_board_node', 'create_board_edge'] },
-  materialId: { param: 'material_id', tools: ['semantic_search'] },
+  materialId: { param: 'material_id', tools: ['semantic_search', 'get_material'] },
 };
+
+const ID_PLACEHOLDERS = new Set([
+  'current', 'cur', 'this', 'active', 'latest',
+  '__current__', '__active__',
+  'null', 'undefined',
+]);
+
+function looksLikeUuid(value) {
+  return typeof value === 'string'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function shouldOverrideContextParam(param, providedValue, contextValue) {
+  if (!contextValue) return false;
+  if (providedValue === undefined || providedValue === null || providedValue === '') return true;
+
+  if (typeof providedValue === 'string') {
+    const normalized = providedValue.trim().toLowerCase();
+    if (!normalized) return true;
+    if (ID_PLACEHOLDERS.has(normalized)) return true;
+    if (param.endsWith('_id') && !looksLikeUuid(normalized)) return true;
+  }
+
+  return false;
+}
 
 function applyContextDefaults(name, args, surfaceContext) {
   if (!surfaceContext) return args;
-  let patched = args;
+  let patched = args || {};
   for (const [ctxKey, { param, tools }] of Object.entries(CONTEXT_DEFAULTS)) {
-    if (surfaceContext[ctxKey] && !patched[param] && tools.includes(name)) {
+    if (!tools.includes(name)) continue;
+    if (shouldOverrideContextParam(param, patched[param], surfaceContext[ctxKey])) {
       patched = { ...patched, [param]: surfaceContext[ctxKey] };
     }
   }
@@ -60,6 +86,7 @@ export async function executeTool(name, args, ctx) {
           limit: args.limit,
           min_score: args.min_score,
           topic_id: args.topic_id,
+          material_id: args.material_id,
         });
         const total = data.total || 0;
         return {
@@ -130,6 +157,41 @@ export async function executeTool(name, args, ctx) {
     case "list_topics": {
       const topics = await listTopicsWithCardCount(supabase, userId);
       return { topics };
+    }
+
+    // ── Materials (read) ──
+    case "list_materials": {
+      const limit = Math.min(args.limit || 20, 50);
+      let query = supabase
+        .from('materials')
+        .select('id, title, source_type, url, ingestion_status, word_count, chunk_count, topic_id, created_at', { count: 'exact' })
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (args.topic_id) query = query.eq('topic_id', args.topic_id);
+      if (args.status) query = query.eq('ingestion_status', args.status);
+
+      const { data, error, count } = await query;
+      if (error) return { error: error.message, materials: [] };
+      return { materials: data || [], total: count || 0 };
+    }
+
+    case "get_material": {
+      const { data, error } = await supabase
+        .from('materials')
+        .select('id, title, source_type, url, ingestion_status, word_count, chunk_count, topic_id, excerpt, created_at')
+        .eq('id', args.material_id)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (error) return { error: error.message };
+      if (!data) return { error: "material_not_found", hint: "调用 list_materials 查看可用材料。" };
+      // Truncate excerpt to 500 chars to avoid context bloat
+      if (data.excerpt && data.excerpt.length > 500) {
+        data.excerpt = data.excerpt.slice(0, 500) + '...';
+      }
+      return { material: data };
     }
 
     // ── Sources (read) ──

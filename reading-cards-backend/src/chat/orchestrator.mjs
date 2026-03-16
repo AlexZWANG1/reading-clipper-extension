@@ -371,7 +371,9 @@ export async function chatConfirm({ messages, pendingToolCalls, confirmedIds, us
   currentMessages.push(...toolResults);
 
   // Continue the normal loop — use scoped tool set (preserve original toolGroup, not escalate to 'full')
-  const scopedTools = getToolsForGroup(toolGroup || 'explore');
+  // If toolGroup not provided by frontend, infer from surfaceContext (e.g. workspace → board)
+  const effectiveToolGroup = toolGroup || inferToolGroup('', surfaceContext) || 'explore';
+  const scopedTools = getToolsForGroup(effectiveToolGroup);
   let rounds = 0;
   while (rounds < MAX_TOOL_ROUNDS) {
     rounds++;
@@ -486,12 +488,36 @@ function compressToolResult(toolName, result) {
           text: r.chunk_text?.slice(0, 200),
           score: r.score,
           source: r.source_title || r.material_id,
+          topic_id: r.topic_id || null,
         })),
         total: result.total,
       };
 
     case 'list_topics':
       return { topics: result.topics?.map(t => ({ id: t.id, title: t.title, card_count: t.card_count })) };
+
+    case 'list_materials':
+      return {
+        materials: result.materials?.map(m => ({
+          id: m.id, title: m.title, source_type: m.source_type,
+          status: m.ingestion_status, word_count: m.word_count,
+          chunk_count: m.chunk_count, topic_id: m.topic_id,
+        })),
+        total: result.total,
+      };
+
+    case 'get_material':
+      if (!result.material) return result;
+      return {
+        material: {
+          id: result.material.id, title: result.material.title,
+          source_type: result.material.source_type, url: result.material.url,
+          status: result.material.ingestion_status,
+          word_count: result.material.word_count, chunk_count: result.material.chunk_count,
+          topic_id: result.material.topic_id,
+          excerpt: result.material.excerpt?.slice(0, 500) || null,
+        },
+      };
 
     default: {
       // P09: Generic compression — truncate arrays and long strings

@@ -266,7 +266,9 @@ router.get('/', requireAuth, async (req, res) => {
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
-    if (topic_id) {
+    if (topic_id === 'null') {
+      query = query.is('topic_id', null);
+    } else if (topic_id) {
       query = query.eq('topic_id', topic_id);
     }
 

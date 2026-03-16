@@ -22,7 +22,7 @@ export default function TopicWorkspace() {
         readerWidth, setReaderWidth, initReaderWidth,
         leftNavExpanded, toggleLeftNav, setLeftNavExpanded,
         enterWorkspace, leaveWorkspace,
-        setBoardId,
+        boardId, setBoardId,
     } = useWorkspaceStore();
 
     const [topicTitle, setTopicTitle] = useState('');
@@ -147,7 +147,7 @@ export default function TopicWorkspace() {
                     <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex rounded-xl glass-surface overflow-hidden" style={{ boxShadow: '0 10px 22px rgba(31, 27, 20, 0.14)' }}>
                         <button
                             onClick={() => setActiveView('structure')}
-                            className="px-4 py-2 text-xs font-medium transition-colors"
+                            className="px-4 py-2 text-xs font-medium cursor-pointer transition-colors"
                             style={{
                                 background: activeView === 'structure' ? 'rgba(13,110,253,0.10)' : 'transparent',
                                 color: activeView === 'structure' ? 'var(--accent-400)' : 'var(--text-2)',
@@ -157,7 +157,7 @@ export default function TopicWorkspace() {
                         </button>
                         <button
                             onClick={() => setActiveView('document')}
-                            className="px-4 py-2 text-xs font-medium transition-colors"
+                            className="px-4 py-2 text-xs font-medium cursor-pointer transition-colors"
                             style={{
                                 background: activeView === 'document' ? 'rgba(13,110,253,0.10)' : 'transparent',
                                 color: activeView === 'document' ? 'var(--accent-400)' : 'var(--text-2)',
@@ -183,6 +183,7 @@ export default function TopicWorkspace() {
                     {activeView === 'document' && (
                         <DocumentView
                             topicId={topicId}
+                            boardId={boardId}
                             className="flex-1"
                         />
                     )}
