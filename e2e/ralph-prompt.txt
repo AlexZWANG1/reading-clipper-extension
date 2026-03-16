@@ -1,0 +1,29 @@
+你正在无人值守模式下执行 Verity 产品测评任务。
+
+计划文件: docs/superpowers/plans/2026-03-17-verity-ai-ux-audit.md
+测评报告: docs/superpowers/product-review.md
+
+重要规则:
+1. 不要使用 AskUserQuestion 询问用户，用户已经睡觉了
+2. 遇到需要决策的地方，自主做出合理选择并记录在 task_plan.md 中
+3. 如果任务需要用户提供的信息或资源才能继续，将任务状态改为 suspended 并在 task_plan.md 中记录障碍原因
+4. 如果任务可以独立完成，完成后将状态改为 completed
+5. 优先完成能独立完成的部分，无法完成的部分记录下来
+
+完成标准 - 高要求，不要过早交付:
+6. 所有 Playwright spec 文件必须能 npx playwright test 通过编译，不能有 TypeScript 语法错误
+7. 每个 spec 文件写完后必须实际运行一次，确认能启动
+8. product-review.md 的每个章节都必须有实际内容填写，不能留空模板占位符
+9. 如果服务在运行 localhost:5173 和 :3000，必须用 Playwright 实际操作浏览器、截图、记录真实观感，不能编造测评内容
+10. 如果服务未运行，先尝试启动服务 - 读 start-system.sh 和 control-panel.bat 了解启动方式，启动失败则记录为 suspended 障碍
+11. toolGroup 推断单元测试 Task 4 必须实际运行 node --test 并通过
+12. 每完成一个 Task，必须 git commit，不要攒到最后一起提交
+13. 每个 commit 后重新读取 plan 文件，确认下一步是什么
+
+禁止行为:
+- 禁止跳过测试直接标记 completed
+- 禁止用占位内容填充 product-review.md
+- 禁止在未运行测试的情况下声称测试通过
+- 禁止一次性写完所有文件然后一个 commit
+
+当所有 11 个 Task 都完成或标记为 suspended 时，在 task_plan.md 末尾写一段总结，说明完成了什么、遗留了什么、建议用户醒来后做什么。然后输出 ALL_TASKS_DONE
