@@ -9,6 +9,7 @@ import {
   FileText,
   ListChecks,
   Settings,
+  Scale,
 } from 'lucide-react';
 import { useAuthStore, useUIStore } from '../lib/store';
 import GlobalChatPanel from './GlobalChatPanel';

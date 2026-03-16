@@ -2,7 +2,10 @@
 // Extracted from routes/v2/search.mjs for direct use by toolExecutor and task runner.
 
 const SIDECAR_URL = process.env.SIDECAR_URL || 'http://127.0.0.1:8100';
-const SIDECAR_API_KEY = process.env.SIDECAR_API_KEY || 'rc-sidecar-2026';
+const SIDECAR_API_KEY = process.env.SIDECAR_API_KEY;
+if (!SIDECAR_API_KEY) {
+  console.warn('[searchService] SIDECAR_API_KEY not set — semantic search will fail');
+}
 
 /**
  * Semantic search across user's document chunks.

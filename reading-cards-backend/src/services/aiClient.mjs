@@ -135,6 +135,8 @@ function getUserCustomEndpoint(userSettings) {
  * @param {Object} supabaseClient - Supabase客户端（可选）
  * @returns {Promise<Object>} AI客户端配置
  */
+export { encryptApiKey, decryptApiKey };
+
 export async function createAIClientConfig(userId = null, supabaseClient = null) {
   const config = loadModelsConfig();
   if (!config) {

@@ -206,7 +206,8 @@ router.post('/ingest', requireAuth, async (req, res) => {
             : err.message,
         })
         .eq('id', material.id)
-        .then();
+        .then(() => {})
+        .catch(updateErr => console.error('Failed to update material status:', updateErr.message));
     });
 
     res.json({
@@ -421,7 +422,8 @@ router.post('/upload', requireAuth, upload.single('file'), async (req, res) => {
         .from('materials')
         .update({ ingestion_status: 'failed', ingestion_error: err.message })
         .eq('id', material.id)
-        .then();
+        .then(() => {})
+        .catch(updateErr => console.error('Failed to update material status:', updateErr.message));
     });
 
     res.json({ ok: true, material_id: material.id, title, status: 'pending' });

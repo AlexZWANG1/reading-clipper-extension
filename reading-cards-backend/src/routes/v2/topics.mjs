@@ -262,7 +262,7 @@ router.get("/:id/board", async (req, res) => {
     );
 
     // 获取完整画板数据（含节点和边）
-    const fullBoard = await getFullBoard(req.supabase, board.id);
+    const fullBoard = await getFullBoard(req.supabase, board.id, req.user.id);
 
     res.json({
       ok: true,

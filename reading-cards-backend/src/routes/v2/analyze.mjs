@@ -59,7 +59,13 @@ router.post('/:id/analyze', requireAuth, async (req, res) => {
       });
       let content = response.choices?.[0]?.message?.content || '';
       content = content.replace(/^```json\s*\n?/, '').replace(/\n?```\s*$/, '');
-      const result = JSON.parse(content);
+      let result;
+      try {
+        result = JSON.parse(content);
+      } catch (parseErr) {
+        console.error('Failed to parse AI summary response:', parseErr.message);
+        return res.status(502).json({ error: 'AI returned invalid JSON', raw: content.slice(0, 200) });
+      }
 
       return res.json({ mode: 'summary', result });
     }
@@ -108,7 +114,13 @@ router.post('/:id/analyze', requireAuth, async (req, res) => {
       });
       let qaContent = qaResponse.choices?.[0]?.message?.content || '';
       qaContent = qaContent.replace(/^```json\s*\n?/, '').replace(/\n?```\s*$/, '');
-      const result = JSON.parse(qaContent);
+      let result;
+      try {
+        result = JSON.parse(qaContent);
+      } catch (parseErr) {
+        console.error('Failed to parse AI QA response:', parseErr.message);
+        return res.status(502).json({ error: 'AI returned invalid JSON', raw: qaContent.slice(0, 200) });
+      }
 
       return res.json({ mode: 'qa', result });
     }

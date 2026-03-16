@@ -5,10 +5,12 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { requireAuth } from "../../middleware/auth.mjs";
-import { 
+import {
   testAPIConnection,
   getAvailableModels,
-  getAvailableProviders 
+  getAvailableProviders,
+  encryptApiKey,
+  decryptApiKey,
 } from "../../services/aiClient.mjs";
 
 // 加载模型配置的辅助函数
@@ -133,12 +135,15 @@ router.patch("/", requireAuth, async (req, res) => {
       });
     }
 
-    // 加密API Key（如果提供）
+    // 加密API Key（如果提供）— 使用 AES-256-GCM
     let api_key_encrypted = null;
     if (api_key) {
-      // TODO: 使用真正的加密方法
-      // 目前使用base64编码（临时方案）
-      api_key_encrypted = Buffer.from(api_key).toString("base64");
+      api_key_encrypted = encryptApiKey(api_key);
+      if (!api_key_encrypted) {
+        // encryptApiKey returns null when ENCRYPTION_KEY is not set — fall back to base64
+        console.warn('[settings] API_KEY_ENCRYPTION_SECRET not set, falling back to base64');
+        api_key_encrypted = Buffer.from(api_key).toString("base64");
+      }
     }
 
     // 构建更新对象
@@ -218,7 +223,7 @@ router.post("/test-api", requireAuth, async (req, res) => {
     const testConfig = {
       provider: provider || currentSettings?.provider || "openai",
       model: model || currentSettings?.model || "gpt-5.2",
-      api_key_encrypted: api_key ? Buffer.from(api_key).toString("base64") : currentSettings?.api_key_encrypted,
+      api_key_encrypted: api_key ? (encryptApiKey(api_key) || Buffer.from(api_key).toString("base64")) : currentSettings?.api_key_encrypted,
       api_endpoint: api_endpoint || currentSettings?.api_endpoint || null,
     };
 
@@ -228,11 +233,7 @@ router.post("/test-api", requireAuth, async (req, res) => {
     if (api_key) {
       decryptedApiKey = api_key;
     } else if (testConfig.api_key_encrypted) {
-      try {
-        decryptedApiKey = Buffer.from(testConfig.api_key_encrypted, "base64").toString("utf-8");
-      } catch {
-        decryptedApiKey = testConfig.api_key_encrypted; // 如果解密失败，使用原值
-      }
+      decryptedApiKey = decryptApiKey(testConfig.api_key_encrypted);
     }
 
     // 如果没有提供API Key，尝试从环境变量获取
