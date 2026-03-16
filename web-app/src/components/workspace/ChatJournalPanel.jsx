@@ -34,8 +34,9 @@ function ToolCallLog({ toolCalls }) {
         <div className="rounded-lg text-xs" style={{ background: 'var(--surface-1)', border: '1px solid var(--stroke-0)' }}>
             <button
                 onClick={() => setExpanded(!expanded)}
-                className="flex items-center gap-1.5 w-full px-2.5 py-1.5 text-left"
+                className="flex items-center gap-1.5 w-full px-2.5 py-1.5 text-left cursor-pointer transition-colors"
                 style={{ color: 'var(--text-2)' }}
+                aria-label="展开工具调用日志"
             >
                 <Wrench size={11} style={{ color: 'var(--accent-400)' }} />
                 <span>执行了 {toolCalls.length} 个工具</span>
@@ -87,7 +88,7 @@ function PlanProposal({ plan, onExecute, onDismiss, executing }) {
                 <button
                     onClick={onExecute}
                     disabled={executing}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs text-white disabled:opacity-50"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs text-white disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
                     style={{ background: 'var(--accent-500)' }}
                 >
                     {executing ? <Loader2 size={10} className="animate-spin" /> : <Play size={10} />}
@@ -96,7 +97,7 @@ function PlanProposal({ plan, onExecute, onDismiss, executing }) {
                 <button
                     onClick={onDismiss}
                     disabled={executing}
-                    className="px-2.5 py-1 rounded-md text-xs"
+                    className="px-2.5 py-1 rounded-md text-xs cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{ color: 'var(--text-2)', background: 'var(--surface-1)' }}
                 >
                     取消
@@ -113,8 +114,9 @@ function JournalBlock({ content, timestamp }) {
         <div className="rounded-xl px-3 py-2.5 my-2" style={{ background: 'var(--surface-1)', border: '1px solid var(--stroke-0)' }}>
             <button
                 onClick={() => setExpanded(!expanded)}
-                className="flex items-center gap-1.5 w-full text-left"
+                className="flex items-center gap-1.5 w-full text-left cursor-pointer transition-colors"
                 style={{ color: 'var(--text-2)' }}
+                aria-label="展开AI推理过程"
             >
                 <BookOpen size={12} style={{ color: 'var(--accent-400)' }} />
                 <span className="text-[11px] font-medium flex-1" style={{ color: 'var(--accent-400)' }}>
@@ -157,15 +159,11 @@ export default function ChatJournalPanel({ className }) {
 
     const autonomyLevel = useWorkspaceStore(s => s.autonomyLevel);
 
-    // Update surface context
+    // Update surface context — re-run whenever any context field changes
+    // (boardId arrives async after BoardCanvas loads, so it MUST be in deps)
     useEffect(() => {
-        const stored = useChatStore.getState().surfaceContext;
-        const routeHasSpecificContext = surfaceContext.topicId || surfaceContext.materialId;
-        const surfaceChanged = !stored || stored.surface !== surfaceContext.surface;
-        if (surfaceChanged || routeHasSpecificContext) {
-            setSurfaceContext(surfaceContext);
-        }
-    }, [surfaceContext.surface, surfaceContext.topicId, surfaceContext.materialId]);
+        setSurfaceContext(surfaceContext);
+    }, [surfaceContext.surface, surfaceContext.topicId, surfaceContext.materialId, surfaceContext.boardId]);
 
     // Auto-scroll
     useEffect(() => {
@@ -330,7 +328,7 @@ export default function ChatJournalPanel({ className }) {
                             <button
                                 key={m.key}
                                 onClick={() => handleModeChange(m.key)}
-                                className="px-2 py-0.5 rounded-md text-[11px] transition-colors"
+                                className="px-2 py-0.5 rounded-md text-[11px] transition-colors cursor-pointer"
                                 style={
                                     mode === m.key
                                         ? { background: 'var(--surface-0)', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', fontWeight: 600, color: 'var(--text-0)' }
@@ -343,9 +341,10 @@ export default function ChatJournalPanel({ className }) {
                     </div>
                     <button
                         onClick={handleNewConversation}
-                        className="p-1.5 rounded-lg transition-colors hover:bg-blue-500/10"
+                        className="p-1.5 rounded-lg transition-colors hover:bg-blue-500/10 cursor-pointer"
                         style={{ color: 'var(--text-2)' }}
                         title="新对话"
+                        aria-label="新对话"
                     >
                         <Trash2 size={14} />
                     </button>
@@ -386,7 +385,7 @@ export default function ChatJournalPanel({ className }) {
                                         : { background: 'var(--surface-1)', border: '1px solid var(--stroke-0)', color: 'var(--text-0)' }
                                 }
                             >
-                                <ChatMessage message={msg} />
+                                <ChatMessage content={msg.content} role={msg.role} />
                             </div>
                         </div>
                     );
@@ -422,7 +421,7 @@ export default function ChatJournalPanel({ className }) {
                             <button
                                 onClick={handleConfirm}
                                 disabled={confirming}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs text-white disabled:opacity-50"
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs text-white disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
                                 style={{ background: '#18A06A' }}
                             >
                                 {confirming ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />}
@@ -431,7 +430,7 @@ export default function ChatJournalPanel({ className }) {
                             <button
                                 onClick={handleCancelActions}
                                 disabled={confirming}
-                                className="px-2.5 py-1 rounded-md text-xs"
+                                className="px-2.5 py-1 rounded-md text-xs cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 style={{ color: 'var(--text-2)', background: 'var(--surface-1)' }}
                             >
                                 取消
@@ -503,8 +502,9 @@ export default function ChatJournalPanel({ className }) {
                     <button
                         onClick={handleSend}
                         disabled={inputDisabled || !input.trim()}
-                        className="p-2 rounded-xl transition-colors disabled:opacity-30"
+                        className="p-2 rounded-xl transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                         style={{ background: 'var(--accent-500)', color: '#fff' }}
+                        aria-label="发送"
                     >
                         <Send size={16} />
                     </button>
