@@ -36,6 +36,7 @@ assert.ok(!autoPrompt.includes('<mode>'), 'auto mode should not have mode tag');
 assert.ok(chatPrompt.includes('<role>'), 'should use XML role tag');
 assert.ok(chatPrompt.includes('<absolute_prohibitions>'), 'should use XML prohibitions tag');
 assert.ok(chatPrompt.includes('<data_model>'), 'should use XML data_model tag');
+assert.ok(!chatPrompt.includes('<epistemic_standards>'), 'explore mode should NOT have epistemic_standards');
 
 // Test 5: UUID prohibition present (now in Chinese)
 assert.ok(chatPrompt.includes('UUID'), 'UUID prohibition missing in chat');

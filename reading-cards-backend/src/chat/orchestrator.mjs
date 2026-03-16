@@ -4,7 +4,7 @@
 // Tool groups prevent AI from accessing write tools when user is only querying.
 
 import { createAIClientConfig, callChatAPI } from "../services/aiClient.mjs";
-import { getToolSideEffect, buildConfirmMessage, summarizeToolResult } from "./tools.mjs";
+import { getToolSideEffect, buildConfirmMessage, summarizeToolResult, TOOL_DEFINITIONS } from "./tools.mjs";
 import { executeTool } from "./toolExecutor.mjs";
 import { generatePlan, generateConversationTitle } from "./planner.mjs";
 import { executePlan, cancelExecution } from "./executor.mjs";
@@ -82,7 +82,13 @@ export async function chat({ messages, userId, supabase, accessToken, onToolCall
 
   // Determine tool group
   const lastUserMsg = messages.filter(m => m.role === 'user').pop()?.content || '';
-  const toolGroup = toolGroupOverride || (mode === 'chat' ? 'explore' : inferToolGroup(lastUserMsg, surfaceContext));
+  const inferredGroup = inferToolGroup(lastUserMsg, surfaceContext);
+  const toolGroup = toolGroupOverride || (mode === 'chat' ? 'explore' : inferredGroup);
+
+  // Write-intent detection: log when chat mode suppresses a write-capable toolGroup
+  if (mode === 'chat' && inferredGroup !== 'explore') {
+    console.info(`[orchestrator] Write-intent detected in chat mode (inferred: ${inferredGroup}, forced: explore)`);
+  }
   const scopedTools = getToolsForGroup(toolGroup);
 
   // Build the system prompt
@@ -270,16 +276,30 @@ export async function chat({ messages, userId, supabase, accessToken, onToolCall
 
 // ── Reply sanitization — code-enforced guardrail against UUID/tool name leakage ──
 const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+const TOOL_NAMES = new Set(TOOL_DEFINITIONS.map(t => t.function.name));
 
 function sanitizeReply(text) {
   if (!text) return text;
-  // Replace UUIDs that leak into natural language (not inside JSON/code blocks)
-  return text.replace(UUID_REGEX, (match, offset) => {
-    // Skip if inside a code block (crude heuristic: preceded by ` or ")
-    const before = text[offset - 1];
+  let result = text;
+
+  // 1. Strip leaked UUIDs (not inside quotes/backticks)
+  result = result.replace(UUID_REGEX, (match, offset) => {
+    const before = result[offset - 1];
     if (before === '"' || before === '`' || before === "'") return match;
     return '[…]';
   });
+
+  // 2. Strip leaked tool names (e.g. "我调用了 semantic_search 找到了...")
+  for (const name of TOOL_NAMES) {
+    if (result.includes(name)) {
+      result = result.replaceAll(name, '');
+    }
+  }
+
+  // 3. Clean up artifacts from stripping (double spaces, empty brackets)
+  result = result.replace(/  +/g, ' ').replace(/「\s*」/g, '').replace(/\(\s*\)/g, '');
+
+  return result;
 }
 
 function isBoardMutation(toolName) {
@@ -610,7 +630,13 @@ async function _chatWithConversationInner({ conversationId, userMessage, userId,
     ? { ...surfaceContext, topicTitle: topicRow.title }
     : surfaceContext;
 
-  const toolGroup = mode === 'chat' ? 'explore' : inferToolGroup(userMessage, surfaceContext);
+  const inferredGroupConv = inferToolGroup(userMessage, surfaceContext);
+  const toolGroup = mode === 'chat' ? 'explore' : inferredGroupConv;
+
+  // Write-intent detection: log when chat mode suppresses a write-capable toolGroup
+  if (mode === 'chat' && inferredGroupConv !== 'explore') {
+    console.info(`[orchestrator] Write-intent detected in chat mode (inferred: ${inferredGroupConv}, forced: explore)`);
+  }
 
   const systemPrompt = buildSystemPrompt({ surfaceContext: enrichedSurfaceContext, methodology, researchState, toolGroup, mode });
   const scopedTools = getToolsForGroup(toolGroup);

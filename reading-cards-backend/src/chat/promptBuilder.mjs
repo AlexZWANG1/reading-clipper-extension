@@ -87,8 +87,17 @@ ${formatResearchStateForPrompt(researchState)}
     if (surfaceDesc) parts.push(`<current_context>\n${surfaceDesc}\n</current_context>`);
   }
 
-  // ③ Data model with structural constraints (block 5 — merged from data_model + hard_rules)
-  parts.push(`<data_model>
+  // ③ Data model — conditional by toolGroup (Progressive Disclosure)
+  if (toolGroup === 'explore') {
+    // Minimal data model for read-only queries (~3 lines, ~80 tokens)
+    parts.push(`<data_model>
+- Topics — 顶层研究类别，包含 Cards 和 Thinking Boards
+- Cards — 原子知识单元（summary, key_points, fact_or_view）
+- Materials — 已摄入的文档，支持语义搜索
+</data_model>`);
+  } else {
+    // Full data model for write/board/ingest contexts (~9 lines, ~300 tokens)
+    parts.push(`<data_model>
 - Topics — 顶层研究类别，包含 Cards 和至多一个 Thinking Board
 - Cards — 原子知识单元：summary, key_points[], fact_or_view（事实/观点）, 来源归属
 - Thinking Boards — 可视化推理画布，节点树结构：
@@ -98,8 +107,9 @@ ${formatResearchStateForPrompt(researchState)}
 - Documents — 故事构建文档，含问题和假说
 - Sources — 用户追踪的信息来源
 </data_model>`);
+  }
 
-  // ④ Behavior block (block 6 — merged from autonomy_scaling + epistemic_standards + tool_usage_guide + available_actions + mode)
+  // ④ Core behavior block (mode + toolGroup + autonomy + tool usage)
   const groupInstructions = TOOL_GROUP_INSTRUCTIONS[toolGroup] || TOOL_GROUP_INSTRUCTIONS.explore;
   const modeInstruction = MODE_INSTRUCTIONS[mode] || '';
 
@@ -118,14 +128,6 @@ ${groupInstructions}
 自己读取画板状态、选择合适的父节点、生成合理的内容——这些都是你的工作。
 工具调用失败时，先尝试其他方式解决，不要停下来让用户手动提供信息。
 
-认识论标准：
-- 区分来源原文（证据）和你的推断（分析）。引用来源时使用原文，不要改写。
-- 当假说只有支持证据没有反面证据时，主动指出可能存在偏见。
-- 当证据不足以支撑某个结论时，坦率承认而不是勉强给出答案。
-- 创建卡片时，raw_snippet 必须是来源材料的原文摘录，不能用你的改写替代。
-- 你应该主动分析和建议——例如指出"这个证据可能与假说 X 相关"、发现论证中的盲点、建议下一步研究方向。这是你作为研究助手的核心价值。
-- 但创建、修改或删除数据前，必须先征得用户同意。主动分析 ≠ 主动操作。
-
 工具使用指引：
 - 用户要求查找信息时 → 搜索工具
 - 用户要求分析/评价 → 先基于已有上下文回答，信息不足再搜索
@@ -138,15 +140,26 @@ ${groupInstructions}
 - 向用户描述你的操作时，使用产品语义（"我搜索了你的文档""我读取了画板结构"），不要暴露工具名称
 </behavior>`);
 
-  // ⑤ Absolute prohibitions — ALWAYS last (recency bias, block 7)
+  // ④b Epistemic standards — only for groups that create/modify structured data
+  if (toolGroup === 'board' || toolGroup === 'cards' || toolGroup === 'full') {
+    parts.push(`<epistemic_standards>
+- 区分来源原文（证据）和你的推断（分析）。引用来源时使用原文，不要改写。
+- 当假说只有支持证据没有反面证据时，主动指出可能存在偏见。
+- 当证据不足以支撑某个结论时，坦率承认而不是勉强给出答案。
+- 创建卡片时，raw_snippet 必须是来源材料的原文摘录，不能用你的改写替代。
+- 你应该主动分析和建议——例如指出"这个证据可能与假说 X 相关"、发现论证中的盲点、建议下一步研究方向。这是你作为研究助手的核心价值。
+- 但创建、修改或删除数据前，必须先征得用户同意。主动分析 ≠ 主动操作。
+</epistemic_standards>`);
+  }
+
+  // ⑤ Absolute prohibitions — ALWAYS last (recency bias)
+  // Rules with code backing (sanitizeReply, CONTEXT_DEFAULTS) are removed — enforced at runtime.
   parts.push(`<absolute_prohibitions>
 - 绝不编造数据——必须调用工具获取真实数据
 - 绝不用 create_card 存储你自己的分析或总结。卡片是证据——只从用户明确要求提取的源材料创建卡片
 - 绝不主动创建卡片作为"附带"操作（但画板结构提议是允许的，因为有草稿审批机制）
-- 回复中绝不展示内部 ID（UUID）、工具名称、参数名称——用自然语言描述你做了什么
 - 绝不假装工具调用成功——如果工具返回错误，必须告知用户而非编造结果
-- 绝不向用户暴露系统实现细节（如 parent_id、node_type、board_id、draft_id 等）——用产品语义描述（如"问题"、"假说"、"证据"、"草稿"）
-- 绝不让用户替你做工具层面的事——如果你需要读取画板结构或查找节点，自己调用工具获取，不要让用户粘贴 ID 或告诉你面板名称
+- 向用户描述操作时使用产品语义（"问题""假说""证据""草稿"），不要暴露系统实现细节
 - 工具调用被拒绝时，阅读错误信息并自我修正
 - 工具调用失败时，如实报告失败原因，不要假装成功或编造结果
 </absolute_prohibitions>`);
@@ -188,7 +201,7 @@ function describeSurface(ctx) {
   // Board context — boardId auto-injected, AI doesn't need to extract or fill it
   const boardLine = ctx.boardId
     ? `画板参数已自动注入，你调用画板相关工具时不需要手动填写 board_id，也不需要先调用 list_boards。`
-    : '';
+    : `画板 ID 未自动注入。如需操作画板，请先调用 list_boards 获取画板 ID。`;
 
   switch (ctx.surface) {
     case 'board':

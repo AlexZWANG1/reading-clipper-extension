@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSystemPrompt, FEW_SHOT_EXAMPLES, TOOL_GROUP_INSTRUCTIONS, MODE_INSTRUCTIONS } from '../src/chat/promptBuilder.mjs';
+import { buildSystemPrompt, TOOL_GROUP_INSTRUCTIONS, MODE_INSTRUCTIONS } from '../src/chat/promptBuilder.mjs';
 
 // ========= Prompt ↔ Spec Alignment Tests =========
 // Verify that the system prompt contains all sections required by PRODUCT-SPEC §10.
@@ -21,8 +21,7 @@ describe('Prompt structure: required XML sections', () => {
   const prompt = buildPrompt();
 
   for (const tag of [
-    'role', 'data_model', 'hard_rules', 'autonomy_scaling',
-    'epistemic_standards', 'tool_usage_guide', 'available_actions',
+    'role', 'data_model', 'behavior',
     'absolute_prohibitions',
   ]) {
     it(`must contain <${tag}> section`, () => {
@@ -35,20 +34,22 @@ describe('Prompt structure: required XML sections', () => {
 describe('Prompt: AI Behavior Contract §10.1 — Autonomy Scaling', () => {
   const prompt = buildPrompt();
 
-  it('must define autonomy levels from full to user-owned', () => {
-    assert.ok(prompt.includes('完全自主'), 'Must mention full autonomy for reading');
-    assert.ok(prompt.includes('用户确认'), 'Must require user confirmation for creation');
-    assert.ok(prompt.includes('明确批准'), 'Must require explicit approval for deletion');
+  it('must tie autonomy to available tools', () => {
+    assert.ok(prompt.includes('你可以用的工具'), 'Must mention available tools determine autonomy');
+    assert.ok(prompt.includes('系统会自动暂停让用户确认'), 'Must mention system pauses for write ops');
+    assert.ok(prompt.includes('草稿系统本身就是安全网'), 'Must mention draft system as safety net');
   });
 
-  it('must encourage proactive analysis as a positive capability', () => {
-    assert.ok(prompt.includes('主动分析') || prompt.includes('主动提供洞察'),
-      'Prompt must encourage proactive analysis, not just prohibit unauthorized actions');
+  it('must encourage proactive analysis in board/cards groups (Progressive Disclosure)', () => {
+    const boardPrompt = buildPrompt({ toolGroup: 'board' });
+    assert.ok(boardPrompt.includes('主动分析') || boardPrompt.includes('主动提供洞察'),
+      'Board prompt must encourage proactive analysis');
   });
 });
 
 describe('Prompt: AI Behavior Contract §10.5 — Proactive Analysis vs Passive Mutation', () => {
-  const prompt = buildPrompt();
+  // Epistemic standards (including proactive analysis vs mutation) are now conditional — only in board/cards/full
+  const prompt = buildPrompt({ toolGroup: 'board' });
 
   it('must distinguish proactive analysis from data mutation', () => {
     assert.ok(prompt.includes('主动分析') && prompt.includes('征得用户同意'),
@@ -56,22 +57,29 @@ describe('Prompt: AI Behavior Contract §10.5 — Proactive Analysis vs Passive 
   });
 });
 
-describe('Prompt: AI Behavior Contract §10.3 — Epistemic Standards', () => {
-  const prompt = buildPrompt();
+describe('Prompt: AI Behavior Contract §10.3 — Epistemic Standards (Progressive Disclosure)', () => {
+  // Epistemic standards are now in a separate <epistemic_standards> block, only for board/cards/full
+  const prompt = buildPrompt({ toolGroup: 'board' });
+  const explorePrompt = buildPrompt({ toolGroup: 'explore' });
 
-  it('must distinguish evidence from inference', () => {
+  it('must distinguish evidence from inference (in board/cards/full)', () => {
     assert.ok(prompt.includes('来源原文') && prompt.includes('推断'),
-      'Prompt must instruct AI to distinguish evidence from inference');
+      'Board prompt must instruct AI to distinguish evidence from inference');
   });
 
   it('must flag one-sided evidence (bias warning)', () => {
     assert.ok(prompt.includes('偏见'),
-      'Prompt must instruct AI to flag bias when hypothesis has only supporting evidence');
+      'Board prompt must instruct AI to flag bias when hypothesis has only supporting evidence');
   });
 
   it('must require raw_snippet from source material', () => {
     assert.ok(prompt.includes('raw_snippet') && prompt.includes('原文摘录'),
-      'Prompt must enforce raw_snippet as exact source quote');
+      'Board prompt must enforce raw_snippet as exact source quote');
+  });
+
+  it('must NOT include epistemic standards in explore mode', () => {
+    assert.ok(!explorePrompt.includes('<epistemic_standards>'),
+      'Explore prompt should not have epistemic_standards (Progressive Disclosure)');
   });
 });
 
@@ -87,9 +95,9 @@ describe('Prompt: AI Behavior Contract §10.6 — Failure Behavior', () => {
 describe('Prompt: AI Behavior Contract §10.5 — Initiative Limits', () => {
   const prompt = buildPrompt();
 
-  it('must prohibit unsolicited data creation', () => {
-    assert.ok(prompt.includes('绝不在用户没有明确要求时创建'),
-      'Prompt must prohibit creating data without user request');
+  it('must prohibit unsolicited card creation', () => {
+    assert.ok(prompt.includes('绝不用 create_card 存储你自己的分析'),
+      'Prompt must prohibit using create_card for AI summaries');
   });
 
   it('must prohibit unsolicited "side effect" operations', () => {
@@ -118,9 +126,9 @@ describe('Prompt: AI Quality §13.5 — Response Style', () => {
 });
 
 describe('Prompt: mode instruction injection', () => {
-  it('chat mode injects read-only constraint', () => {
+  it('chat mode injects read-only constraint inside behavior block', () => {
     const prompt = buildPrompt({ mode: 'chat' });
-    assert.ok(prompt.includes('<mode>'), 'chat mode should inject <mode> tag');
+    assert.ok(prompt.includes('聊天模式'), 'chat mode should mention chat mode');
     assert.ok(prompt.includes('不能创建'), 'chat mode should say cannot create');
   });
 
@@ -129,9 +137,9 @@ describe('Prompt: mode instruction injection', () => {
     assert.ok(prompt.includes('确认'), 'agent mode should mention confirmation');
   });
 
-  it('auto mode adds no mode tag', () => {
+  it('auto mode adds no mode text', () => {
     const prompt = buildPrompt({ mode: 'auto' });
-    assert.ok(!prompt.includes('<mode>'), 'auto mode should not add mode tag');
+    assert.ok(!prompt.includes('当前模式'), 'auto mode should not add mode text');
   });
 });
 
@@ -190,14 +198,14 @@ describe('Prompt: methodology and research state injection', () => {
 });
 
 describe('Prompt: tool group instructions', () => {
-  it('explore group instruction mentions read-only', () => {
+  it('explore group instruction mentions query-only', () => {
     const prompt = buildPrompt({ toolGroup: 'explore' });
-    assert.ok(prompt.includes('只读'), 'explore instructions should mention read-only');
+    assert.ok(prompt.includes('只能查询和搜索'), 'explore instructions should mention query-only');
   });
 
-  it('board group instruction mentions propose changes', () => {
+  it('board group instruction mentions draft system', () => {
     const prompt = buildPrompt({ toolGroup: 'board' });
-    assert.ok(prompt.includes('propose_board_changes'), 'board instructions should mention draft proposal tool');
+    assert.ok(prompt.includes('草稿系统'), 'board instructions should mention draft system');
   });
 
   it('cards group instruction mentions card creation', () => {
